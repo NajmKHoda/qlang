@@ -8,3 +8,4 @@ lalrpop = "0.22.2"
 
 [dependencies]
 lalrpop-util = { version = "0.21.0", features = ["lexer", "unicode"] }
+inkwell = { version = "0.7.0", features = ["llvm21-1"] }
