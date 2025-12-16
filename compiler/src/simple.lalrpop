@@ -15,7 +15,9 @@ Expression: Box<ExpressionNode> = {
     Int => Box::new(ExpressionNode::Integer(<>)),
     QName => Box::new(ExpressionNode::QName(<>)),
     #[precedence(level="1")] #[assoc(side="left")]
-    <Expression> "+" <Expression> => Box::new(ExpressionNode::Add(<>))
+    <Expression> "+" <Expression> => Box::new(ExpressionNode::Add(<>)),
+    #[precedence(level="2")]
+    "input()" => Box::new(ExpressionNode::Input)
 }
 
 Int: i32 = r"-?[0-9]+" => i32::from_str(<>).unwrap();

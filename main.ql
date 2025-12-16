@@ -1,4 +1,4 @@
-x = 10;
-y = -30;
+x = input();
+y = 1;
 
 print(x + y);

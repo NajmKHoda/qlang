@@ -6,5 +6,6 @@ pub enum StatementNode {
 pub enum ExpressionNode {
     QName(String),
     Integer(i32),
-    Add(Box<ExpressionNode>, Box<ExpressionNode>)
+    Add(Box<ExpressionNode>, Box<ExpressionNode>),
+    Input
 }

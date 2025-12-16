@@ -6,8 +6,8 @@ use inkwell::module::Module;
 use inkwell::builder::{Builder, BuilderError};
 use inkwell::support::LLVMString;
 use inkwell::targets::{FileType, Target, TargetMachine};
-use inkwell::types::{IntType, VoidType};
-use inkwell::values::{FunctionValue, IntValue, PointerValue};
+use inkwell::types::{IntType};
+use inkwell::values::{FunctionValue, IntValue, PointerValue, ValueKind};
 
 use crate::tokens::{ExpressionNode, StatementNode};
 
@@ -41,17 +41,16 @@ struct CodeGen<'ctxt> {
     vars: HashMap<String, PointerValue<'ctxt>>,
     context: &'ctxt Context,
     builder: Builder<'ctxt>,
+    module: Module<'ctxt>,
+
+    print_fn: FunctionValue<'ctxt>,
+    input_fn: FunctionValue<'ctxt>,
 }
 
 impl<'ctxt> CodeGen<'ctxt> {
-    fn gen_code(&mut self, stmts: &Vec<StatementNode>) -> Result<Module<'ctxt>, CodeGenError> {
-        let module = self.context.create_module("db-lang");
-
+    fn gen_code(mut self, stmts: &Vec<StatementNode>) -> Result<Module<'ctxt>, CodeGenError> {
         let main_type = self.int_type().fn_type(&[], false);
-        let main_fn = module.add_function("main", main_type, None);
-
-        let print_type = self.void_type().fn_type(&[self.int_type().into()], false);
-        let print_fn = module.add_function("printi", print_type, None);
+        let main_fn = self.module.add_function("main", main_type, None);
 
         let basic_block = self.context.append_basic_block(main_fn, "entry");
         self.builder.position_at_end(basic_block);
@@ -59,14 +58,14 @@ impl<'ctxt> CodeGen<'ctxt> {
         for stmt in stmts {
             match stmt {
                 StatementNode::Assignment(_,_) => self.gen_assignment(stmt)?,
-                StatementNode::Print(_) => self.gen_print(stmt, print_fn)?
+                StatementNode::Print(_) => self.gen_print(stmt)?
             }
         }
 
         self.builder.build_return(Some(&self.int_type().const_int(0, false)))?;
 
-        module.verify().map_err(|e| CodeGenError::ModuleVerificationError(e))?;
-        Ok(module)
+        self.module.verify().map_err(|e| CodeGenError::ModuleVerificationError(e))?;
+        Ok(self.module)
     }
 
     fn gen_assignment(&mut self, node: &StatementNode) -> Result<(), CodeGenError> {
@@ -86,10 +85,10 @@ impl<'ctxt> CodeGen<'ctxt> {
         }
     }
 
-    fn gen_print(&self, node: &StatementNode, print_fn: FunctionValue) -> Result<(), CodeGenError> {
+    fn gen_print(&self, node: &StatementNode) -> Result<(), CodeGenError> {
         if let StatementNode::Print(expr) = node {
             let value = self.gen_expr(expr)?;
-            self.builder.build_call(print_fn, &[value.into()], "printi")?;
+            self.builder.build_call(self.print_fn, &[value.into()], "printi")?;
             Ok(())
         } else {
             unreachable!()
@@ -111,22 +110,39 @@ impl<'ctxt> CodeGen<'ctxt> {
                 let val1 = self.gen_expr(expr1)?;
                 let val2 = self.gen_expr(expr2)?;
                 Ok(self.builder.build_int_add(val1, val2, "sum")?)
+            },
+            ExpressionNode::Input => {
+                let call_site = self.builder.build_call(self.input_fn, &[], "inputi")?;
+                if let ValueKind::Basic(val) = call_site.try_as_basic_value() {
+                    Ok(val.into_int_value())
+                } else {
+                    panic!("Expected integer return from inputi");
+                }
             }
         }
     }
 
     fn int_type(&self) -> IntType<'ctxt> { self.context.i32_type() }
-    fn void_type(&self) -> VoidType<'ctxt> { self.context.void_type() }
 }
 
 pub fn gen_code(stmts: &Vec<StatementNode>) -> Result<(), CodeGenError> {
     let context = Context::create();
     let builder = context.create_builder();
+    let module = context.create_module("main");
+
+    let print_type = context.void_type().fn_type(&[context.i32_type().into()], false);
+    let print_fn = module.add_function("printi", print_type, None);
+
+    let input_type = context.i32_type().fn_type(&[], false);
+    let input_fn = module.add_function("inputi", input_type, None);
     
-    let mut codegen = CodeGen {
+    let codegen = CodeGen {
         vars: HashMap::<String, PointerValue>::new(),
         context: &context,
         builder,
+        module,
+        print_fn,
+        input_fn
     };
 
     let module = codegen.gen_code(stmts)?;
