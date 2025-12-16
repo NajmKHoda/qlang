@@ -19,4 +19,4 @@ Expression: Box<ExpressionNode> = {
 }
 
 Int: i32 = r"-?[0-9]+" => i32::from_str(<>).unwrap();
-QName: String = r"[a-zA-Z_][a-zA-Z0-9_]+" => String::from(<>);
+QName: String = r"[a-zA-Z_][a-zA-Z0-9_]*" => String::from(<>);
