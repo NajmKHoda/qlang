@@ -4,17 +4,22 @@ use std::fs::File;
 use std::collections::HashMap;
 use lalrpop_util::lalrpop_mod;
 
-use crate::tokens::Expression;
-use crate::tokens::Statement;
+use crate::tokens::ExpressionNode;
+use crate::tokens::StatementNode;
 
 mod tokens;
 
 lalrpop_mod!(pub simple);
 
-fn eval_expr(expr: &Expression, vars: &HashMap<String, i32>) -> i32 {
+fn eval_expr(expr: &ExpressionNode, vars: &HashMap<String, i32>) -> i32 {
     match expr {
-        Expression::Integer(val) => *val,
-        Expression::QName(name) => vars[name]
+        ExpressionNode::Integer(val) => *val,
+        ExpressionNode::QName(name) => vars[name],
+        ExpressionNode::Add(expr1, expr2) => {
+            let a = eval_expr(expr1, vars);
+            let b = eval_expr(expr2, vars);
+            a + b
+        }
     }
 }
 
@@ -32,11 +37,11 @@ fn main() -> Result<(), IOError> {
     let mut vars = HashMap::<String, i32>::new();
     for statement in program {
         match statement {
-            Statement::Print(ref expr) => {
+            StatementNode::Print(ref expr) => {
                 let val = eval_expr(expr, &vars);
                 println!("{val}")
             },
-            Statement::Assignment(ref qname, ref expr) => {
+            StatementNode::Assignment(ref qname, ref expr) => {
                 let val = eval_expr(expr, &vars);
                 vars.insert(qname.clone(), val);
             }

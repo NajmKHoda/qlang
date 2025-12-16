@@ -1,9 +1,10 @@
-pub enum Statement {
-    Assignment(String, Expression),
-    Print(Expression)
+pub enum StatementNode {
+    Assignment(String, Box<ExpressionNode>),
+    Print(Box<ExpressionNode>)
 }
 
-pub enum Expression {
+pub enum ExpressionNode {
     QName(String),
-    Integer(i32)
+    Integer(i32),
+    Add(Box<ExpressionNode>, Box<ExpressionNode>)
 }
