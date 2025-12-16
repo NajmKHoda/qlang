@@ -1,0 +1,19 @@
+use std::str::FromStr;
+use crate::tokens::{Statement, Expression};
+
+grammar;
+
+pub Program: Vec<Statement> = Statement*;
+
+Statement: Statement = {
+    <QName> "=" <Expression> ";" => Statement::Assignment(<>),
+    "print(" <Expression> ");" => Statement::Print(<>)
+}
+
+Expression: Expression = {
+    Int => Expression::Integer(<>),
+    QName => Expression::QName(<>)
+}
+
+Int: i32 = r"[0-9]+" => i32::from_str(<>).unwrap();
+QName: String = r"[a-zA-Z_][a-zA-Z0-9_]+" => String::from(<>);
