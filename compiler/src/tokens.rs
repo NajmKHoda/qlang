@@ -2,6 +2,7 @@ use crate::codegen::{CodeGen, CodeGenError, QLValue};
 
 pub enum StatementNode {
     Assignment(String, Box<ExpressionNode>),
+    Conditional(Box<ExpressionNode>, Vec<StatementNode>, Vec<StatementNode>),
     LoneExpression(Box<ExpressionNode>),
 }
 
@@ -12,6 +13,10 @@ impl StatementNode {
                 let value = expr.gen_eval(code_gen)?;
                 code_gen.store_var(var_name, value)
             },
+            StatementNode::Conditional(cond_expr, then_stmts, else_stmts) => {
+                let condition = cond_expr.gen_eval(code_gen)?;
+                code_gen.gen_conditional(condition, then_stmts, else_stmts)
+            }
             StatementNode::LoneExpression(expr) => {
                 expr.gen_eval(code_gen).map(|_| ())
             }

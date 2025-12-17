@@ -7,6 +7,7 @@ pub Program: Vec<StatementNode> = Statement*;
 
 Statement: StatementNode = {
     <QName> "=" <Expression> ";" => StatementNode::Assignment(<>),
+    "if" <Expression> "{" <Statement*> "}" "else" "{" <Statement*> "}" => StatementNode::Conditional(<>),
     <Expression> ";" => StatementNode::LoneExpression(<>)
 }
 

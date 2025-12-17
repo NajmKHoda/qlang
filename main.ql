@@ -1,4 +1,7 @@
-x = printi(2);
-y = 1;
+x = inputi();
 
-printi(x + y);
+if x + -69 {
+    printi(1);
+} else {
+    printi(0);
+}
