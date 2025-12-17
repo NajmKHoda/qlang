@@ -13,7 +13,7 @@ use inkwell::basic_block::BasicBlock;
 use crate::tokens::{StatementNode};
 
 pub enum CodeGenError {
-    UnexpectedVoidError,
+    UnexpectedTypeError,
     UndefinedVariableError(String),
 
     BuilderError(BuilderError),
@@ -26,7 +26,7 @@ pub enum CodeGenError {
 impl std::fmt::Display for CodeGenError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            CodeGenError::UnexpectedVoidError => write!(f, "Unexpected void return value"),
+            CodeGenError::UnexpectedTypeError => write!(f, "Unexpected type encountered"),
             CodeGenError::UndefinedVariableError(name) => write!(f, "Undefined variable: {name}"),
             CodeGenError::BuilderError(err) => write!(f, "Builder error: {err}"),
             CodeGenError::ModuleVerificationError(err) => write!(f, "Module verification error: {err}"),
@@ -44,6 +44,7 @@ impl From<BuilderError> for CodeGenError {
 #[derive(Clone, Copy, PartialEq)]
 pub enum QLValue<'a> {
     Integer(IntValue<'a>),
+    Bool(IntValue<'a>),
     Void
 }
 
@@ -52,8 +53,14 @@ impl<'a> TryFrom<BasicValueEnum<'a>> for QLValue<'a> {
 
     fn try_from(value: BasicValueEnum<'a>) -> Result<Self, Self::Error> {
         match value {
-            BasicValueEnum::IntValue(int_val) => Ok(QLValue::Integer(int_val)),
-            _ => Err(CodeGenError::UnexpectedVoidError),
+            BasicValueEnum::IntValue(int_val) => {
+                match int_val.get_type().get_bit_width() {
+                    1 => Ok(QLValue::Bool(int_val)),
+                    32 => Ok(QLValue::Integer(int_val)),
+                    _ => Err(CodeGenError::UnexpectedTypeError),
+                }
+            }
+            _ => Err(CodeGenError::UnexpectedTypeError),
         }
     }
 }
@@ -64,7 +71,8 @@ impl<'a> TryFrom<QLValue<'a>> for BasicValueEnum<'a> {
     fn try_from(value: QLValue<'a>) -> Result<Self, Self::Error> {
         match value {
             QLValue::Integer(int_val) => Ok(BasicValueEnum::IntValue(int_val)),
-            QLValue::Void => Err(CodeGenError::UnexpectedVoidError),
+            QLValue::Bool(int_val) => Ok(BasicValueEnum::IntValue(int_val)),
+            QLValue::Void => Err(CodeGenError::UnexpectedTypeError),
         }
     }
 }
@@ -136,7 +144,16 @@ impl<'ctxt> CodeGen<'ctxt> {
             let res = self.builder.build_int_add(int1, int2, "sum")?;
             Ok(QLValue::Integer(res))
         } else {
-            Err(CodeGenError::UnexpectedVoidError)
+            Err(CodeGenError::UnexpectedTypeError)
+        }
+    }
+
+    pub fn eq(&self, val1: QLValue<'ctxt>, val2: QLValue<'ctxt>) -> Result<QLValue<'ctxt>, CodeGenError> {
+        if let (QLValue::Integer(int1), QLValue::Integer(int2)) = (val1, val2) {
+            let res = self.builder.build_int_compare(inkwell::IntPredicate::EQ, int1, int2, "eq")?;
+            Ok(QLValue::Bool(res))
+        } else {
+            Err(CodeGenError::UnexpectedTypeError)
         }
     }
 
@@ -160,15 +177,12 @@ impl<'ctxt> CodeGen<'ctxt> {
         then_stmts: &Vec<StatementNode>,
         else_stmts: &Vec<StatementNode>
     ) -> Result<(), CodeGenError> {
-        if let QLValue::Integer(cond_int32) = conditional {
+        if let QLValue::Bool(cond_bool) = conditional {
             let then_block = self.append_block("then");
             let else_block = self.append_block("else");
             let merge_block = self.append_block("merge");
-            
-            let zero = self.int_type().const_int(0, false);
-            let cond = self.builder.build_int_compare(inkwell::IntPredicate::NE, cond_int32, zero, "cond")?;
 
-            self.builder.build_conditional_branch(cond, then_block, else_block)?;
+            self.builder.build_conditional_branch(cond_bool, then_block, else_block)?;
             self.builder.position_at_end(then_block);
             self.gen_stmts(then_stmts)?;
             self.builder.build_unconditional_branch(merge_block)?;
@@ -181,7 +195,7 @@ impl<'ctxt> CodeGen<'ctxt> {
 
             Ok(())
         } else {
-            Err(CodeGenError::UnexpectedVoidError)
+            Err(CodeGenError::UnexpectedTypeError)
         }
     }
 }
@@ -206,7 +220,10 @@ pub fn gen_code(stmts: &Vec<StatementNode>) -> Result<(), CodeGenError> {
     };
 
     let module = codegen.gen_code(stmts)?;
-  
+    if let Err(msg) = module.print_to_file("out/main.debug") {
+        eprintln!("Failed to write debug LLVM IR: {}", msg);
+    }
+
     Target::initialize_all(&Default::default());
     let target_triple = TargetMachine::get_default_triple();
     let target = Target::from_triple(&target_triple).map_err(|e| CodeGenError::TargetError(e))?;

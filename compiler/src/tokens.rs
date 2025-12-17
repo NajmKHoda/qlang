@@ -28,6 +28,7 @@ pub enum ExpressionNode {
     QName(String),
     Integer(i32),
     Add(Box<ExpressionNode>, Box<ExpressionNode>),
+    Equality(Box<ExpressionNode>, Box<ExpressionNode>),
     FunctionCall(String, Vec<Box<ExpressionNode>>),
 }
 
@@ -41,6 +42,11 @@ impl ExpressionNode {
                 let val2 = expr2.gen_eval(code_gen)?;
                 code_gen.add(val1, val2)
             },
+            ExpressionNode::Equality(expr1, expr2) => {
+                let val1 = expr1.gen_eval(code_gen)?;
+                let val2 = expr2.gen_eval(code_gen)?;
+                code_gen.eq(val1, val2)
+            }
             ExpressionNode::FunctionCall(fn_name, arg_exprs) => {
                 let args = arg_exprs.iter()
                     .map(|expr| expr.gen_eval(code_gen))

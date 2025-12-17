@@ -17,8 +17,9 @@ Expression: Box<ExpressionNode> = {
     QName => Box::new(ExpressionNode::QName(<>)),
     #[precedence(level="1")] #[assoc(side="left")]
     <Expression> "+" <Expression> => Box::new(ExpressionNode::Add(<>)),
-    #[precedence(level="2")]
-    <QName> "(" <Expression*> ")" => Box::new(ExpressionNode::FunctionCall(<>))
+    <QName> "(" <Expression*> ")" => Box::new(ExpressionNode::FunctionCall(<>)),
+    #[precedence(level="2")] #[assoc(side="right")]
+    <Expression> "==" <Expression> => Box::new(ExpressionNode::Equality(<>)),
 }
 
 Int: i32 = r"-?[0-9]+" => i32::from_str(<>).unwrap();

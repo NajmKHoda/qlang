@@ -22,7 +22,7 @@ run: $(PROGRAM_OBJ)
 
 .PHONY: $(COMPILER_OBJ)
 $(COMPILER_OBJ):
-	@cargo build --manifest-path=$(COMPILER_MANIFEST) $(if $(DEBUG),,--release)
+	cargo build --manifest-path=$(COMPILER_MANIFEST) $(if $(DEBUG),,--release)
 
 $(RUNTIME_OBJ): $(RUNTIME_SRC)
 	@mkdir -p out
