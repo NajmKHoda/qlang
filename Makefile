@@ -20,6 +20,7 @@ compiler: $(COMPILER_OBJ) $(RUNTIME_OBJ)
 run: $(PROGRAM_OBJ)
 	@$(PROGRAM_OBJ)
 
+.PHONY: $(COMPILER_OBJ)
 $(COMPILER_OBJ):
 	@cargo build --manifest-path=$(COMPILER_MANIFEST) $(if $(DEBUG),,--release)
 

@@ -1,4 +1,4 @@
-x = input();
+x = printi(2);
 y = 1;
 
-print(x + y);
+printi(x + y);

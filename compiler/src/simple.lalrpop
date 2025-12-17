@@ -7,7 +7,7 @@ pub Program: Vec<StatementNode> = Statement*;
 
 Statement: StatementNode = {
     <QName> "=" <Expression> ";" => StatementNode::Assignment(<>),
-    "print(" <Expression> ");" => StatementNode::Print(<>)
+    <Expression> ";" => StatementNode::LoneExpression(<>)
 }
 
 Expression: Box<ExpressionNode> = {
@@ -17,7 +17,7 @@ Expression: Box<ExpressionNode> = {
     #[precedence(level="1")] #[assoc(side="left")]
     <Expression> "+" <Expression> => Box::new(ExpressionNode::Add(<>)),
     #[precedence(level="2")]
-    "input()" => Box::new(ExpressionNode::Input)
+    <QName> "(" <Expression*> ")" => Box::new(ExpressionNode::FunctionCall(<>))
 }
 
 Int: i32 = r"-?[0-9]+" => i32::from_str(<>).unwrap();

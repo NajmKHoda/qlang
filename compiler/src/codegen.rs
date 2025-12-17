@@ -7,28 +7,31 @@ use inkwell::builder::{Builder, BuilderError};
 use inkwell::support::LLVMString;
 use inkwell::targets::{FileType, Target, TargetMachine};
 use inkwell::types::{IntType};
-use inkwell::values::{FunctionValue, IntValue, PointerValue, ValueKind};
+use inkwell::values::{ArrayValue, BasicMetadataValueEnum, BasicValueEnum, IntValue, PointerValue, ValueKind};
 
-use crate::tokens::{ExpressionNode, StatementNode};
+use crate::tokens::{StatementNode};
 
 pub enum CodeGenError {
-    BuilderError(BuilderError),
+    UnexpectedVoidError,
     UndefinedVariableError(String),
+
+    BuilderError(BuilderError),
     ModuleVerificationError(LLVMString),
     TargetError(LLVMString),
-    TargetMachineError(),
-    TargetMachineWriteError(),
+    TargetMachineError,
+    TargetMachineWriteError,
 }
 
 impl std::fmt::Display for CodeGenError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            CodeGenError::BuilderError(err) => write!(f, "Builder error: {err}"),
+            CodeGenError::UnexpectedVoidError => write!(f, "Unexpected void return value"),
             CodeGenError::UndefinedVariableError(name) => write!(f, "Undefined variable: {name}"),
+            CodeGenError::BuilderError(err) => write!(f, "Builder error: {err}"),
             CodeGenError::ModuleVerificationError(err) => write!(f, "Module verification error: {err}"),
             CodeGenError::TargetError(err) => write!(f, "Target error: {err}"),
-            CodeGenError::TargetMachineError() => write!(f, "Target machine creation error"),
-            CodeGenError::TargetMachineWriteError() => write!(f, "Target machine write to file error"),
+            CodeGenError::TargetMachineError => write!(f, "Target machine creation error"),
+            CodeGenError::TargetMachineWriteError => write!(f, "Target machine write to file error"),
         }
     }
 }
@@ -37,14 +40,42 @@ impl From<BuilderError> for CodeGenError {
     fn from(err: BuilderError) -> Self { CodeGenError::BuilderError(err) }
 }
 
-struct CodeGen<'ctxt> {
+#[derive(Clone, Copy, PartialEq)]
+pub enum QLValue<'a> {
+    Integer(IntValue<'a>),
+    String(ArrayValue<'a>),
+    Void
+}
+
+impl<'a> TryFrom<BasicValueEnum<'a>> for QLValue<'a> {
+    type Error = CodeGenError;
+
+    fn try_from(value: BasicValueEnum<'a>) -> Result<Self, Self::Error> {
+        match value {
+            BasicValueEnum::IntValue(int_val) => Ok(QLValue::Integer(int_val)),
+            BasicValueEnum::ArrayValue(arr_val) => Ok(QLValue::String(arr_val)),
+            _ => Err(CodeGenError::UnexpectedVoidError),
+        }
+    }
+}
+
+impl<'a> TryFrom<QLValue<'a>> for BasicValueEnum<'a> {
+    type Error = CodeGenError;
+
+    fn try_from(value: QLValue<'a>) -> Result<Self, Self::Error> {
+        match value {
+            QLValue::Integer(int_val) => Ok(BasicValueEnum::IntValue(int_val)),
+            QLValue::String(arr_val) => Ok(BasicValueEnum::ArrayValue(arr_val)),
+            QLValue::Void => Err(CodeGenError::UnexpectedVoidError),
+        }
+    }
+}
+
+pub struct CodeGen<'ctxt> {
     vars: HashMap<String, PointerValue<'ctxt>>,
     context: &'ctxt Context,
     builder: Builder<'ctxt>,
-    module: Module<'ctxt>,
-
-    print_fn: FunctionValue<'ctxt>,
-    input_fn: FunctionValue<'ctxt>,
+    module: Module<'ctxt>
 }
 
 impl<'ctxt> CodeGen<'ctxt> {
@@ -56,10 +87,7 @@ impl<'ctxt> CodeGen<'ctxt> {
         self.builder.position_at_end(basic_block);
 
         for stmt in stmts {
-            match stmt {
-                StatementNode::Assignment(_,_) => self.gen_assignment(stmt)?,
-                StatementNode::Print(_) => self.gen_print(stmt)?
-            }
+            stmt.gen_stmt(&mut self)?;
         }
 
         self.builder.build_return(Some(&self.int_type().const_int(0, false)))?;
@@ -68,61 +96,54 @@ impl<'ctxt> CodeGen<'ctxt> {
         Ok(self.module)
     }
 
-    fn gen_assignment(&mut self, node: &StatementNode) -> Result<(), CodeGenError> {
-        if let StatementNode::Assignment(var_name, expr) = node {
-            if !self.vars.contains_key(var_name) {
-                // Allocate memory on first assignment
-                let pointer = self.builder.build_alloca(self.int_type(), var_name)?;
-                self.vars.insert(var_name.clone(), pointer);
-            }
-            
-            let pointer = self.vars[var_name];
-            let value = self.gen_expr(expr)?;
-            self.builder.build_store(pointer, value)?;
-            Ok(())
-        } else {
-            unreachable!()
-        }
-    }
-
-    fn gen_print(&self, node: &StatementNode) -> Result<(), CodeGenError> {
-        if let StatementNode::Print(expr) = node {
-            let value = self.gen_expr(expr)?;
-            self.builder.build_call(self.print_fn, &[value.into()], "printi")?;
-            Ok(())
-        } else {
-            unreachable!()
-        }
-    }
-
-    fn gen_expr(&self, node: &ExpressionNode) -> Result<IntValue<'ctxt>, CodeGenError> {
-        match node {
-            ExpressionNode::Integer(x) => Ok(self.int_type().const_int(*x as u64, false)),
-            ExpressionNode::QName(name) => {
-                if let Some(pointer) = self.vars.get(name) {
-                    let res = self.builder.build_load(self.int_type(), *pointer, "assign").map(|v| v.into_int_value())?;
-                    Ok(res)
-                } else {
-                    Err(CodeGenError::UndefinedVariableError(name.clone()))
-                }
-            },
-            ExpressionNode::Add(expr1, expr2) => {
-                let val1 = self.gen_expr(expr1)?;
-                let val2 = self.gen_expr(expr2)?;
-                Ok(self.builder.build_int_add(val1, val2, "sum")?)
-            },
-            ExpressionNode::Input => {
-                let call_site = self.builder.build_call(self.input_fn, &[], "inputi")?;
-                if let ValueKind::Basic(val) = call_site.try_as_basic_value() {
-                    Ok(val.into_int_value())
-                } else {
-                    panic!("Expected integer return from inputi");
-                }
-            }
-        }
-    }
-
     fn int_type(&self) -> IntType<'ctxt> { self.context.i32_type() }
+    pub fn const_int(&self, value: i32) -> QLValue<'ctxt> {
+        QLValue::Integer(self.int_type().const_int(value as u64, false))
+    }
+
+    pub fn load_var(&self, name: &String) -> Result<QLValue<'ctxt>, CodeGenError> {
+        if let Some(pointer) = self.vars.get(name) {
+            let res = self.builder.build_load(self.int_type(), *pointer, "load").map(|v| v.into_int_value())?;
+            Ok(QLValue::Integer(res))
+        } else {
+            Err(CodeGenError::UndefinedVariableError(name.clone()))
+        }
+    }
+
+    pub fn store_var(&mut self, name: &String, value: QLValue<'ctxt>) -> Result<(), CodeGenError> {
+        if !self.vars.contains_key(name) {
+            // Allocate memory on first assignment
+            let pointer = self.builder.build_alloca(self.int_type(), name)?;
+            self.vars.insert(name.clone(), pointer);
+        }
+        
+        let pointer = self.vars[name];
+        self.builder.build_store::<BasicValueEnum>(pointer, value.try_into()?)?;
+        Ok(())
+    } 
+    
+    pub fn add(&self, val1: QLValue<'ctxt>, val2: QLValue<'ctxt>) -> Result<QLValue<'ctxt>, CodeGenError> {
+        if let (QLValue::Integer(int1), QLValue::Integer(int2)) = (val1, val2) {
+            let res = self.builder.build_int_add(int1, int2, "sum")?;
+            Ok(QLValue::Integer(res))
+        } else {
+            Err(CodeGenError::UnexpectedVoidError)
+        }
+    }
+
+    pub fn call(&self, fn_name: &str, args: Vec<QLValue<'ctxt>>) -> Result<QLValue<'ctxt>, CodeGenError> {
+        let function = self.module.get_function(fn_name)
+            .ok_or_else(|| CodeGenError::UndefinedVariableError(fn_name.to_string()))?;
+        let arg_values: Vec<BasicMetadataValueEnum> = args
+            .into_iter()
+            .map(|v| BasicValueEnum::try_from(v).map(BasicMetadataValueEnum::from))
+            .collect::<Result<Vec<BasicMetadataValueEnum>, CodeGenError>>()?;
+        let call_site = self.builder.build_call(function, &arg_values, "call")?;
+        match call_site.try_as_basic_value() {
+            ValueKind::Basic(value) => Ok(value.try_into()?),
+            ValueKind::Instruction(_) => Ok(QLValue::Void),
+        }
+    }
 }
 
 pub fn gen_code(stmts: &Vec<StatementNode>) -> Result<(), CodeGenError> {
@@ -131,18 +152,16 @@ pub fn gen_code(stmts: &Vec<StatementNode>) -> Result<(), CodeGenError> {
     let module = context.create_module("main");
 
     let print_type = context.void_type().fn_type(&[context.i32_type().into()], false);
-    let print_fn = module.add_function("printi", print_type, None);
+    module.add_function("printi", print_type, None);
 
     let input_type = context.i32_type().fn_type(&[], false);
-    let input_fn = module.add_function("inputi", input_type, None);
+    module.add_function("inputi", input_type, None);
     
     let codegen = CodeGen {
         vars: HashMap::<String, PointerValue>::new(),
         context: &context,
         builder,
-        module,
-        print_fn,
-        input_fn
+        module
     };
 
     let module = codegen.gen_code(stmts)?;
@@ -157,7 +176,7 @@ pub fn gen_code(stmts: &Vec<StatementNode>) -> Result<(), CodeGenError> {
         inkwell::OptimizationLevel::Default,
         inkwell::targets::RelocMode::Default,
         inkwell::targets::CodeModel::Default,
-    ).ok_or_else(|| CodeGenError::TargetMachineError())?;
+    ).ok_or_else(|| CodeGenError::TargetMachineError)?;
 
     let data_layout = target_machine.get_target_data().get_data_layout();
     module.set_triple(&target_triple);
@@ -165,7 +184,7 @@ pub fn gen_code(stmts: &Vec<StatementNode>) -> Result<(), CodeGenError> {
 
     let path = Path::new("out/main.o");
     target_machine.write_to_file(&module, FileType::Object, path)
-        .map_err(|_| CodeGenError::TargetMachineWriteError())
+        .map_err(|_| CodeGenError::TargetMachineWriteError)
 }
 
 
