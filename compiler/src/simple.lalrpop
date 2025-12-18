@@ -1,5 +1,6 @@
 use std::str::FromStr;
 use crate::tokens::{StatementNode, ExpressionNode};
+use crate::codegen::{ComparisonOp};
 
 grammar;
 
@@ -8,6 +9,7 @@ pub Program: Vec<StatementNode> = Statement*;
 Statement: StatementNode = {
     <QName> "=" <Expression> ";" => StatementNode::Assignment(<>),
     "if" <Expression> "{" <Statement*> "}" "else" "{" <Statement*> "}" => StatementNode::Conditional(<>),
+    "while" <Expression> "{" <Statement*> "}" => StatementNode::ConditionalLoop(<>),
     <Expression> ";" => StatementNode::LoneExpression(<>)
 }
 
@@ -17,9 +19,16 @@ Expression: Box<ExpressionNode> = {
     QName => Box::new(ExpressionNode::QName(<>)),
     #[precedence(level="1")] #[assoc(side="left")]
     <Expression> "+" <Expression> => Box::new(ExpressionNode::Add(<>)),
+    <Expression> "-" <Expression> => Box::new(ExpressionNode::Subtract(<>)),
     <QName> "(" <Expression*> ")" => Box::new(ExpressionNode::FunctionCall(<>)),
-    #[precedence(level="2")] #[assoc(side="right")]
-    <Expression> "==" <Expression> => Box::new(ExpressionNode::Equality(<>)),
+    #[precedence(level="2")] #[assoc(side="left")]
+    <Expression> ">" <Expression> => Box::new(ExpressionNode::Comparison(<>, ComparisonOp::GreaterThan)),
+    <Expression> "<" <Expression> => Box::new(ExpressionNode::Comparison(<>, ComparisonOp::LessThan)),
+    <Expression> ">=" <Expression> => Box::new(ExpressionNode::Comparison(<>, ComparisonOp::GreaterThanOrEqual)),
+    <Expression> "<=" <Expression> => Box::new(ExpressionNode::Comparison(<>, ComparisonOp::LessThanOrEqual)),
+    #[precedence(level="3")] #[assoc(side="left")]
+    <Expression> "==" <Expression> => Box::new(ExpressionNode::Comparison(<>, ComparisonOp::Equal)),
+    <Expression> "!=" <Expression> => Box::new(ExpressionNode::Comparison(<>, ComparisonOp::NotEqual))
 }
 
 Int: i32 = r"-?[0-9]+" => i32::from_str(<>).unwrap();

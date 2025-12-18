@@ -30,7 +30,7 @@ fn main() -> Result<(), IOError> {
         IOError::new(ErrorKind::InvalidData, "Parsing failed")
     })?;
 
-    codegen::gen_code(&program).map_err(|e| {
+    codegen::gen_code(program).map_err(|e| {
         eprintln!("Failed to build {source_filepath}: {e}");
         IOError::new(ErrorKind::InvalidData, "Building failed")
     })?;

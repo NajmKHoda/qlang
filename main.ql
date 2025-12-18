@@ -1,7 +1,10 @@
-x = inputi();
+n = inputi();
 
-if x == 0 {
-    printi(1);
-} else {
-    printi(0);
+a = 0;
+b = 1;
+while n > 0 {
+    printi(b);
+    b = b + a;
+    a = b - a;
+    n = n - 1;
 }

@@ -16,6 +16,7 @@ mod data;
 mod error;
 pub use error::CodeGenError;
 pub use data::QLValue;
+pub use operations::ComparisonOp;
 
 pub struct CodeGen<'ctxt> {
     vars: HashMap<String, PointerValue<'ctxt>>,
@@ -26,7 +27,7 @@ pub struct CodeGen<'ctxt> {
 }
 
 impl<'ctxt> CodeGen<'ctxt> {
-    fn gen_code(mut self, stmts: &Vec<StatementNode>) -> Result<Module<'ctxt>, CodeGenError> {
+    fn gen_code(mut self, stmts: Vec<StatementNode>) -> Result<Module<'ctxt>, CodeGenError> {
         let main_type = self.int_type().fn_type(&[], false);
         let main_fn = self.module.add_function("main", main_type, None);
         self.cur_fn = Some(main_fn);
@@ -45,7 +46,7 @@ impl<'ctxt> CodeGen<'ctxt> {
         self.context.append_basic_block(cur_fn, name)
     }
 
-    fn gen_stmts(&mut self, stmts: &Vec<StatementNode>) -> Result<(), CodeGenError> {
+    fn gen_stmts(&mut self, stmts: Vec<StatementNode>) -> Result<(), CodeGenError> {
         for stmt in stmts {
             stmt.gen_stmt(self)?;
         }
@@ -55,7 +56,7 @@ impl<'ctxt> CodeGen<'ctxt> {
     fn int_type(&self) -> IntType<'ctxt> { self.context.i32_type() }
 }
 
-pub fn gen_code(stmts: &Vec<StatementNode>) -> Result<(), CodeGenError> {
+pub fn gen_code(stmts: Vec<StatementNode>) -> Result<(), CodeGenError> {
     let context = Context::create();
     let builder = context.create_builder();
     let module = context.create_module("main");
