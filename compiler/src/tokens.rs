@@ -21,7 +21,7 @@ impl StatementNode {
             },
             StatementNode::Conditional(cond_expr, then_stmts, else_stmts) => {
                 let condition = cond_expr.gen_eval(code_gen)?;
-                code_gen.gen_conditional_loop(condition, then_stmts, else_stmts)
+                code_gen.gen_conditional(condition, then_stmts, else_stmts)
             }
             StatementNode::ConditionalLoop(cond_expr, body_stmts) => {
                 code_gen.gen_loop(cond_expr, body_stmts)

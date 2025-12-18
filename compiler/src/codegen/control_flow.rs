@@ -18,7 +18,7 @@ impl<'ctxt> CodeGen<'ctxt> {
         }
     }
 
-    pub fn gen_conditional_loop(
+    pub fn gen_conditional(
         &mut self,
         conditional: QLValue<'ctxt>,
         then_stmts: Vec<StatementNode>,
