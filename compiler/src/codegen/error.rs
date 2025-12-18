@@ -6,6 +6,7 @@ pub enum CodeGenError {
     UnexpectedTypeError,
     UndefinedVariableError(String),
     DuplicateDefinitionError(String),
+    BadFunctionCallError(String),
 
     BuilderError(BuilderError),
     ModuleVerificationError(LLVMString),
@@ -20,6 +21,8 @@ impl fmt::Display for CodeGenError {
             CodeGenError::UnexpectedTypeError => write!(f, "Unexpected type encountered"),
             CodeGenError::UndefinedVariableError(name) => write!(f, "Undefined variable: {name}"),
             CodeGenError::DuplicateDefinitionError(name) => write!(f, "Duplicate definition for {name}"),
+            CodeGenError::BadFunctionCallError(name) => write!(f, "Bad function call: {name}"),
+            
             CodeGenError::BuilderError(err) => write!(f, "Builder error: {err}"),
             CodeGenError::ModuleVerificationError(err) => write!(f, "Module verification error: {err}"),
             CodeGenError::TargetError(err) => write!(f, "Target error: {err}"),

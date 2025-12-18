@@ -2,7 +2,7 @@ use inkwell::values::{BasicValueEnum, IntValue, PointerValue};
 
 use super::{CodeGen, CodeGenError};
 
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, PartialEq, Debug)]
 pub enum QLType {
     Integer,
     Bool,
@@ -71,7 +71,8 @@ impl<'ctxt> CodeGen<'ctxt> {
 
     pub fn load_var(&self, name: &str) -> Result<QLValue<'ctxt>, CodeGenError> {
         if let Some(variable) = self.vars.get(name) {
-            let res: QLValue<'ctxt> = self.builder.build_load(self.int_type(), variable.pointer, "load")?.try_into()?;
+            let var_type = self.try_get_nonvoid_type(&variable.ql_type)?;
+            let res: QLValue<'ctxt> = self.builder.build_load(var_type, variable.pointer, "load")?.try_into()?;
             Ok(res)
         } else {
             Err(CodeGenError::UndefinedVariableError(name.to_string()))

@@ -4,10 +4,11 @@ use inkwell::context::Context;
 use inkwell::module::Module;
 use inkwell::builder::Builder;
 use inkwell::targets::{FileType, Target, TargetMachine};
-use inkwell::types::{IntType};
+use inkwell::types::{BasicTypeEnum, IntType, VoidType};
 use inkwell::values::{FunctionValue};
 use inkwell::basic_block::BasicBlock;
 
+use crate::codegen::control_flow::QLFunction;
 use crate::tokens::{StatementNode};
 
 mod control_flow;
@@ -23,6 +24,7 @@ pub use operations::ComparisonOp;
 
 pub struct CodeGen<'ctxt> {
     vars: HashMap<String, QLVariable<'ctxt>>,
+    functions: HashMap<String, QLFunction<'ctxt>>,
     cur_fn: Option<FunctionValue<'ctxt>>,
     context: &'ctxt Context,
     builder: Builder<'ctxt>,
@@ -31,8 +33,11 @@ pub struct CodeGen<'ctxt> {
 
 impl<'ctxt> CodeGen<'ctxt> {
     fn gen_code(mut self, stmts: Vec<StatementNode>) -> Result<Module<'ctxt>, CodeGenError> {
-        let main_type = self.int_type().fn_type(&[], false);
-        let main_fn = self.module.add_function("main", main_type, None);
+        self.declare_function("printi", QLType::Void, vec![QLType::Integer])?;
+        self.declare_function("printb", QLType::Void, vec![QLType::Bool])?;
+        self.declare_function("inputi", QLType::Integer, vec![])?;
+
+        let main_fn = self.declare_function("main", QLType::Integer, vec![])?;
         self.cur_fn = Some(main_fn);
 
         let block = self.append_block("entry");
@@ -58,24 +63,24 @@ impl<'ctxt> CodeGen<'ctxt> {
 
     fn int_type(&self) -> IntType<'ctxt> { self.context.i32_type() }
     fn bool_type(&self) -> IntType<'ctxt> { self.context.bool_type() }
+    fn void_type(&self) -> VoidType<'ctxt> { self.context.void_type() }
+    fn try_get_nonvoid_type(&self, ql_type: &QLType) -> Result<BasicTypeEnum<'ctxt>, CodeGenError> {
+        match ql_type {
+            QLType::Integer => Ok(self.int_type().into()),
+            QLType::Bool => Ok(self.bool_type().into()),
+            QLType::Void => Err(CodeGenError::UnexpectedTypeError)
+        }
+    }
 }
 
 pub fn gen_code(stmts: Vec<StatementNode>) -> Result<(), CodeGenError> {
     let context = Context::create();
     let builder = context.create_builder();
     let module = context.create_module("main");
-
-    let printi_type = context.void_type().fn_type(&[context.i32_type().into()], false);
-    module.add_function("printi", printi_type, None);
-
-    let printb_type = context.void_type().fn_type(&[context.bool_type().into()], false);
-    module.add_function("printb", printb_type, None);
-
-    let input_type = context.i32_type().fn_type(&[], false);
-    module.add_function("inputi", input_type, None);
     
     let codegen = CodeGen {
         vars: HashMap::<String, QLVariable>::new(),
+        functions: HashMap::<String, QLFunction>::new(),
         cur_fn: None,
         context: &context,
         builder,
