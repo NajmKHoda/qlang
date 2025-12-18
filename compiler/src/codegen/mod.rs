@@ -7,15 +7,16 @@ use inkwell::targets::{FileType, Target, TargetMachine};
 use inkwell::types::{BasicTypeEnum, IntType, VoidType};
 use inkwell::basic_block::BasicBlock;
 
-use crate::codegen::control_flow::QLFunction;
 use crate::tokens::{ProgramNode, StatementNode};
 
 mod control_flow;
 mod operations;
 mod data;
 mod error;
+mod function;
 
 use data::QLVariable;
+use function::QLFunction;
 pub use error::CodeGenError;
 pub use data::QLValue;
 pub use data::QLType;
