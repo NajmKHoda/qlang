@@ -1,19 +1,31 @@
 use crate::codegen::{CodeGen, CodeGenError, QLValue, QLType, ComparisonOp};
 
+pub struct ProgramNode {
+    pub functions: Vec<FunctionNode>
+}
+
+pub struct FunctionNode {
+    pub name: String,
+    pub return_type: QLType,
+    pub params: Vec<TypedQNameNode>,
+    pub body: Vec<StatementNode>,
+}
+
 pub enum StatementNode {
-    VariableDefinition(String, QLType, Box<ExpressionNode>),
+    VariableDefinition(TypedQNameNode, Box<ExpressionNode>),
     Assignment(String, Box<ExpressionNode>),
     Conditional(Box<ExpressionNode>, Vec<StatementNode>, Vec<StatementNode>),
     ConditionalLoop(Box<ExpressionNode>, Vec<StatementNode>),
     LoneExpression(Box<ExpressionNode>),
+    Return(Option<Box<ExpressionNode>>),
 }
 
 impl StatementNode {
     pub fn gen_stmt<'a>(self, code_gen: &mut CodeGen<'a>) -> Result<(), CodeGenError> {
         match self {
-            StatementNode::VariableDefinition(var_name, var_type, expr) => {
+            StatementNode::VariableDefinition(var, expr) => {
                 let value = expr.gen_eval(code_gen)?;
-                code_gen.define_var(&var_name, var_type, value)
+                code_gen.define_var(&var.name, var.ql_type, value)
             },
             StatementNode::Assignment(var_name, expr) => {
                 let value = expr.gen_eval(code_gen)?;
@@ -29,8 +41,20 @@ impl StatementNode {
             StatementNode::LoneExpression(expr) => {
                 expr.gen_eval(code_gen).map(|_| ())
             }
+            StatementNode::Return(expr) => {
+                let val = match expr {
+                    Some(e) => Some(e.gen_eval(code_gen)?),
+                    None => None
+                };
+                code_gen.gen_return(val)
+            }
         }
     }
+}
+
+pub struct TypedQNameNode {
+    pub name: String,
+    pub ql_type: QLType,
 }
 
 pub enum ExpressionNode {

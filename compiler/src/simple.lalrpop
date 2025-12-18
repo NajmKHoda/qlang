@@ -1,16 +1,25 @@
 use std::str::FromStr;
-use crate::tokens::{StatementNode, ExpressionNode};
+use crate::tokens::{ProgramNode, FunctionNode, StatementNode, ExpressionNode, TypedQNameNode};
 use crate::codegen::{ComparisonOp, QLType};
 
 grammar;
 
-pub Program: Vec<StatementNode> = Statement*;
+pub Program: ProgramNode = <functions:Function*> => ProgramNode { <> };
+
+Function: FunctionNode =
+    "function" <name:QName>
+    "(" <params:Comma<TypedQName>> ")"
+    "->" <return_type:TypeNameWithVoid>
+    "{" <body:Statement*> "}"
+    => FunctionNode { <> };
 
 Statement: StatementNode = {
-    <t:TypeName> <q:QName> "<-" <e:Expression> ";" => StatementNode::VariableDefinition(q, t, e),
+    <TypedQName> "<-" <Expression> ";" => StatementNode::VariableDefinition(<>),
     <QName> "<-" <Expression> ";" => StatementNode::Assignment(<>),
     "if" <Expression> "{" <Statement*> "}" "else" "{" <Statement*> "}" => StatementNode::Conditional(<>),
     "while" <Expression> "{" <Statement*> "}" => StatementNode::ConditionalLoop(<>),
+    "return" ";" => StatementNode::Return(None),
+    "return" <Expression> ";" => StatementNode::Return(Some(<>)),
     <Expression> ";" => StatementNode::LoneExpression(<>)
 }
 
@@ -22,7 +31,7 @@ Expression: Box<ExpressionNode> = {
     #[precedence(level="1")] #[assoc(side="left")]
     <Expression> "+" <Expression> => Box::new(ExpressionNode::Add(<>)),
     <Expression> "-" <Expression> => Box::new(ExpressionNode::Subtract(<>)),
-    <QName> "(" <Expression*> ")" => Box::new(ExpressionNode::FunctionCall(<>)),
+    <QName> "(" <Comma<Expression>> ")" => Box::new(ExpressionNode::FunctionCall(<>)),
     #[precedence(level="2")] #[assoc(side="left")]
     <Expression> ">" <Expression> => Box::new(ExpressionNode::Comparison(<>, ComparisonOp::GreaterThan)),
     <Expression> "<" <Expression> => Box::new(ExpressionNode::Comparison(<>, ComparisonOp::LessThan)),
@@ -33,6 +42,13 @@ Expression: Box<ExpressionNode> = {
     <Expression> "!=" <Expression> => Box::new(ExpressionNode::Comparison(<>, ComparisonOp::NotEqual))
 }
 
+TypedQName: TypedQNameNode = <ql_type:TypeName> <name:QName> => TypedQNameNode { <> };
+
+TypeNameWithVoid: QLType = {
+    <TypeName>,
+    "void" => QLType::Void
+}
+
 TypeName: QLType = {
     "int" => QLType::Integer,
     "bool" => QLType::Bool
@@ -41,3 +57,14 @@ TypeName: QLType = {
 Int: i32 = r"-?[0-9]+" => i32::from_str(<>).unwrap();
 Bool: bool = { "true" => true, "false" => false };
 QName: String = r"[a-zA-Z_][a-zA-Z0-9_]*" => String::from(<>);
+
+Comma<T>: Vec<T> = _Comma<T>? => match <> {
+    Some(xs) => xs,
+    None => vec![]
+};
+
+_Comma<T>: Vec<T> = <head:T> <tail:("," <T>)*> => {
+    let mut vals = vec![head];
+    vals.extend(tail.into_iter());
+    vals
+};

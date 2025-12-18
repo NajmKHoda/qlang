@@ -7,6 +7,7 @@ pub enum CodeGenError {
     UndefinedVariableError(String),
     DuplicateDefinitionError(String),
     BadFunctionCallError(String),
+    BadArgumentMutationError(String, String),
 
     BuilderError(BuilderError),
     ModuleVerificationError(LLVMString),
@@ -22,7 +23,8 @@ impl fmt::Display for CodeGenError {
             CodeGenError::UndefinedVariableError(name) => write!(f, "Undefined variable: {name}"),
             CodeGenError::DuplicateDefinitionError(name) => write!(f, "Duplicate definition for {name}"),
             CodeGenError::BadFunctionCallError(name) => write!(f, "Bad function call: {name}"),
-            
+            CodeGenError::BadArgumentMutationError(fn_name, arg) => write!(f, "Attempt to mutate argument {arg} of {fn_name}"),
+
             CodeGenError::BuilderError(err) => write!(f, "Builder error: {err}"),
             CodeGenError::ModuleVerificationError(err) => write!(f, "Module verification error: {err}"),
             CodeGenError::TargetError(err) => write!(f, "Target error: {err}"),

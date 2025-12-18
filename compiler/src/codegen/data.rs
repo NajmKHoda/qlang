@@ -74,6 +74,8 @@ impl<'ctxt> CodeGen<'ctxt> {
             let var_type = self.try_get_nonvoid_type(&variable.ql_type)?;
             let res: QLValue<'ctxt> = self.builder.build_load(var_type, variable.pointer, "load")?.try_into()?;
             Ok(res)
+        } else if let Some(arg) = self.cur_fn().try_get_arg_value(name) {
+            Ok(arg.try_into()?)
         } else {
             Err(CodeGenError::UndefinedVariableError(name.to_string()))
         }
@@ -106,6 +108,8 @@ impl<'ctxt> CodeGen<'ctxt> {
             }
             self.builder.build_store::<BasicValueEnum>(variable.pointer, value.try_into()?)?;
             Ok(())
+        } else if let Some(_) = self.cur_fn().try_get_arg_value(name) {
+            Err(CodeGenError::BadArgumentMutationError(self.cur_fn().name.clone(), name.to_string()))
         } else {
             Err(CodeGenError::UndefinedVariableError(name.to_string()))
         }

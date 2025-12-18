@@ -5,11 +5,10 @@ use inkwell::module::Module;
 use inkwell::builder::Builder;
 use inkwell::targets::{FileType, Target, TargetMachine};
 use inkwell::types::{BasicTypeEnum, IntType, VoidType};
-use inkwell::values::{FunctionValue};
 use inkwell::basic_block::BasicBlock;
 
 use crate::codegen::control_flow::QLFunction;
-use crate::tokens::{StatementNode};
+use crate::tokens::{ProgramNode, StatementNode};
 
 mod control_flow;
 mod operations;
@@ -25,33 +24,34 @@ pub use operations::ComparisonOp;
 pub struct CodeGen<'ctxt> {
     vars: HashMap<String, QLVariable<'ctxt>>,
     functions: HashMap<String, QLFunction<'ctxt>>,
-    cur_fn: Option<FunctionValue<'ctxt>>,
+    cur_fn_name: Option<String>,
     context: &'ctxt Context,
     builder: Builder<'ctxt>,
     module: Module<'ctxt>
 }
 
 impl<'ctxt> CodeGen<'ctxt> {
-    fn gen_code(mut self, stmts: Vec<StatementNode>) -> Result<Module<'ctxt>, CodeGenError> {
-        self.declare_function("printi", QLType::Void, vec![QLType::Integer])?;
-        self.declare_function("printb", QLType::Void, vec![QLType::Bool])?;
-        self.declare_function("inputi", QLType::Integer, vec![])?;
+    fn gen_code(mut self, program: ProgramNode) -> Result<Module<'ctxt>, CodeGenError> {
+        self.declare_extern_function("printi", QLType::Void, &[QLType::Integer])?;
+        self.declare_extern_function("printb", QLType::Void, &[QLType::Bool])?;
+        self.declare_extern_function("inputi", QLType::Integer, &[])?;
 
-        let main_fn = self.declare_function("main", QLType::Integer, vec![])?;
-        self.cur_fn = Some(main_fn);
+        for function in program.functions {
+            self.declare_function(&function.name, function.return_type, function.params)?;
+            self.cur_fn_name = Some(function.name.to_string());
 
-        let block = self.append_block("entry");
-        self.builder.position_at_end(block);
-        self.gen_stmts(stmts)?;
-        self.builder.build_return(Some(&self.int_type().const_int(0, false)))?;
+            let block = self.append_block("entry");
+            self.builder.position_at_end(block);
+            self.gen_stmts(function.body)?;
+        }
 
         self.module.verify().map_err(|e| CodeGenError::ModuleVerificationError(e))?;
         Ok(self.module)
     }
 
     fn append_block(&mut self, name: &str) -> BasicBlock<'ctxt> {
-        let cur_fn = self.cur_fn.unwrap();
-        self.context.append_basic_block(cur_fn, name)
+        let cur_fn = self.cur_fn();
+        self.context.append_basic_block(cur_fn.llvm_function, name)
     }
 
     fn gen_stmts(&mut self, stmts: Vec<StatementNode>) -> Result<(), CodeGenError> {
@@ -61,9 +61,15 @@ impl<'ctxt> CodeGen<'ctxt> {
         Ok(())
     }
 
+    fn cur_fn(&self) -> &QLFunction<'ctxt> {
+        let name = self.cur_fn_name.as_ref().unwrap();
+        self.functions.get(name).unwrap()
+    }
+
     fn int_type(&self) -> IntType<'ctxt> { self.context.i32_type() }
     fn bool_type(&self) -> IntType<'ctxt> { self.context.bool_type() }
     fn void_type(&self) -> VoidType<'ctxt> { self.context.void_type() }
+    
     fn try_get_nonvoid_type(&self, ql_type: &QLType) -> Result<BasicTypeEnum<'ctxt>, CodeGenError> {
         match ql_type {
             QLType::Integer => Ok(self.int_type().into()),
@@ -73,7 +79,7 @@ impl<'ctxt> CodeGen<'ctxt> {
     }
 }
 
-pub fn gen_code(stmts: Vec<StatementNode>) -> Result<(), CodeGenError> {
+pub fn gen_code(program: ProgramNode) -> Result<(), CodeGenError> {
     let context = Context::create();
     let builder = context.create_builder();
     let module = context.create_module("main");
@@ -81,13 +87,13 @@ pub fn gen_code(stmts: Vec<StatementNode>) -> Result<(), CodeGenError> {
     let codegen = CodeGen {
         vars: HashMap::<String, QLVariable>::new(),
         functions: HashMap::<String, QLFunction>::new(),
-        cur_fn: None,
+        cur_fn_name: None,
         context: &context,
         builder,
         module
     };
 
-    let module = codegen.gen_code(stmts)?;
+    let module = codegen.gen_code(program)?;
     if let Err(msg) = module.print_to_file("out/main.debug") {
         eprintln!("Failed to write debug LLVM IR: {}", msg);
     }
