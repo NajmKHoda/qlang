@@ -86,7 +86,8 @@ impl<'ctxt> CodeGen<'ctxt> {
             return Err(CodeGenError::UnexpectedTypeError);
         }
         
-        let pointer = self.builder.build_alloca(self.int_type(), name)?;
+        let llvm_type = self.try_get_nonvoid_type(&var_type)?;
+        let pointer = self.builder.build_alloca(llvm_type, name)?;
         self.builder.build_store::<BasicValueEnum>(pointer, value.try_into()?)?;
 
         let var = QLVariable {
