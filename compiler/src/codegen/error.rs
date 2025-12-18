@@ -5,6 +5,7 @@ use inkwell::support::LLVMString;
 pub enum CodeGenError {
     UnexpectedTypeError,
     UndefinedVariableError(String),
+    DuplicateDefinitionError(String),
 
     BuilderError(BuilderError),
     ModuleVerificationError(LLVMString),
@@ -18,6 +19,7 @@ impl fmt::Display for CodeGenError {
         match self {
             CodeGenError::UnexpectedTypeError => write!(f, "Unexpected type encountered"),
             CodeGenError::UndefinedVariableError(name) => write!(f, "Undefined variable: {name}"),
+            CodeGenError::DuplicateDefinitionError(name) => write!(f, "Duplicate definition for {name}"),
             CodeGenError::BuilderError(err) => write!(f, "Builder error: {err}"),
             CodeGenError::ModuleVerificationError(err) => write!(f, "Module verification error: {err}"),
             CodeGenError::TargetError(err) => write!(f, "Target error: {err}"),

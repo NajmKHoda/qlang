@@ -5,7 +5,7 @@ use inkwell::module::Module;
 use inkwell::builder::Builder;
 use inkwell::targets::{FileType, Target, TargetMachine};
 use inkwell::types::{IntType};
-use inkwell::values::{PointerValue, FunctionValue};
+use inkwell::values::{FunctionValue};
 use inkwell::basic_block::BasicBlock;
 
 use crate::tokens::{StatementNode};
@@ -14,12 +14,15 @@ mod control_flow;
 mod operations;
 mod data;
 mod error;
+
+use data::QLVariable;
 pub use error::CodeGenError;
 pub use data::QLValue;
+pub use data::QLType;
 pub use operations::ComparisonOp;
 
 pub struct CodeGen<'ctxt> {
-    vars: HashMap<String, PointerValue<'ctxt>>,
+    vars: HashMap<String, QLVariable<'ctxt>>,
     cur_fn: Option<FunctionValue<'ctxt>>,
     context: &'ctxt Context,
     builder: Builder<'ctxt>,
@@ -54,6 +57,7 @@ impl<'ctxt> CodeGen<'ctxt> {
     }
 
     fn int_type(&self) -> IntType<'ctxt> { self.context.i32_type() }
+    fn bool_type(&self) -> IntType<'ctxt> { self.context.bool_type() }
 }
 
 pub fn gen_code(stmts: Vec<StatementNode>) -> Result<(), CodeGenError> {
@@ -61,14 +65,17 @@ pub fn gen_code(stmts: Vec<StatementNode>) -> Result<(), CodeGenError> {
     let builder = context.create_builder();
     let module = context.create_module("main");
 
-    let print_type = context.void_type().fn_type(&[context.i32_type().into()], false);
-    module.add_function("printi", print_type, None);
+    let printi_type = context.void_type().fn_type(&[context.i32_type().into()], false);
+    module.add_function("printi", printi_type, None);
+
+    let printb_type = context.void_type().fn_type(&[context.bool_type().into()], false);
+    module.add_function("printb", printb_type, None);
 
     let input_type = context.i32_type().fn_type(&[], false);
     module.add_function("inputi", input_type, None);
     
     let codegen = CodeGen {
-        vars: HashMap::<String, PointerValue>::new(),
+        vars: HashMap::<String, QLVariable>::new(),
         cur_fn: None,
         context: &context,
         builder,

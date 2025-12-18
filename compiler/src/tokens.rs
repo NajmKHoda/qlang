@@ -1,6 +1,7 @@
-use crate::codegen::{CodeGen, CodeGenError, QLValue, ComparisonOp};
+use crate::codegen::{CodeGen, CodeGenError, QLValue, QLType, ComparisonOp};
 
 pub enum StatementNode {
+    VariableDefinition(String, QLType, Box<ExpressionNode>),
     Assignment(String, Box<ExpressionNode>),
     Conditional(Box<ExpressionNode>, Vec<StatementNode>, Vec<StatementNode>),
     ConditionalLoop(Box<ExpressionNode>, Vec<StatementNode>),
@@ -10,6 +11,10 @@ pub enum StatementNode {
 impl StatementNode {
     pub fn gen_stmt<'a>(self, code_gen: &mut CodeGen<'a>) -> Result<(), CodeGenError> {
         match self {
+            StatementNode::VariableDefinition(var_name, var_type, expr) => {
+                let value = expr.gen_eval(code_gen)?;
+                code_gen.define_var(&var_name, var_type, value)
+            },
             StatementNode::Assignment(var_name, expr) => {
                 let value = expr.gen_eval(code_gen)?;
                 code_gen.store_var(&var_name, value)
@@ -30,7 +35,8 @@ impl StatementNode {
 
 pub enum ExpressionNode {
     QName(String),
-    Integer(i32),
+    IntegerLiteral(i32),
+    BoolLiteral(bool),
     Add(Box<ExpressionNode>, Box<ExpressionNode>),
     Subtract(Box<ExpressionNode>, Box<ExpressionNode>),
     Comparison(Box<ExpressionNode>, Box<ExpressionNode>, ComparisonOp),
@@ -40,7 +46,8 @@ pub enum ExpressionNode {
 impl ExpressionNode {
     pub fn gen_eval<'a>(self, code_gen: &CodeGen<'a>) -> Result<QLValue<'a>, CodeGenError> {
         match self {
-            ExpressionNode::Integer(x) => Ok(code_gen.const_int(x)),
+            ExpressionNode::IntegerLiteral(x) => Ok(code_gen.const_int(x)),
+            ExpressionNode::BoolLiteral(x) => Ok(code_gen.const_bool(x)),
             ExpressionNode::QName(name) => code_gen.load_var(&name),
             ExpressionNode::Add(expr1, expr2) => {
                 let val1 = expr1.gen_eval(code_gen)?;

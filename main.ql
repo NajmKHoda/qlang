@@ -1,10 +1,4 @@
-n = inputi();
+int age <- 30;
+bool is_married <- true;
 
-a = 0;
-b = 1;
-while n > 0 {
-    printi(b);
-    b = b + a;
-    a = b - a;
-    n = n - 1;
-}
+printi(is_married);
