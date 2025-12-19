@@ -5,6 +5,8 @@ use inkwell::support::LLVMString;
 pub enum CodeGenError {
     UnexpectedTypeError,
     UndefinedVariableError(String),
+    UndefinedLoopLabelError(String),
+    BadLoopControlError,
     DuplicateDefinitionError(String),
     BadFunctionCallError(String),
     BadArgumentMutationError(String, String),
@@ -24,6 +26,8 @@ impl fmt::Display for CodeGenError {
         match self {
             CodeGenError::UnexpectedTypeError => write!(f, "Unexpected type encountered"),
             CodeGenError::UndefinedVariableError(name) => write!(f, "Undefined variable: {name}"),
+            CodeGenError::UndefinedLoopLabelError(name) => write!(f, "Undefined loop label: {name}"),
+            CodeGenError::BadLoopControlError => write!(f, "No loop to break/continue from"),
             CodeGenError::DuplicateDefinitionError(name) => write!(f, "Duplicate definition for {name}"),
             CodeGenError::BadFunctionCallError(name) => write!(f, "Bad function call: {name}"),
             CodeGenError::BadArgumentMutationError(fn_name, arg) => write!(f, "Attempt to mutate argument {arg} of {fn_name}"),

@@ -15,9 +15,11 @@ pub enum StatementNode {
     VariableDefinition(TypedQNameNode, Box<ExpressionNode>),
     Assignment(String, Box<ExpressionNode>),
     Conditional(Box<ExpressionNode>, Vec<StatementNode>, Vec<StatementNode>),
-    ConditionalLoop(Box<ExpressionNode>, Vec<StatementNode>),
+    ConditionalLoop(Box<ExpressionNode>, Vec<StatementNode>, Option<String>),
     LoneExpression(Box<ExpressionNode>),
-    Return(Option<Box<ExpressionNode>>)
+    Return(Option<Box<ExpressionNode>>),
+    Break(Option<String>),
+    Continue(Option<String>)
 }
 
 impl StatementNode {
@@ -35,8 +37,8 @@ impl StatementNode {
                 let condition = cond_expr.gen_eval(code_gen)?;
                 return code_gen.gen_conditional(condition, then_stmts, else_stmts);
             }
-            StatementNode::ConditionalLoop(cond_expr, body_stmts) => {
-                code_gen.gen_loop(cond_expr, body_stmts)?;
+            StatementNode::ConditionalLoop(cond_expr, body_stmts, loop_label) => {
+                code_gen.gen_loop(cond_expr, body_stmts, loop_label)?;
             }
             StatementNode::LoneExpression(expr) => {
                 expr.gen_eval(code_gen).map(|_| ())?;
@@ -47,6 +49,14 @@ impl StatementNode {
                     None => None
                 };
                 code_gen.gen_return(val)?;
+                return Ok(true);
+            }
+            StatementNode::Break(label) => {
+                code_gen.gen_break(label)?;
+                return Ok(true);
+            },
+            StatementNode::Continue(label) => {
+                code_gen.gen_continue(label)?;
                 return Ok(true);
             }
         };

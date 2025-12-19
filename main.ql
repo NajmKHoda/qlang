@@ -1,11 +1,13 @@
 function main() -> int {
     int x <- 1;
-    if inputi() = 1 {
-        int x <- 2;
-        printi(x);
-    } else {
-        int x <- 3;
-        printi(x);
-    }
-    printi(x);
+    while true {
+        while true {
+            if x > 10 {
+                break Inner;
+            } else {
+                printi(x);
+                x <- x + 1;
+            }
+        } as Inner;
+    } as Outer;
 }

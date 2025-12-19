@@ -17,6 +17,7 @@ mod function;
 
 use data::QLVariable;
 use function::QLFunction;
+use control_flow::QLLoop;
 pub use error::CodeGenError;
 pub use data::QLValue;
 pub use data::QLType;
@@ -25,6 +26,7 @@ pub use operations::ComparisonOp;
 pub struct CodeGen<'ctxt> {
     vars: Vec<HashMap<String, QLVariable<'ctxt>>>,
     functions: HashMap<String, QLFunction<'ctxt>>,
+    loops: Vec<QLLoop<'ctxt>>,
     cur_fn_name: Option<String>,
     context: &'ctxt Context,
     builder: Builder<'ctxt>,
@@ -42,7 +44,7 @@ impl<'ctxt> CodeGen<'ctxt> {
             self.cur_fn_name = Some(function.name.to_string());
 
             self.push_scope();
-            let entry_block = self.append_block("entry");
+            let entry_block = self.append_block(format!("{}_entry", function.name).as_str());
             let function_terminates = self.gen_block_stmts(entry_block, function.body)?;
             if !function_terminates {
                 if function.return_type == QLType::Void {
@@ -59,6 +61,10 @@ impl<'ctxt> CodeGen<'ctxt> {
         let main_fn = self.functions.get("main").ok_or(CodeGenError::MissingMainError)?;
         if main_fn.return_type != QLType::Integer || !main_fn.params.is_empty() {
             return Err(CodeGenError::BadMainSignatureError);
+        }
+
+        if let Err(msg) = self.module.print_to_file("out/main.debug") {
+            eprintln!("Failed to write debug LLVM IR: {}", msg);
         }
 
         self.module.verify().map_err(|e| CodeGenError::ModuleVerificationError(e))?;
@@ -118,6 +124,7 @@ pub fn gen_code(program: ProgramNode) -> Result<(), CodeGenError> {
     let codegen = CodeGen {
         vars: Vec::new(),
         functions: HashMap::new(),
+        loops: Vec::new(),
         cur_fn_name: None,
         context: &context,
         builder,
@@ -125,9 +132,6 @@ pub fn gen_code(program: ProgramNode) -> Result<(), CodeGenError> {
     };
 
     let module = codegen.gen_code(program)?;
-    if let Err(msg) = module.print_to_file("out/main.debug") {
-        eprintln!("Failed to write debug LLVM IR: {}", msg);
-    }
 
     Target::initialize_all(&Default::default());
     let target_triple = TargetMachine::get_default_triple();

@@ -17,9 +17,10 @@ Statement: StatementNode = {
     <TypedQName> "<-" <Expression> ";" => StatementNode::VariableDefinition(<>),
     <QName> "<-" <Expression> ";" => StatementNode::Assignment(<>),
     "if" <Expression> "{" <Statement*> "}" "else" "{" <Statement*> "}" => StatementNode::Conditional(<>),
-    "while" <Expression> "{" <Statement*> "}" => StatementNode::ConditionalLoop(<>),
-    "return" ";" => StatementNode::Return(None),
-    "return" <Expression> ";" => StatementNode::Return(Some(<>)),
+    "while" <Expression> "{" <Statement*> "}" <("as" <QName> ";")?> => StatementNode::ConditionalLoop(<>),
+    "return" <Expression?> ";" => StatementNode::Return(<>),
+    "break" <QName?> ";" => StatementNode::Break(<>),
+    "continue" <QName?> ";" => StatementNode::Continue(<>),
     <Expression> ";" => StatementNode::LoneExpression(<>)
 }
 
