@@ -1,30 +1,47 @@
+use inkwell::basic_block::BasicBlock;
+
 use super::{CodeGen, CodeGenError, QLValue};
 use crate::tokens::{ExpressionNode, StatementNode};
 
 impl<'ctxt> CodeGen<'ctxt> {
+    fn branch_if(
+        &mut self,
+        predicate: bool,
+        source_block: BasicBlock<'ctxt>,
+        destination_block: BasicBlock<'ctxt>
+    ) -> Result<(), CodeGenError> {
+        self.builder.position_at_end(source_block);
+        if predicate {
+            self.builder.build_unconditional_branch(destination_block)?;
+        }
+        Ok(())
+    }
+
     pub fn gen_conditional(
         &mut self,
         conditional: QLValue<'ctxt>,
         then_stmts: Vec<StatementNode>,
         else_stmts: Vec<StatementNode>
-    ) -> Result<(), CodeGenError> {
+    ) -> Result<bool, CodeGenError> {
         if let QLValue::Bool(cond_bool) = conditional {
             let then_block = self.append_block("then");
             let else_block = self.append_block("else");
-            let merge_block = self.append_block("merge");
-
             self.builder.build_conditional_branch(cond_bool, then_block, else_block)?;
-            self.builder.position_at_end(then_block);
-            self.gen_stmts(then_stmts)?;
-            self.builder.build_unconditional_branch(merge_block)?;
 
-            self.builder.position_at_end(else_block);
-            self.gen_stmts(else_stmts)?;
-            self.builder.build_unconditional_branch(merge_block)?;
+            let then_terminates = self.gen_block_stmts(then_block, then_stmts)?;
+            let else_terminates = self.gen_block_stmts(else_block, else_stmts)?;
 
+            if then_terminates && else_terminates {
+                // No need to create a merge block if both terminate
+                return Ok(true);
+            }
+
+            let merge_block = self.append_block("merge");
+            self.branch_if(!then_terminates, then_block, merge_block)?;
+            self.branch_if(!else_terminates, else_block, merge_block)?;
             self.builder.position_at_end(merge_block);
 
-            Ok(())
+            Ok(false)
         } else {
             Err(CodeGenError::UnexpectedTypeError)
         }
@@ -49,9 +66,8 @@ impl<'ctxt> CodeGen<'ctxt> {
             return Err(CodeGenError::UnexpectedTypeError);
         }
 
-        self.builder.position_at_end(loop_body_block);
-        self.gen_stmts(body_stmts)?;
-        self.builder.build_unconditional_branch(loop_cond_block)?;
+        let body_terminates = self.gen_block_stmts(loop_body_block, body_stmts)?;
+        self.branch_if(!body_terminates, loop_body_block, loop_cond_block)?;
 
         self.builder.position_at_end(after_loop_block);
 

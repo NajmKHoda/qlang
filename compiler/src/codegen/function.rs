@@ -4,7 +4,7 @@ use inkwell::values::{BasicMetadataValueEnum, BasicValueEnum, FunctionValue, Val
 use super::{CodeGen, CodeGenError, QLValue, QLType};
 use crate::tokens::TypedQNameNode;
 
-struct QLParameter {
+pub(super) struct QLParameter {
 	name: String,
 	ql_type: QLType,
 }
@@ -22,7 +22,7 @@ pub(super) struct QLFunction<'ctxt> {
 	pub(super) llvm_function: FunctionValue<'ctxt>,
 	pub(super) return_type: QLType,
 	pub(super) name: String,
-	params: Vec<QLParameter>
+	pub(super) params: Vec<QLParameter>
 }
 
 impl<'ctxt> QLFunction<'ctxt> {

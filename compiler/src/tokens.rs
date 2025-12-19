@@ -17,39 +17,42 @@ pub enum StatementNode {
     Conditional(Box<ExpressionNode>, Vec<StatementNode>, Vec<StatementNode>),
     ConditionalLoop(Box<ExpressionNode>, Vec<StatementNode>),
     LoneExpression(Box<ExpressionNode>),
-    Return(Option<Box<ExpressionNode>>),
+    Return(Option<Box<ExpressionNode>>)
 }
 
 impl StatementNode {
-    pub fn gen_stmt<'a>(self, code_gen: &mut CodeGen<'a>) -> Result<(), CodeGenError> {
+    pub fn gen_stmt<'a>(self, code_gen: &mut CodeGen<'a>) -> Result<bool, CodeGenError> {
         match self {
             StatementNode::VariableDefinition(var, expr) => {
                 let value = expr.gen_eval(code_gen)?;
-                code_gen.define_var(&var.name, var.ql_type, value)
+                code_gen.define_var(&var.name, var.ql_type, value)?;
             },
             StatementNode::Assignment(var_name, expr) => {
                 let value = expr.gen_eval(code_gen)?;
-                code_gen.store_var(&var_name, value)
+                code_gen.store_var(&var_name, value)?;
             },
             StatementNode::Conditional(cond_expr, then_stmts, else_stmts) => {
                 let condition = cond_expr.gen_eval(code_gen)?;
-                code_gen.gen_conditional(condition, then_stmts, else_stmts)
+                return code_gen.gen_conditional(condition, then_stmts, else_stmts);
             }
             StatementNode::ConditionalLoop(cond_expr, body_stmts) => {
-                code_gen.gen_loop(cond_expr, body_stmts)
+                code_gen.gen_loop(cond_expr, body_stmts)?;
             }
             StatementNode::LoneExpression(expr) => {
-                expr.gen_eval(code_gen).map(|_| ())
+                expr.gen_eval(code_gen).map(|_| ())?;
             }
             StatementNode::Return(expr) => {
                 let val = match expr {
                     Some(e) => Some(e.gen_eval(code_gen)?),
                     None => None
                 };
-                code_gen.gen_return(val)
+                code_gen.gen_return(val)?;
+                return Ok(true);
             }
-        }
+        };
+        Ok(false)
     }
+    
 }
 
 pub struct TypedQNameNode {

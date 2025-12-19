@@ -1,17 +1,12 @@
-function sum_range(int a, int b) -> int {
-    int s <- 0;
-    int j <- a;
-    while j <= b {
-        s <- s + j;
-        j <- j + 1;
-    }
-    return s;
+function is_67(int y) -> bool {
+    return y = 67;
 }
 
 function main() -> int {
-    int a <- inputi();
-    int b <- inputi();
-    int sum <- sum_range(a, b, 10);
-    printi(sum);
-    return 0;
+    int x <- inputi();
+    if is_67(x) {
+        return 1;
+    } else {
+
+    }
 }

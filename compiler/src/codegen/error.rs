@@ -8,6 +8,9 @@ pub enum CodeGenError {
     DuplicateDefinitionError(String),
     BadFunctionCallError(String),
     BadArgumentMutationError(String, String),
+    InexhaustiveReturnError(String),
+    MissingMainError,
+    BadMainSignatureError,
 
     BuilderError(BuilderError),
     ModuleVerificationError(LLVMString),
@@ -24,6 +27,9 @@ impl fmt::Display for CodeGenError {
             CodeGenError::DuplicateDefinitionError(name) => write!(f, "Duplicate definition for {name}"),
             CodeGenError::BadFunctionCallError(name) => write!(f, "Bad function call: {name}"),
             CodeGenError::BadArgumentMutationError(fn_name, arg) => write!(f, "Attempt to mutate argument {arg} of {fn_name}"),
+            CodeGenError::InexhaustiveReturnError(fn_name) => write!(f, "Not all paths return a value in function {fn_name}"),
+            CodeGenError::MissingMainError => write!(f, "Missing main function"),
+            CodeGenError::BadMainSignatureError => write!(f, "Main function has invalid signature"),
 
             CodeGenError::BuilderError(err) => write!(f, "Builder error: {err}"),
             CodeGenError::ModuleVerificationError(err) => write!(f, "Module verification error: {err}"),

@@ -41,9 +41,22 @@ impl<'ctxt> CodeGen<'ctxt> {
             self.declare_function(&function.name, function.return_type, function.params)?;
             self.cur_fn_name = Some(function.name.to_string());
 
-            let block = self.append_block("entry");
-            self.builder.position_at_end(block);
-            self.gen_stmts(function.body)?;
+            let entry_block = self.append_block("entry");
+            let function_terminates = self.gen_block_stmts(entry_block, function.body)?;
+            if !function_terminates {
+                if function.return_type == QLType::Void {
+                    self.builder.build_return(None)?;
+                } else if function.name == "main" {
+                    self.builder.build_return(Some(&self.int_type().const_zero()))?;
+                } else {
+                    return Err(CodeGenError::InexhaustiveReturnError(function.name));
+                }
+            }
+        }
+        
+        let main_fn = self.functions.get("main").ok_or(CodeGenError::MissingMainError)?;
+        if main_fn.return_type != QLType::Integer || !main_fn.params.is_empty() {
+            return Err(CodeGenError::BadMainSignatureError);
         }
 
         self.module.verify().map_err(|e| CodeGenError::ModuleVerificationError(e))?;
@@ -55,11 +68,15 @@ impl<'ctxt> CodeGen<'ctxt> {
         self.context.append_basic_block(cur_fn.llvm_function, name)
     }
 
-    fn gen_stmts(&mut self, stmts: Vec<StatementNode>) -> Result<(), CodeGenError> {
+    fn gen_block_stmts(&mut self, block: BasicBlock<'ctxt>, stmts: Vec<StatementNode>) -> Result<bool, CodeGenError> {
+        self.builder.position_at_end(block);
         for stmt in stmts {
-            stmt.gen_stmt(self)?;
+            let terminates = stmt.gen_stmt(self)?;
+            if terminates {
+                return Ok(true);
+            }
         }
-        Ok(())
+        Ok(false)
     }
 
     fn cur_fn(&self) -> &QLFunction<'ctxt> {
