@@ -61,6 +61,15 @@ impl<'a> TryFrom<QLValue<'a>> for BasicValueEnum<'a> {
 }
 
 impl<'ctxt> CodeGen<'ctxt> {
+    fn get_var<'a>(&'a self, name: &str) -> Option<&'a QLVariable<'ctxt>> {
+        for scope in self.vars.iter().rev() {
+            if let Some(var) = scope.get(name) {
+                return Some(var);
+            }
+        }
+        None
+    }
+
     pub fn const_int(&self, value: i32) -> QLValue<'ctxt> {
         QLValue::Integer(self.int_type().const_int(value as u64, false))
     }
@@ -70,7 +79,7 @@ impl<'ctxt> CodeGen<'ctxt> {
     }
 
     pub fn load_var(&self, name: &str) -> Result<QLValue<'ctxt>, CodeGenError> {
-        if let Some(variable) = self.vars.get(name) {
+        if let Some(variable) = self.get_var(name) {
             let var_type = self.try_get_nonvoid_type(&variable.ql_type)?;
             let res: QLValue<'ctxt> = self.builder.build_load(var_type, variable.pointer, "load")?.try_into()?;
             Ok(res)
@@ -82,27 +91,27 @@ impl<'ctxt> CodeGen<'ctxt> {
     }
 
     pub fn define_var(&mut self, name: &str, var_type: QLType, value: QLValue<'ctxt>) -> Result<(), CodeGenError> {
-        if self.vars.contains_key(name) {
+        let llvm_type = self.try_get_nonvoid_type(&var_type)?;
+        let cur_scope = self.vars.last_mut().unwrap();
+        if cur_scope.contains_key(name) {
             return Err(CodeGenError::DuplicateDefinitionError(name.to_string()));
         } else if var_type == QLType::Void || var_type != value.get_type() {
             return Err(CodeGenError::UnexpectedTypeError);
         }
-        
-        let llvm_type = self.try_get_nonvoid_type(&var_type)?;
+
         let pointer = self.builder.build_alloca(llvm_type, name)?;
         self.builder.build_store::<BasicValueEnum>(pointer, value.try_into()?)?;
-
         let var = QLVariable {
             ql_type: var_type,
             pointer
         };
-        self.vars.insert(name.to_string(), var);
+        cur_scope.insert(name.to_string(), var);
         
         Ok(())
     }
 
     pub fn store_var(&self, name: &str, value: QLValue<'ctxt>) -> Result<(), CodeGenError> {
-        if let Some(variable) = self.vars.get(name) {
+        if let Some(variable) = self.get_var(name) {
             if variable.ql_type != value.get_type() {
                 return Err(CodeGenError::UnexpectedTypeError);
             }

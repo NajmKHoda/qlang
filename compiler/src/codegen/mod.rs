@@ -23,7 +23,7 @@ pub use data::QLType;
 pub use operations::ComparisonOp;
 
 pub struct CodeGen<'ctxt> {
-    vars: HashMap<String, QLVariable<'ctxt>>,
+    vars: Vec<HashMap<String, QLVariable<'ctxt>>>,
     functions: HashMap<String, QLFunction<'ctxt>>,
     cur_fn_name: Option<String>,
     context: &'ctxt Context,
@@ -41,6 +41,7 @@ impl<'ctxt> CodeGen<'ctxt> {
             self.declare_function(&function.name, function.return_type, function.params)?;
             self.cur_fn_name = Some(function.name.to_string());
 
+            self.push_scope();
             let entry_block = self.append_block("entry");
             let function_terminates = self.gen_block_stmts(entry_block, function.body)?;
             if !function_terminates {
@@ -52,6 +53,7 @@ impl<'ctxt> CodeGen<'ctxt> {
                     return Err(CodeGenError::InexhaustiveReturnError(function.name));
                 }
             }
+            self.pop_scope();
         }
         
         let main_fn = self.functions.get("main").ok_or(CodeGenError::MissingMainError)?;
@@ -69,19 +71,30 @@ impl<'ctxt> CodeGen<'ctxt> {
     }
 
     fn gen_block_stmts(&mut self, block: BasicBlock<'ctxt>, stmts: Vec<StatementNode>) -> Result<bool, CodeGenError> {
+        self.push_scope();
         self.builder.position_at_end(block);
+        let mut terminates = false;
         for stmt in stmts {
-            let terminates = stmt.gen_stmt(self)?;
+            terminates = stmt.gen_stmt(self)?;
             if terminates {
-                return Ok(true);
+                break;
             }
         }
-        Ok(false)
+        self.pop_scope();
+        Ok(terminates)
     }
 
     fn cur_fn(&self) -> &QLFunction<'ctxt> {
         let name = self.cur_fn_name.as_ref().unwrap();
         self.functions.get(name).unwrap()
+    }
+
+    fn push_scope(&mut self) {
+        self.vars.push(HashMap::new());
+    }
+
+    fn pop_scope(&mut self) {
+        self.vars.pop();
     }
 
     fn int_type(&self) -> IntType<'ctxt> { self.context.i32_type() }
@@ -103,8 +116,8 @@ pub fn gen_code(program: ProgramNode) -> Result<(), CodeGenError> {
     let module = context.create_module("main");
     
     let codegen = CodeGen {
-        vars: HashMap::<String, QLVariable>::new(),
-        functions: HashMap::<String, QLFunction>::new(),
+        vars: Vec::new(),
+        functions: HashMap::new(),
         cur_fn_name: None,
         context: &context,
         builder,
