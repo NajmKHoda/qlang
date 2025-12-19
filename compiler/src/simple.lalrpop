@@ -1,5 +1,5 @@
 use std::str::FromStr;
-use crate::tokens::{ProgramNode, FunctionNode, StatementNode, ExpressionNode, TypedQNameNode};
+use crate::tokens::{ProgramNode, FunctionNode, StatementNode, ConditionalBranchNode, ExpressionNode, TypedQNameNode};
 use crate::codegen::{ComparisonOp, QLType};
 
 grammar;
@@ -16,13 +16,26 @@ Function: FunctionNode =
 Statement: StatementNode = {
     <TypedQName> "<-" <Expression> ";" => StatementNode::VariableDefinition(<>),
     <QName> "<-" <Expression> ";" => StatementNode::Assignment(<>),
-    "if" <Expression> "{" <Statement*> "}" "else" "{" <Statement*> "}" => StatementNode::Conditional(<>),
+    <ConditionalStatement>,
     "while" <Expression> "{" <Statement*> "}" <("as" <QName> ";")?> => StatementNode::ConditionalLoop(<>),
     "return" <Expression?> ";" => StatementNode::Return(<>),
     "break" <QName?> ";" => StatementNode::Break(<>),
     "continue" <QName?> ";" => StatementNode::Continue(<>),
     <Expression> ";" => StatementNode::LoneExpression(<>)
 }
+
+ConditionalStatement: StatementNode =
+    "if" <head:ConditionalBranch>
+    <middle:("else" "if" <ConditionalBranch>)*>
+    <else_body:("else" "{" <Statement*> "}")?>
+=> {
+    let mut branches = vec![head];
+    branches.extend(middle.into_iter());
+    StatementNode::Conditional(branches, else_body)
+};
+
+ConditionalBranch: ConditionalBranchNode =
+    <condition:Expression> "{" <body:Statement*> "}" => ConditionalBranchNode { <> };
 
 Expression: Box<ExpressionNode> = {
     #[precedence(level="0")]

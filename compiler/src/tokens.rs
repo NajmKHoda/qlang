@@ -14,7 +14,7 @@ pub struct FunctionNode {
 pub enum StatementNode {
     VariableDefinition(TypedQNameNode, Box<ExpressionNode>),
     Assignment(String, Box<ExpressionNode>),
-    Conditional(Box<ExpressionNode>, Vec<StatementNode>, Vec<StatementNode>),
+    Conditional(Vec<ConditionalBranchNode>, Option<Vec<StatementNode>>),
     ConditionalLoop(Box<ExpressionNode>, Vec<StatementNode>, Option<String>),
     LoneExpression(Box<ExpressionNode>),
     Return(Option<Box<ExpressionNode>>),
@@ -33,9 +33,8 @@ impl StatementNode {
                 let value = expr.gen_eval(code_gen)?;
                 code_gen.store_var(&var_name, value)?;
             },
-            StatementNode::Conditional(cond_expr, then_stmts, else_stmts) => {
-                let condition = cond_expr.gen_eval(code_gen)?;
-                return code_gen.gen_conditional(condition, then_stmts, else_stmts);
+            StatementNode::Conditional(cond_branches, else_body) => {
+                return code_gen.gen_conditional(cond_branches, else_body);
             }
             StatementNode::ConditionalLoop(cond_expr, body_stmts, loop_label) => {
                 code_gen.gen_loop(cond_expr, body_stmts, loop_label)?;
@@ -68,6 +67,11 @@ impl StatementNode {
 pub struct TypedQNameNode {
     pub name: String,
     pub ql_type: QLType,
+}
+
+pub struct ConditionalBranchNode {
+    pub condition: Box<ExpressionNode>,
+    pub body: Vec<StatementNode>
 }
 
 pub enum ExpressionNode {

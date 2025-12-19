@@ -1,7 +1,7 @@
 use inkwell::basic_block::BasicBlock;
 
 use super::{CodeGen, CodeGenError, QLValue};
-use crate::tokens::{ExpressionNode, StatementNode};
+use crate::tokens::{ConditionalBranchNode, ExpressionNode, StatementNode};
 
 pub(super) struct QLLoop<'a> {
     label: Option<String>,
@@ -34,34 +34,54 @@ impl<'ctxt> CodeGen<'ctxt> {
 
     pub fn gen_conditional(
         &mut self,
-        conditional: QLValue<'ctxt>,
-        then_stmts: Vec<StatementNode>,
-        else_stmts: Vec<StatementNode>
+        conditional_branches: Vec<ConditionalBranchNode>,
+        else_branch: Option<Vec<StatementNode>>
     ) -> Result<bool, CodeGenError> {
-        if let QLValue::Bool(cond_bool) = conditional {
-            let then_entry_block = self.append_block("then_entry");
-            let else_entry_block = self.append_block("else_entry");
-            self.builder.build_conditional_branch(cond_bool, then_entry_block, else_entry_block)?;
+        let initial_block = self.builder.get_insert_block().unwrap();
+        let merge_block = self.append_block("merge_branches");
 
-            let then_terminates = self.gen_block_stmts(then_entry_block, then_stmts)?;
-            let then_tail_block = self.builder.get_insert_block().unwrap();
+        let mut all_branches_terminate = true;
+        let mut next_block: BasicBlock = merge_block;
+        if let Some(else_body) = else_branch {
+            let body_block = self.context.prepend_basic_block(merge_block, "else_body");
+            next_block = body_block;
 
-            let else_terminates = self.gen_block_stmts(else_entry_block, else_stmts)?;
-            let else_tail_block = self.builder.get_insert_block().unwrap();
+            let terminates = self.gen_block_stmts(body_block, else_body)?;
+            all_branches_terminate = all_branches_terminate && terminates;
+            self.branch_if(!terminates, body_block, merge_block)?;
+        } else {
+            all_branches_terminate = false;
+        }
 
-            if then_terminates && else_terminates {
-                // No need to create a merge block if both terminate
-                return Ok(true);
+        for branch in conditional_branches.into_iter().rev() {
+            let body_block = self.context.prepend_basic_block(next_block, "branch_body");
+            let cond_block = self.context.prepend_basic_block(body_block, "branch_cond");
+
+            self.builder.position_at_end(cond_block);
+            let cond_val = branch.condition.gen_eval(self)?;
+            if let QLValue::Bool(cond_llvm) = cond_val {
+                self.builder.build_conditional_branch(cond_llvm, body_block, next_block)?;
+            } else {
+                return Err(CodeGenError::UnexpectedTypeError);
             }
 
-            let merge_block = self.append_block("merge");
-            self.branch_if(!then_terminates, then_tail_block, merge_block)?;
-            self.branch_if(!else_terminates, else_tail_block, merge_block)?;
-            self.builder.position_at_end(merge_block);
+            let terminates = self.gen_block_stmts(body_block, branch.body)?;
+            all_branches_terminate = all_branches_terminate && terminates;
+            self.branch_if(!terminates, body_block, merge_block)?;
+            
+            next_block = cond_block;
+        }
 
-            Ok(false)
+        self.builder.position_at_end(initial_block);
+        self.builder.build_unconditional_branch(next_block)?;
+
+        if all_branches_terminate {
+            self.builder.position_at_end(merge_block.get_previous_basic_block().unwrap());
+            let _ = merge_block.remove_from_function();
+            Ok(true)
         } else {
-            Err(CodeGenError::UnexpectedTypeError)
+            self.builder.position_at_end(merge_block);
+            Ok(false)
         }
     }
 
