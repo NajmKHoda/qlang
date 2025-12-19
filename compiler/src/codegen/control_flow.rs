@@ -53,9 +53,9 @@ impl<'ctxt> CodeGen<'ctxt> {
             all_branches_terminate = false;
         }
 
-        for branch in conditional_branches.into_iter().rev() {
-            let body_block = self.context.prepend_basic_block(next_block, "branch_body");
-            let cond_block = self.context.prepend_basic_block(body_block, "branch_cond");
+        for (i, branch) in conditional_branches.into_iter().enumerate().rev() {
+            let body_block = self.context.prepend_basic_block(next_block, format!("branch{}_body", i).as_str());
+            let cond_block = self.context.prepend_basic_block(body_block, format!("branch{}_cond", i).as_str());
 
             self.builder.position_at_end(cond_block);
             let cond_val = branch.condition.gen_eval(self)?;
