@@ -41,6 +41,7 @@ Expression: Box<ExpressionNode> = {
     #[precedence(level="0")]
     Int => Box::new(ExpressionNode::IntegerLiteral(<>)),
     Bool => Box::new(ExpressionNode::BoolLiteral(<>)),
+    QLString => Box::new(ExpressionNode::StringLiteral(<>)),
     QName => Box::new(ExpressionNode::QName(<>)),
     #[precedence(level="1")] #[assoc(side="left")]
     <Expression> "+" <Expression> => Box::new(ExpressionNode::Add(<>)),
@@ -65,11 +66,13 @@ TypeNameWithVoid: QLType = {
 
 TypeName: QLType = {
     "int" => QLType::Integer,
-    "bool" => QLType::Bool
+    "bool" => QLType::Bool,
+    "str" => QLType::String
 }
 
 Int: i32 = r"-?[0-9]+" => i32::from_str(<>).unwrap();
 Bool: bool = { "true" => true, "false" => false };
+QLString: String = <s:r#""[^"]*""#> => s[1..s.len()-1].to_string();
 QName: String = r"[a-zA-Z_][a-zA-Z0-9_]*" => String::from(<>);
 
 Comma<T>: Vec<T> = _Comma<T>? => match <> {

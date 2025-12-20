@@ -1,4 +1,4 @@
-use inkwell::values::{BasicValueEnum, IntValue, PointerValue};
+use inkwell::values::{AnyValue, BasicValueEnum, IntValue, PointerValue};
 
 use super::{CodeGen, CodeGenError};
 
@@ -6,6 +6,7 @@ use super::{CodeGen, CodeGenError};
 pub enum QLType {
     Integer,
     Bool,
+    String,
     Void
 }
 
@@ -18,6 +19,7 @@ pub(super) struct QLVariable<'a> {
 pub enum QLValue<'a> {
     Integer(IntValue<'a>),
     Bool(IntValue<'a>),
+    String(PointerValue<'a>),
     Void
 }
 
@@ -26,6 +28,7 @@ impl<'a> QLValue<'a> {
         match self {
             QLValue::Integer(_) => QLType::Integer,
             QLValue::Bool(_) => QLType::Bool,
+            QLValue::String(_) => QLType::String,
             QLValue::Void => QLType::Void
         }
     }
@@ -43,6 +46,7 @@ impl<'a> TryFrom<BasicValueEnum<'a>> for QLValue<'a> {
                     _ => Err(CodeGenError::UnexpectedTypeError),
                 }
             }
+            BasicValueEnum::PointerValue(str_val) => Ok(QLValue::String(str_val)),
             _ => Err(CodeGenError::UnexpectedTypeError),
         }
     }
@@ -55,6 +59,7 @@ impl<'a> TryFrom<QLValue<'a>> for BasicValueEnum<'a> {
         match value {
             QLValue::Integer(int_val) => Ok(BasicValueEnum::IntValue(int_val)),
             QLValue::Bool(int_val) => Ok(BasicValueEnum::IntValue(int_val)),
+            QLValue::String(str_val) => Ok(BasicValueEnum::PointerValue(str_val)),
             QLValue::Void => Err(CodeGenError::UnexpectedTypeError),
         }
     }
@@ -76,6 +81,17 @@ impl<'ctxt> CodeGen<'ctxt> {
 
     pub fn const_bool(&self, value: bool) -> QLValue<'ctxt> {
         QLValue::Bool(self.bool_type().const_int(value as u64, false))
+    }
+
+    pub fn const_str(&self, value: &str) -> Result<QLValue<'ctxt>, CodeGenError> {
+        let raw_str = self.builder.build_global_string_ptr(value, "global_str")?.as_pointer_value();
+        let length = self.context.i32_type().const_int(value.len() as u64, false);
+        let str_ptr = self.builder.build_call(
+            self.runtime_functions.new_string.into(),
+            &[raw_str.into(), length.into()],
+            "string_alloc"
+        )?.as_any_value_enum().into_pointer_value();
+        Ok(QLValue::String(str_ptr))
     }
 
     pub fn load_var(&self, name: &str) -> Result<QLValue<'ctxt>, CodeGenError> {

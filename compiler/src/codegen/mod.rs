@@ -4,7 +4,7 @@ use inkwell::context::Context;
 use inkwell::module::Module;
 use inkwell::builder::Builder;
 use inkwell::targets::{FileType, Target, TargetMachine};
-use inkwell::types::{BasicTypeEnum, IntType, VoidType};
+use inkwell::types::{PointerType, BasicTypeEnum, IntType, VoidType};
 use inkwell::basic_block::BasicBlock;
 
 use crate::tokens::{ProgramNode, StatementNode};
@@ -14,10 +14,12 @@ mod operations;
 mod data;
 mod error;
 mod function;
+mod runtime;
 
 use data::QLVariable;
 use function::QLFunction;
 use control_flow::QLLoop;
+use runtime::RuntimeFunctions;
 pub use error::CodeGenError;
 pub use data::QLValue;
 pub use data::QLType;
@@ -26,7 +28,9 @@ pub use operations::ComparisonOp;
 pub struct CodeGen<'ctxt> {
     vars: Vec<HashMap<String, QLVariable<'ctxt>>>,
     functions: HashMap<String, QLFunction<'ctxt>>,
+    runtime_functions: RuntimeFunctions<'ctxt>,
     loops: Vec<QLLoop<'ctxt>>,
+
     cur_fn_name: Option<String>,
     context: &'ctxt Context,
     builder: Builder<'ctxt>,
@@ -35,12 +39,14 @@ pub struct CodeGen<'ctxt> {
 
 impl<'ctxt> CodeGen<'ctxt> {
     fn gen_code(mut self, program: ProgramNode) -> Result<Module<'ctxt>, CodeGenError> {
-        self.declare_extern_function("printi", QLType::Void, &[QLType::Integer])?;
-        self.declare_extern_function("printb", QLType::Void, &[QLType::Bool])?;
-        self.declare_extern_function("inputi", QLType::Integer, &[])?;
+        self.expose_runtime_function(self.runtime_functions.print_integer, QLType::Void, &[QLType::Integer]);
+        self.expose_runtime_function(self.runtime_functions.print_boolean, QLType::Void, &[QLType::Bool]);
+        self.expose_runtime_function(self.runtime_functions.print_string, QLType::Void, &[QLType::String]);
+        self.expose_runtime_function(self.runtime_functions.input_integer, QLType::Integer, &[]);
+        self.expose_runtime_function(self.runtime_functions.input_string, QLType::String, &[]);
 
         for function in program.functions {
-            self.declare_function(&function.name, function.return_type, function.params)?;
+            self.declare_user_function(&function.name, function.return_type, function.params)?;
             self.cur_fn_name = Some(function.name.to_string());
 
             self.push_scope();
@@ -105,12 +111,14 @@ impl<'ctxt> CodeGen<'ctxt> {
 
     fn int_type(&self) -> IntType<'ctxt> { self.context.i32_type() }
     fn bool_type(&self) -> IntType<'ctxt> { self.context.bool_type() }
+    fn ptr_type(&self) -> PointerType<'ctxt> { self.context.ptr_type(Default::default())  }
     fn void_type(&self) -> VoidType<'ctxt> { self.context.void_type() }
     
     fn try_get_nonvoid_type(&self, ql_type: &QLType) -> Result<BasicTypeEnum<'ctxt>, CodeGenError> {
         match ql_type {
             QLType::Integer => Ok(self.int_type().into()),
             QLType::Bool => Ok(self.bool_type().into()),
+            QLType::String => Ok(self.ptr_type().into()),
             QLType::Void => Err(CodeGenError::UnexpectedTypeError)
         }
     }
@@ -120,10 +128,11 @@ pub fn gen_code(program: ProgramNode) -> Result<(), CodeGenError> {
     let context = Context::create();
     let builder = context.create_builder();
     let module = context.create_module("main");
-    
+
     let codegen = CodeGen {
         vars: Vec::new(),
         functions: HashMap::new(),
+        runtime_functions: RuntimeFunctions::new(&context, &module),
         loops: Vec::new(),
         cur_fn_name: None,
         context: &context,

@@ -78,6 +78,7 @@ pub enum ExpressionNode {
     QName(String),
     IntegerLiteral(i32),
     BoolLiteral(bool),
+    StringLiteral(String),
     Add(Box<ExpressionNode>, Box<ExpressionNode>),
     Subtract(Box<ExpressionNode>, Box<ExpressionNode>),
     Comparison(Box<ExpressionNode>, Box<ExpressionNode>, ComparisonOp),
@@ -89,6 +90,7 @@ impl ExpressionNode {
         match self {
             ExpressionNode::IntegerLiteral(x) => Ok(code_gen.const_int(x)),
             ExpressionNode::BoolLiteral(x) => Ok(code_gen.const_bool(x)),
+            ExpressionNode::StringLiteral(x) => Ok(code_gen.const_str(&x)?),
             ExpressionNode::QName(name) => code_gen.load_var(&name),
             ExpressionNode::Add(expr1, expr2) => {
                 let val1 = expr1.gen_eval(code_gen)?;

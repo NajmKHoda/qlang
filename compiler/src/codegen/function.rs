@@ -5,8 +5,8 @@ use super::{CodeGen, CodeGenError, QLValue, QLType};
 use crate::tokens::TypedQNameNode;
 
 pub(super) struct QLParameter {
-	name: String,
-	ql_type: QLType,
+	pub(super) name: String,
+	pub(super) ql_type: QLType,
 }
 
 impl From<TypedQNameNode> for QLParameter {
@@ -45,21 +45,23 @@ impl<'ctxt> QLFunction<'ctxt> {
 }
 
 impl<'ctxt> CodeGen<'ctxt> {
-	fn get_fn_type(&self, return_type: QLType, param_types: &[QLType]) -> Result<FunctionType<'ctxt>, CodeGenError> {
+	pub (super) fn get_fn_type(&self, return_type: QLType, param_types: &[QLType]) -> Result<FunctionType<'ctxt>, CodeGenError> {
 		let llvm_param_types = param_types
 			.iter()
 			.map(|t| self.try_get_nonvoid_type(t)
 			.map(BasicMetadataTypeEnum::from))
 			.collect::<Result<Vec<BasicMetadataTypeEnum>, CodeGenError>>()?;
+
 		let fn_type = match return_type {
 			QLType::Integer => self.int_type().fn_type(&llvm_param_types, false),
 			QLType::Bool => self.bool_type().fn_type(&llvm_param_types, false),
+			QLType::String => self.ptr_type().fn_type(&llvm_param_types, false),
 			QLType::Void => self.void_type().fn_type(&llvm_param_types, false),
 		};
 		Ok(fn_type)
 	}
 
-	pub(super) fn declare_function(
+	pub(super) fn declare_user_function(
 		&mut self,
 		name: &str,
 		return_type: QLType,
@@ -69,27 +71,6 @@ impl<'ctxt> CodeGen<'ctxt> {
 		let param_types: Vec<QLType> = params.iter().map(|p| p.ql_type).collect();
 		let fn_type = self.get_fn_type(return_type, &param_types)?;
 
-		self.functions.insert(name.to_string(), QLFunction {
-			name: name.to_string(),
-			llvm_function: self.module.add_function(name, fn_type, None),
-			return_type,
-			params
-		});
-
-		Ok(self.functions.get(name).unwrap())
-	}
-
-	pub(super) fn declare_extern_function(
-		&mut self, name: &str,
-		return_type: QLType,
-		param_types: &[QLType])
-	-> Result<&QLFunction<'ctxt>, CodeGenError> {
-		let fn_type = self.get_fn_type(return_type, &param_types)?;
-		let params: Vec<QLParameter> = param_types
-			.iter()
-			.enumerate()
-			.map(|(i, t)| QLParameter { name: format!("arg{}", i), ql_type: *t })
-			.collect();
 		self.functions.insert(name.to_string(), QLFunction {
 			name: name.to_string(),
 			llvm_function: self.module.add_function(name, fn_type, None),
