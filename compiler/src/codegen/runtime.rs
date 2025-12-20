@@ -25,7 +25,9 @@ pub(super) struct RuntimeFunctions<'ctxt> {
     pub(super) input_integer: RuntimeFunction<'ctxt>,
     pub(super) input_string: RuntimeFunction<'ctxt>,
 
-    pub(super) new_string: RuntimeFunction<'ctxt>
+    pub(super) new_string: RuntimeFunction<'ctxt>,
+    pub(super) concat_string: RuntimeFunction<'ctxt>,
+    pub(super) compare_string: RuntimeFunction<'ctxt>,
 }
 
 impl<'ctxt> RuntimeFunctions<'ctxt> {
@@ -82,13 +84,27 @@ impl<'ctxt> RuntimeFunctions<'ctxt> {
             ptr_type.fn_type(&[ptr_type.into(), int_type.into()], false),
         );
 
+        let concat_string = Self::add_runtime_function(
+            module,
+            "__ql__QLString_concat",
+            ptr_type.fn_type(&[ptr_type.into(), ptr_type.into()], false),
+        );
+
+        let compare_string = Self::add_runtime_function(
+            module,
+            "__ql__QLString_compare",
+            int_type.fn_type(&[ptr_type.into(), ptr_type.into()], false),
+        );
+
         RuntimeFunctions {
             print_integer,
             print_boolean,
             print_string,
             input_integer,
             input_string,
-            new_string
+            new_string,
+            concat_string,
+            compare_string,
         }
     }
 }

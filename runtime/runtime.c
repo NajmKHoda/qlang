@@ -41,6 +41,13 @@ QLString* __ql__QLString_concat(QLString* a, QLString* b) {
     return __ql__QLString_new(raw_string, length);
 }
 
+int __ql__QLString_compare(QLString* a, QLString* b) {
+    int an = a->length, bn = b->length;
+    int n = (an < bn) ? an : bn;
+    int cmp = memcmp(a->raw_string, b->raw_string, n);
+    return (cmp != 0) ? cmp : (an - bn);
+}
+
 void __ql__QLString_free(QLString* str) {
     free(str->raw_string);
     free(str);

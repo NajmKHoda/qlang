@@ -1,3 +1,5 @@
+use inkwell::values::AnyValue;
+
 use super::{CodeGen, CodeGenError, QLValue};
 
 pub enum ComparisonOp {
@@ -27,6 +29,13 @@ impl<'ctxt> CodeGen<'ctxt> {
         if let (QLValue::Integer(int1), QLValue::Integer(int2)) = (val1, val2) {
             let res = self.builder.build_int_add(int1, int2, "sum")?;
             Ok(QLValue::Integer(res))
+        } else if let (QLValue::String(str1), QLValue::String(str2)) = (val1, val2) {
+            let res = self.builder.build_call(
+                self.runtime_functions.concat_string.into(),
+                &[str1.into(), str2.into()],
+                "str_concat"
+            )?.as_any_value_enum().into_pointer_value();
+            Ok(QLValue::String(res))
         } else {
             Err(CodeGenError::UnexpectedTypeError)
         }
@@ -45,6 +54,14 @@ impl<'ctxt> CodeGen<'ctxt> {
         if let (QLValue::Integer(int1), QLValue::Integer(int2)) = (val1, val2) {
             let res = self.builder.build_int_compare(op.into(), int1, int2, "cmp")?;
             Ok(QLValue::Bool(res))
+        } else if let (QLValue::String(str1), QLValue::String(str2)) = (val1, val2) {
+            let res = self.builder.build_call(
+                self.runtime_functions.compare_string.into(),
+                &[str1.into(), str2.into()],
+                "str_compare"
+            )?.as_any_value_enum().into_int_value();
+            let cmp = self.builder.build_int_compare(op.into(), res, self.int_type().const_zero(), "str_cmp")?;
+            Ok(QLValue::Bool(cmp))
         } else {
             Err(CodeGenError::UnexpectedTypeError)
         }
