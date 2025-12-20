@@ -26,6 +26,8 @@ pub(super) struct RuntimeFunctions<'ctxt> {
     pub(super) input_string: RuntimeFunction<'ctxt>,
 
     pub(super) new_string: RuntimeFunction<'ctxt>,
+    pub(super) add_string_ref: RuntimeFunction<'ctxt>,
+    pub(super) remove_string_ref: RuntimeFunction<'ctxt>,
     pub(super) concat_string: RuntimeFunction<'ctxt>,
     pub(super) compare_string: RuntimeFunction<'ctxt>,
 }
@@ -81,7 +83,19 @@ impl<'ctxt> RuntimeFunctions<'ctxt> {
         let new_string = Self::add_runtime_function(
             module,
             "__ql__QLString_new",
-            ptr_type.fn_type(&[ptr_type.into(), int_type.into()], false),
+            ptr_type.fn_type(&[ptr_type.into(), int_type.into(), bool_type.into()], false),
+        );
+
+        let add_string_ref = Self::add_runtime_function(
+            module,
+            "__ql__QLString_add_ref",
+            void_type.fn_type(&[ptr_type.into()], false),
+        );
+
+        let remove_string_ref = Self::add_runtime_function(
+            module,
+            "__ql__QLString_remove_ref",
+            void_type.fn_type(&[ptr_type.into()], false),
         );
 
         let concat_string = Self::add_runtime_function(
@@ -103,6 +117,8 @@ impl<'ctxt> RuntimeFunctions<'ctxt> {
             input_integer,
             input_string,
             new_string,
+            add_string_ref,
+            remove_string_ref,
             concat_string,
             compare_string,
         }

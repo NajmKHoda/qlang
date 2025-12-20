@@ -38,9 +38,10 @@ impl<'ctxt> QLFunction<'ctxt> {
 		Ok(())
 	}
 
-	pub fn try_get_arg_value(&self, name: &str) -> Option<BasicValueEnum<'ctxt>> {
-		let index = self.params.iter().enumerate().find(|(_, p)| p.name == name)?.0 as u32;
-		self.llvm_function.get_nth_param(index)
+	pub fn try_get_arg_value(&self, name: &str) -> Option<QLValue<'ctxt>> {
+		let (index, param) = self.params.iter().enumerate().find(|(_, p)| p.name == name)?;
+		let llvm_value = self.llvm_function.get_nth_param(index as u32)?;
+		Some(param.ql_type.to_value(llvm_value, true))
 	}
 }
 
@@ -85,12 +86,17 @@ impl<'ctxt> CodeGen<'ctxt> {
         if let Some(function) = self.functions.get(fn_name) {
             function.check_args(&args)?;
             let arg_values: Vec<BasicMetadataValueEnum> = args
-                .into_iter()
-                .map(|v| BasicValueEnum::try_from(v).map(BasicMetadataValueEnum::from))
+                .iter()
+                .map(|v| BasicValueEnum::try_from(*v).map(BasicMetadataValueEnum::from))
                 .collect::<Result<Vec<BasicMetadataValueEnum>, CodeGenError>>()?;
+
             let call_site = self.builder.build_call(function.llvm_function, &arg_values, "call")?;
+			for arg in args {
+				self.remove_if_temp(arg)?;
+			}
+
             match call_site.try_as_basic_value() {
-                ValueKind::Basic(value) => Ok(value.try_into()?),
+                ValueKind::Basic(value) => Ok(function.return_type.to_value(value, false)),
                 ValueKind::Instruction(_) => Ok(QLValue::Void),
             }
         } else {

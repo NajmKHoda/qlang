@@ -61,7 +61,7 @@ impl<'ctxt> CodeGen<'ctxt> {
                     return Err(CodeGenError::InexhaustiveReturnError(function.name));
                 }
             }
-            self.pop_scope();
+            self.pop_scope()?;
         }
         
         let main_fn = self.functions.get("main").ok_or(CodeGenError::MissingMainError)?;
@@ -92,7 +92,7 @@ impl<'ctxt> CodeGen<'ctxt> {
                 break;
             }
         }
-        self.pop_scope();
+        self.pop_scope()?;
         Ok(terminates)
     }
 
@@ -105,8 +105,10 @@ impl<'ctxt> CodeGen<'ctxt> {
         self.vars.push(HashMap::new());
     }
 
-    fn pop_scope(&mut self) {
+    fn pop_scope(&mut self) -> Result<(), CodeGenError> {
+        self.remove_var_refs()?;
         self.vars.pop();
+        Ok(())
     }
 
     fn int_type(&self) -> IntType<'ctxt> { self.context.i32_type() }

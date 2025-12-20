@@ -10,8 +10,19 @@ pub enum QLType {
     Void
 }
 
+impl QLType {
+    pub(super) fn to_value<'a>(self, value: BasicValueEnum<'a>, is_owned: bool) -> QLValue<'a> {
+        match self {
+            QLType::Integer => QLValue::Integer(value.into_int_value()),
+            QLType::Bool => QLValue::Bool(value.into_int_value()),
+            QLType::String => QLValue::String(value.into_pointer_value(), is_owned),
+            QLType::Void => panic!("Mismatch between void type and basic value"),
+        }
+    }
+}
+
 pub(super) struct QLVariable<'a> {
-    ql_type: QLType,
+    pub(super) ql_type: QLType,
     pointer: PointerValue<'a>,
 }
 
@@ -19,7 +30,7 @@ pub(super) struct QLVariable<'a> {
 pub enum QLValue<'a> {
     Integer(IntValue<'a>),
     Bool(IntValue<'a>),
-    String(PointerValue<'a>),
+    String(PointerValue<'a>, bool),
     Void
 }
 
@@ -28,26 +39,8 @@ impl<'a> QLValue<'a> {
         match self {
             QLValue::Integer(_) => QLType::Integer,
             QLValue::Bool(_) => QLType::Bool,
-            QLValue::String(_) => QLType::String,
+            QLValue::String(_, _) => QLType::String,
             QLValue::Void => QLType::Void
-        }
-    }
-}
-
-impl<'a> TryFrom<BasicValueEnum<'a>> for QLValue<'a> {
-    type Error = CodeGenError;
-
-    fn try_from(value: BasicValueEnum<'a>) -> Result<Self, Self::Error> {
-        match value {
-            BasicValueEnum::IntValue(int_val) => {
-                match int_val.get_type().get_bit_width() {
-                    1 => Ok(QLValue::Bool(int_val)),
-                    32 => Ok(QLValue::Integer(int_val)),
-                    _ => Err(CodeGenError::UnexpectedTypeError),
-                }
-            }
-            BasicValueEnum::PointerValue(str_val) => Ok(QLValue::String(str_val)),
-            _ => Err(CodeGenError::UnexpectedTypeError),
         }
     }
 }
@@ -59,7 +52,7 @@ impl<'a> TryFrom<QLValue<'a>> for BasicValueEnum<'a> {
         match value {
             QLValue::Integer(int_val) => Ok(BasicValueEnum::IntValue(int_val)),
             QLValue::Bool(int_val) => Ok(BasicValueEnum::IntValue(int_val)),
-            QLValue::String(str_val) => Ok(BasicValueEnum::PointerValue(str_val)),
+            QLValue::String(str_val, _) => Ok(BasicValueEnum::PointerValue(str_val)),
             QLValue::Void => Err(CodeGenError::UnexpectedTypeError),
         }
     }
@@ -75,6 +68,45 @@ impl<'ctxt> CodeGen<'ctxt> {
         None
     }
 
+    pub(super) fn add_ref(&self, val: QLValue<'ctxt>) -> Result<(), CodeGenError> {
+        if let QLValue::String(str_ptr, true) = val {
+            self.builder.build_call(
+                self.runtime_functions.add_string_ref.into(),
+                &[str_ptr.into()],
+                "add_string_ref"
+            )?;
+        }
+        Ok(())
+    }
+
+    pub(super) fn remove_ref(&self, val: QLValue<'ctxt>) -> Result<(), CodeGenError> {
+        if let QLValue::String(str_ptr, _) = val {
+            self.builder.build_call(
+                self.runtime_functions.remove_string_ref.into(),
+                &[str_ptr.into()],
+                "remove_string_ref"
+            )?;
+        }
+        Ok(())
+    }
+
+    pub(super) fn remove_if_temp(&self, val: QLValue<'ctxt>) -> Result<(), CodeGenError> {
+        if let QLValue::String(_, false) = val {
+            self.remove_ref(val)?;
+        }
+        Ok(())
+    }
+
+    pub(super) fn remove_var_refs(&self) -> Result<(), CodeGenError> {
+        for (name, var) in self.vars.last().unwrap() {
+            if var.ql_type == QLType::String {
+                let loaded_val = self.load_var(name)?;
+                self.remove_ref(loaded_val)?;
+            }
+        }
+        Ok(())
+    }
+
     pub fn const_int(&self, value: i32) -> QLValue<'ctxt> {
         QLValue::Integer(self.int_type().const_int(value as u64, false))
     }
@@ -88,19 +120,19 @@ impl<'ctxt> CodeGen<'ctxt> {
         let length = self.context.i32_type().const_int(value.len() as u64, false);
         let str_ptr = self.builder.build_call(
             self.runtime_functions.new_string.into(),
-            &[raw_str.into(), length.into()],
+            &[raw_str.into(), length.into(), self.bool_type().const_int(1, false).into()],
             "string_alloc"
         )?.as_any_value_enum().into_pointer_value();
-        Ok(QLValue::String(str_ptr))
+        Ok(QLValue::String(str_ptr, false))
     }
 
     pub fn load_var(&self, name: &str) -> Result<QLValue<'ctxt>, CodeGenError> {
         if let Some(variable) = self.get_var(name) {
             let var_type = self.try_get_nonvoid_type(&variable.ql_type)?;
-            let res: QLValue<'ctxt> = self.builder.build_load(var_type, variable.pointer, "load")?.try_into()?;
-            Ok(res)
+            let res: BasicValueEnum = self.builder.build_load(var_type, variable.pointer, "load")?;
+            Ok(variable.ql_type.to_value(res, true))
         } else if let Some(arg) = self.cur_fn().try_get_arg_value(name) {
-            Ok(arg.try_into()?)
+            Ok(arg)
         } else {
             Err(CodeGenError::UndefinedVariableError(name.to_string()))
         }
@@ -131,6 +163,7 @@ impl<'ctxt> CodeGen<'ctxt> {
             if variable.ql_type != value.get_type() {
                 return Err(CodeGenError::UnexpectedTypeError);
             }
+            self.add_ref(value)?;
             self.builder.build_store::<BasicValueEnum>(variable.pointer, value.try_into()?)?;
             Ok(())
         } else if let Some(_) = self.cur_fn().try_get_arg_value(name) {
@@ -139,4 +172,6 @@ impl<'ctxt> CodeGen<'ctxt> {
             Err(CodeGenError::UndefinedVariableError(name.to_string()))
         }
     }
+
+    
 }

@@ -24,12 +24,16 @@ int inputi() {
 typedef struct {
     char* raw_string;
     unsigned int length;
+    unsigned int ref_count;
+    bool is_global;
 } QLString;
 
-QLString* __ql__QLString_new(char* raw_string, int length) {
+QLString* __ql__QLString_new(char* raw_string, int length, bool is_global) {
     QLString* result = malloc(sizeof(QLString));
     result->raw_string = raw_string;
     result->length = length;
+    result->ref_count = 1;
+    result->is_global = is_global;
     return result;
 }
 
@@ -38,7 +42,7 @@ QLString* __ql__QLString_concat(QLString* a, QLString* b) {
     char* raw_string = malloc(length);
     memcpy(raw_string, a->raw_string, a->length);
     memcpy(raw_string + a->length, b->raw_string, b->length);
-    return __ql__QLString_new(raw_string, length);
+    return __ql__QLString_new(raw_string, length, false);
 }
 
 int __ql__QLString_compare(QLString* a, QLString* b) {
@@ -48,9 +52,18 @@ int __ql__QLString_compare(QLString* a, QLString* b) {
     return (cmp != 0) ? cmp : (an - bn);
 }
 
-void __ql__QLString_free(QLString* str) {
-    free(str->raw_string);
-    free(str);
+void __ql__QLString_add_ref(QLString* str) {
+    str->ref_count++;
+}
+
+void __ql__QLString_remove_ref(QLString* str) {
+    str->ref_count--;
+    if (str->ref_count == 0) {
+        if (!str->is_global) {
+            free(str->raw_string);
+        }
+        free(str);
+    }
 }
 
 void prints(QLString* str) {
@@ -77,9 +90,5 @@ QLString* inputs() {
         c = getchar();
     }
 
-    QLString* result = malloc(sizeof(QLString));
-    result->raw_string = buffer;
-    result->length = i;
-
-    return result;
+    return __ql__QLString_new(buffer, i, false);
 }
