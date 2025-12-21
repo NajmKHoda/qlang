@@ -1,7 +1,7 @@
 use inkwell::basic_block::BasicBlock;
 
 use super::{CodeGen, CodeGenError, QLValue};
-use crate::tokens::{ConditionalBranchNode, ExpressionNode, StatementNode};
+use crate::{codegen::QLScopeType, tokens::{ConditionalBranchNode, ExpressionNode, StatementNode}};
 
 pub(super) struct QLLoop<'a> {
     label: Option<String>,
@@ -23,13 +23,27 @@ impl<'ctxt> CodeGen<'ctxt> {
         Ok(())
     }
 
-    fn find_loop(&self, label_op: Option<String>) -> Result<&QLLoop<'ctxt>, CodeGenError> {
+    fn find_loop(&self, label_op: &Option<String>) -> Result<&QLLoop<'ctxt>, CodeGenError> {
         match label_op {
             Some(label) => self.loops.iter()
                 .find(|lp| lp.label.as_ref() == Some(&label))
-                .ok_or(CodeGenError::UndefinedLoopLabelError(label)),
+                .ok_or(CodeGenError::UndefinedLoopLabelError(label.clone())),
             None => self.loops.last().ok_or(CodeGenError::BadLoopControlError)
         }
+    }
+
+    fn release_to_loop_scope(&self, break_label_op: &Option<String>) -> Result<(), CodeGenError> {
+        for scope in self.scopes.iter().rev() {
+            self.release_scope(scope)?;
+            if let QLScopeType::LoopScope(loop_label_op) = &scope.scope_type {
+                match (loop_label_op, break_label_op.as_deref()) {
+                    (Some(loop_label), Some(break_label)) if loop_label == break_label => break,
+                    (_, None) => break,
+                    _ => {}
+                }
+            }
+        }
+        Ok(())
     }
 
     pub fn gen_conditional(
@@ -46,7 +60,7 @@ impl<'ctxt> CodeGen<'ctxt> {
             let body_block = self.context.prepend_basic_block(merge_block, "else_body");
             next_block = body_block;
 
-            let terminates = self.gen_block_stmts(body_block, else_body)?;
+            let terminates = self.gen_block_stmts(body_block, else_body, QLScopeType::ConditionalScope)?;
             all_branches_terminate = all_branches_terminate && terminates;
             self.branch_if(!terminates, body_block, merge_block)?;
         } else {
@@ -65,7 +79,7 @@ impl<'ctxt> CodeGen<'ctxt> {
                 return Err(CodeGenError::UnexpectedTypeError);
             }
 
-            let terminates = self.gen_block_stmts(body_block, branch.body)?;
+            let terminates = self.gen_block_stmts(body_block, branch.body, QLScopeType::ConditionalScope)?;
             all_branches_terminate = all_branches_terminate && terminates;
             self.branch_if(!terminates, body_block, merge_block)?;
             
@@ -106,12 +120,17 @@ impl<'ctxt> CodeGen<'ctxt> {
         }
 
         self.loops.push(QLLoop {
-            label: loop_label,
+            label: loop_label.clone(),
             cond_block: loop_cond_block,
             after_block: after_loop_block
         });
 
-        let body_terminates = self.gen_block_stmts(loop_body_entry_block, body_stmts)?;
+        let body_terminates = self.gen_block_stmts(
+            loop_body_entry_block,
+            body_stmts,
+            QLScopeType::LoopScope(loop_label)
+        )?;
+
         let cur_block = self.builder.get_insert_block().unwrap();
         self.branch_if(!body_terminates, cur_block, loop_cond_block)?;
 
@@ -121,14 +140,16 @@ impl<'ctxt> CodeGen<'ctxt> {
         Ok(())
     }
 
-    pub fn gen_break(&mut self, label: Option<String>) -> Result<(), CodeGenError> {
-        let loop_info = self.find_loop(label)?;
+    pub fn gen_break(&mut self, break_label: Option<String>) -> Result<(), CodeGenError> {
+        let loop_info = self.find_loop(&break_label)?;
+        self.release_to_loop_scope(&break_label)?;
         self.builder.build_unconditional_branch(loop_info.after_block)?;
         Ok(())
     }
 
-    pub fn gen_continue(&mut self, label: Option<String>) -> Result<(), CodeGenError> {
-        let loop_info = self.find_loop(label)?;
+    pub fn gen_continue(&mut self, continue_label: Option<String>) -> Result<(), CodeGenError> {
+        let loop_info = self.find_loop(&continue_label)?;
+        self.release_to_loop_scope(&continue_label)?;
         self.builder.build_unconditional_branch(loop_info.cond_block)?;
         Ok(())
     }

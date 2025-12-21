@@ -40,7 +40,7 @@ impl StatementNode {
                 code_gen.gen_loop(cond_expr, body_stmts, loop_label)?;
             }
             StatementNode::LoneExpression(expr) => {
-                expr.gen_eval(code_gen).map(|_| ())?;
+                code_gen.gen_lone_expression(expr)?;
             }
             StatementNode::Return(expr) => {
                 let val = match expr {

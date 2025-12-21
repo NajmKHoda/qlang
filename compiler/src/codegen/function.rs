@@ -105,12 +105,17 @@ impl<'ctxt> CodeGen<'ctxt> {
     }
 
 	pub fn gen_return(&mut self, value: Option<QLValue<'ctxt>>) -> Result<(), CodeGenError> {
+		for scope in self.scopes.iter().rev() {
+			self.release_scope(scope)?;
+		}
+
 		let return_type = self.cur_fn().return_type;
 		match value {
 			Some(val) => {
 				if val.get_type() != return_type {
 					return Err(CodeGenError::UnexpectedTypeError);
 				}
+				self.add_ref(val)?;
 				let basic_value = BasicValueEnum::try_from(val)?;
 				self.builder.build_return(Some(&basic_value))
 			}

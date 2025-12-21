@@ -7,6 +7,7 @@ use inkwell::targets::{FileType, Target, TargetMachine};
 use inkwell::types::{PointerType, BasicTypeEnum, IntType, VoidType};
 use inkwell::basic_block::BasicBlock;
 
+use crate::codegen::variable::QLScopeType;
 use crate::tokens::{ProgramNode, StatementNode};
 
 mod control_flow;
@@ -14,9 +15,10 @@ mod operations;
 mod data;
 mod error;
 mod function;
+mod variable;
 mod runtime;
 
-use data::QLVariable;
+use variable::QLScope;
 use function::QLFunction;
 use control_flow::QLLoop;
 use runtime::RuntimeFunctions;
@@ -26,7 +28,7 @@ pub use data::QLType;
 pub use operations::ComparisonOp;
 
 pub struct CodeGen<'ctxt> {
-    vars: Vec<HashMap<String, QLVariable<'ctxt>>>,
+    scopes: Vec<QLScope<'ctxt>>,
     functions: HashMap<String, QLFunction<'ctxt>>,
     runtime_functions: RuntimeFunctions<'ctxt>,
     loops: Vec<QLLoop<'ctxt>>,
@@ -49,9 +51,8 @@ impl<'ctxt> CodeGen<'ctxt> {
             self.declare_user_function(&function.name, function.return_type, function.params)?;
             self.cur_fn_name = Some(function.name.to_string());
 
-            self.push_scope();
             let entry_block = self.append_block(format!("{}_entry", function.name).as_str());
-            let function_terminates = self.gen_block_stmts(entry_block, function.body)?;
+            let function_terminates = self.gen_block_stmts(entry_block, function.body, QLScopeType::FunctionScope)?;
             if !function_terminates {
                 if function.return_type == QLType::Void {
                     self.builder.build_return(None)?;
@@ -61,7 +62,6 @@ impl<'ctxt> CodeGen<'ctxt> {
                     return Err(CodeGenError::InexhaustiveReturnError(function.name));
                 }
             }
-            self.pop_scope()?;
         }
         
         let main_fn = self.functions.get("main").ok_or(CodeGenError::MissingMainError)?;
@@ -82,9 +82,15 @@ impl<'ctxt> CodeGen<'ctxt> {
         self.context.append_basic_block(cur_fn.llvm_function, name)
     }
 
-    fn gen_block_stmts(&mut self, block: BasicBlock<'ctxt>, stmts: Vec<StatementNode>) -> Result<bool, CodeGenError> {
-        self.push_scope();
+    fn gen_block_stmts(
+        &mut self,
+        block: BasicBlock<'ctxt>,
+        stmts: Vec<StatementNode>,
+        scope_type: QLScopeType
+    ) -> Result<bool, CodeGenError> {
+        self.scopes.push(QLScope::new(scope_type));
         self.builder.position_at_end(block);
+
         let mut terminates = false;
         for stmt in stmts {
             terminates = stmt.gen_stmt(self)?;
@@ -92,23 +98,17 @@ impl<'ctxt> CodeGen<'ctxt> {
                 break;
             }
         }
-        self.pop_scope()?;
+
+        if !terminates {
+            self.release_scope(self.scopes.last().unwrap())?;
+        }
+        self.scopes.pop();
         Ok(terminates)
     }
 
     fn cur_fn(&self) -> &QLFunction<'ctxt> {
         let name = self.cur_fn_name.as_ref().unwrap();
         self.functions.get(name).unwrap()
-    }
-
-    fn push_scope(&mut self) {
-        self.vars.push(HashMap::new());
-    }
-
-    fn pop_scope(&mut self) -> Result<(), CodeGenError> {
-        self.remove_var_refs()?;
-        self.vars.pop();
-        Ok(())
     }
 
     fn int_type(&self) -> IntType<'ctxt> { self.context.i32_type() }
@@ -132,7 +132,7 @@ pub fn gen_code(program: ProgramNode) -> Result<(), CodeGenError> {
     let module = context.create_module("main");
 
     let codegen = CodeGen {
-        vars: Vec::new(),
+        scopes: Vec::new(),
         functions: HashMap::new(),
         runtime_functions: RuntimeFunctions::new(&context, &module),
         loops: Vec::new(),

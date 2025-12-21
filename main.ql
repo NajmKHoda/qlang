@@ -1,14 +1,17 @@
 function main() -> int {
-  prints("Enter name 1:");
-  str name1 <- inputs();
-  prints("Enter name 2:");
-  str name2 <- inputs();
+  prints("Enter your first word:");
+  str total <- inputs();
 
-  if name1 < name2 {
-    prints(name1 + " appears in the dictionary first!");
-  } else if name1 > name2 {
-    prints(name2 + " appears in the dictionary first!");
-  } else {
-    prints("You entered the same name!");
+  "useless_string";
+
+  while true {
+    prints("Enter the next word, or STOP to conclude:");
+    str segment <- inputs();
+    if segment = "STOP" {
+      break;
+    }
+    total <- total + " " + segment;
   }
+
+  prints("Your sentence is: " + total);
 }
