@@ -1,5 +1,5 @@
 use inkwell::types::{BasicMetadataTypeEnum, FunctionType};
-use inkwell::values::{BasicMetadataValueEnum, BasicValueEnum, FunctionValue, ValueKind};
+use inkwell::values::{BasicMetadataValueEnum, BasicValue, BasicValueEnum, FunctionValue, ValueKind};
 
 use super::{CodeGen, CodeGenError, QLValue, QLType};
 use crate::tokens::TypedQNameNode;
@@ -105,27 +105,31 @@ impl<'ctxt> CodeGen<'ctxt> {
     }
 
 	pub fn gen_return(&mut self, value: Option<QLValue<'ctxt>>) -> Result<(), CodeGenError> {
-		for scope in self.scopes.iter().rev() {
-			self.release_scope(scope)?;
-		}
-
 		let return_type = self.cur_fn().return_type;
-		match value {
+		let enum_value = match value {
 			Some(val) => {
 				if val.get_type() != return_type {
 					return Err(CodeGenError::UnexpectedTypeError);
 				}
 				self.add_ref(val)?;
 				let basic_value = BasicValueEnum::try_from(val)?;
-				self.builder.build_return(Some(&basic_value))
+				Some(basic_value)
 			}
 			None => {
 				if return_type != QLType::Void {
 					return Err(CodeGenError::UnexpectedTypeError);
 				}
-				self.builder.build_return(None)
+				None
 			}
-		}?;
+		};
+
+		
+		for scope in self.scopes.iter().rev() {
+			self.release_scope(scope)?;
+		}
+
+		let basic_value = enum_value.as_ref().map(|v| v as &dyn BasicValue);
+		self.builder.build_return(basic_value)?;
 		Ok(())
 	}
 }
