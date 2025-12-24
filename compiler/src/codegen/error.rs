@@ -6,6 +6,9 @@ pub enum CodeGenError {
     UnexpectedTypeError,
     UndefinedVariableError(String),
     UndefinedLoopLabelError(String),
+    UndefinedTableError(String),
+    UndefinedTableColumnError(String, String),
+
     BadLoopControlError,
     DuplicateDefinitionError(String),
     BadFunctionCallError(String),
@@ -27,6 +30,9 @@ impl fmt::Display for CodeGenError {
             CodeGenError::UnexpectedTypeError => write!(f, "Unexpected type encountered"),
             CodeGenError::UndefinedVariableError(name) => write!(f, "Undefined variable: {name}"),
             CodeGenError::UndefinedLoopLabelError(name) => write!(f, "Undefined loop label: {name}"),
+            CodeGenError::UndefinedTableError(name) => write!(f, "Undefined table: {name}"),
+            CodeGenError::UndefinedTableColumnError(column_name, table_name) => write!(f, "Undefined column {column_name} in table {table_name}"),
+
             CodeGenError::BadLoopControlError => write!(f, "No loop to break/continue from"),
             CodeGenError::DuplicateDefinitionError(name) => write!(f, "Duplicate definition for {name}"),
             CodeGenError::BadFunctionCallError(name) => write!(f, "Bad function call: {name}"),

@@ -4,30 +4,33 @@ use crate::{codegen::QLScope, tokens::ExpressionNode};
 
 use super::{CodeGen, CodeGenError};
 
-#[derive(Clone, Copy, PartialEq, Debug)]
+#[derive(Clone, PartialEq, Debug)]
 pub enum QLType {
     Integer,
     Bool,
     String,
+    Table(String),
     Void
 }
 
 impl QLType {
-    pub(super) fn to_value<'a>(self, value: BasicValueEnum<'a>, is_owned: bool) -> QLValue<'a> {
+    pub(super) fn to_value<'a>(&self, value: BasicValueEnum<'a>, is_owned: bool) -> QLValue<'a> {
         match self {
             QLType::Integer => QLValue::Integer(value.into_int_value()),
             QLType::Bool => QLValue::Bool(value.into_int_value()),
             QLType::String => QLValue::String(value.into_pointer_value(), is_owned),
+            QLType::Table(table_name) => QLValue::TableRow(value.into_pointer_value(), table_name.clone()),
             QLType::Void => panic!("Mismatch between void type and basic value"),
         }
     }
 }
 
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, PartialEq)]
 pub enum QLValue<'a> {
     Integer(IntValue<'a>),
     Bool(IntValue<'a>),
     String(PointerValue<'a>, bool),
+    TableRow(PointerValue<'a>, String),
     Void
 }
 
@@ -37,6 +40,7 @@ impl<'a> QLValue<'a> {
             QLValue::Integer(_) => QLType::Integer,
             QLValue::Bool(_) => QLType::Bool,
             QLValue::String(_, _) => QLType::String,
+            QLValue::TableRow(_, table_name) => QLType::Table(table_name.clone()),
             QLValue::Void => QLType::Void
         }
     }
@@ -50,17 +54,18 @@ impl<'a> TryFrom<QLValue<'a>> for BasicValueEnum<'a> {
             QLValue::Integer(int_val) => Ok(BasicValueEnum::IntValue(int_val)),
             QLValue::Bool(int_val) => Ok(BasicValueEnum::IntValue(int_val)),
             QLValue::String(str_val, _) => Ok(BasicValueEnum::PointerValue(str_val)),
+            QLValue::TableRow(ptr_val, _) => Ok(BasicValueEnum::PointerValue(ptr_val)),
             QLValue::Void => Err(CodeGenError::UnexpectedTypeError),
         }
     }
 }
 
 impl<'ctxt> CodeGen<'ctxt> {
-    pub(super) fn add_ref(&self, val: QLValue<'ctxt>) -> Result<(), CodeGenError> {
+    pub(super) fn add_ref(&self, val: &QLValue<'ctxt>) -> Result<(), CodeGenError> {
         if let QLValue::String(str_ptr, true) = val {
             self.builder.build_call(
                 self.runtime_functions.add_string_ref.into(),
-                &[str_ptr.into()],
+                &[(*str_ptr).into()],
                 "add_string_ref"
             )?;
         }
@@ -114,7 +119,7 @@ impl<'ctxt> CodeGen<'ctxt> {
         Ok(QLValue::String(str_ptr, false))
     }
 
-    pub fn gen_lone_expression(&mut self, expr: Box<ExpressionNode>) -> Result<(), CodeGenError> {
+    pub fn gen_lone_expression(&mut self, expr: &Box<ExpressionNode>) -> Result<(), CodeGenError> {
         let val = expr.gen_eval(self)?;
         self.remove_ref(val)?;
         Ok(())

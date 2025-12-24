@@ -21,13 +21,6 @@ int inputi() {
 
 // Strings
 
-typedef struct {
-    char* raw_string;
-    unsigned int length;
-    unsigned int ref_count;
-    bool is_global;
-} QLString;
-
 QLString* __ql__QLString_new(char* raw_string, int length, bool is_global) {
     QLString* result = malloc(sizeof(QLString));
     result->raw_string = raw_string;

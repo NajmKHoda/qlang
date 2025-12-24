@@ -50,7 +50,8 @@ impl<'ctxt> CodeGen<'ctxt> {
         }
     }
 
-    pub fn define_var(&mut self, name: &str, var_type: QLType, value: QLValue<'ctxt>) -> Result<(), CodeGenError> {
+    pub fn define_var(&mut self, name: &str, _var_type: &QLType, value: QLValue<'ctxt>) -> Result<(), CodeGenError> {
+        let var_type = _var_type.clone();
         let llvm_type = self.try_get_nonvoid_type(&var_type)?;
         let cur_scope = self.scopes.last_mut().unwrap();
         if cur_scope.vars.contains_key(name) {
@@ -78,7 +79,7 @@ impl<'ctxt> CodeGen<'ctxt> {
 
             let prev_value = self.load_var(name)?;
             self.remove_ref(prev_value)?;
-            self.add_ref(value)?;
+            self.add_ref(&value)?;
             self.builder.build_store::<BasicValueEnum>(variable.pointer, value.try_into()?)?;
             Ok(())
         } else if let Some(_) = self.cur_fn().try_get_arg_value(name) {

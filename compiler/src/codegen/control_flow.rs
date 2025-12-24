@@ -48,8 +48,8 @@ impl<'ctxt> CodeGen<'ctxt> {
 
     pub fn gen_conditional(
         &mut self,
-        conditional_branches: Vec<ConditionalBranchNode>,
-        else_branch: Option<Vec<StatementNode>>
+        conditional_branches: &[ConditionalBranchNode],
+        else_branch: &Option<Vec<StatementNode>>
     ) -> Result<bool, CodeGenError> {
         let initial_block = self.builder.get_insert_block().unwrap();
         let merge_block = self.append_block("merge_branches");
@@ -79,7 +79,7 @@ impl<'ctxt> CodeGen<'ctxt> {
                 return Err(CodeGenError::UnexpectedTypeError);
             }
 
-            let terminates = self.gen_block_stmts(body_block, branch.body, QLScopeType::ConditionalScope)?;
+            let terminates = self.gen_block_stmts(body_block, &branch.body, QLScopeType::ConditionalScope)?;
             all_branches_terminate = all_branches_terminate && terminates;
             self.branch_if(!terminates, body_block, merge_block)?;
             
@@ -101,9 +101,9 @@ impl<'ctxt> CodeGen<'ctxt> {
 
     pub fn gen_loop(
         &mut self,
-        condition_expr: Box<ExpressionNode>,
-        body_stmts: Vec<StatementNode>,
-        loop_label: Option<String>
+        condition_expr: &Box<ExpressionNode>,
+        body_stmts: &[StatementNode],
+        loop_label: &Option<String>
     ) -> Result<(), CodeGenError> {
         let loop_cond_block = self.append_block("loop_cond");
         let loop_body_entry_block = self.append_block("loop_body_entry");
@@ -127,8 +127,8 @@ impl<'ctxt> CodeGen<'ctxt> {
 
         let body_terminates = self.gen_block_stmts(
             loop_body_entry_block,
-            body_stmts,
-            QLScopeType::LoopScope(loop_label)
+            &body_stmts,
+            QLScopeType::LoopScope(loop_label.clone())
         )?;
 
         let cur_block = self.builder.get_insert_block().unwrap();
@@ -140,14 +140,14 @@ impl<'ctxt> CodeGen<'ctxt> {
         Ok(())
     }
 
-    pub fn gen_break(&mut self, break_label: Option<String>) -> Result<(), CodeGenError> {
-        let loop_info = self.find_loop(&break_label)?;
-        self.release_to_loop_scope(&break_label)?;
+    pub fn gen_break(&mut self, break_label: &Option<String>) -> Result<(), CodeGenError> {
+        let loop_info = self.find_loop(break_label)?;
+        self.release_to_loop_scope(break_label)?;
         self.builder.build_unconditional_branch(loop_info.after_block)?;
         Ok(())
     }
 
-    pub fn gen_continue(&mut self, continue_label: Option<String>) -> Result<(), CodeGenError> {
+    pub fn gen_continue(&mut self, continue_label: &Option<String>) -> Result<(), CodeGenError> {
         let loop_info = self.find_loop(&continue_label)?;
         self.release_to_loop_scope(&continue_label)?;
         self.builder.build_unconditional_branch(loop_info.cond_block)?;

@@ -1,10 +1,12 @@
 use std::str::FromStr;
-use crate::tokens::{ProgramNode, FunctionNode, StatementNode, ConditionalBranchNode, ExpressionNode, TypedQNameNode};
+use crate::tokens::{ProgramNode, FunctionNode, StatementNode, ConditionalBranchNode, ExpressionNode, TypedQNameNode, ColumnValueNode, TableNode};
 use crate::codegen::{ComparisonOp, QLType};
 
 grammar;
 
-pub Program: ProgramNode = <functions:Function*> => ProgramNode { <> };
+pub Program: ProgramNode = <tables:Table*> <functions:Function*> => ProgramNode { <> };
+
+Table: TableNode = "table" <name:ProperQName> "{" <columns:Comma<TypedQName>> "}" => TableNode { <> };
 
 Function: FunctionNode =
     "function" <name:QName>
@@ -42,6 +44,7 @@ Expression: Box<ExpressionNode> = {
     Int => Box::new(ExpressionNode::IntegerLiteral(<>)),
     Bool => Box::new(ExpressionNode::BoolLiteral(<>)),
     QLString => Box::new(ExpressionNode::StringLiteral(<>)),
+    <name:ProperQName> "{" <cols:Comma<ColumnValue>> "}" => Box::new(ExpressionNode::TableRow(<>)),
     QName => Box::new(ExpressionNode::QName(<>)),
     #[precedence(level="1")] #[assoc(side="left")]
     <Expression> "+" <Expression> => Box::new(ExpressionNode::Add(<>)),
@@ -57,6 +60,8 @@ Expression: Box<ExpressionNode> = {
     <Expression> "!=" <Expression> => Box::new(ExpressionNode::Comparison(<>, ComparisonOp::NotEqual))
 }
 
+ColumnValue: ColumnValueNode = <name:QName> ":" <value:Expression> => ColumnValueNode { <> };
+
 TypedQName: TypedQNameNode = <ql_type:TypeName> <name:QName> => TypedQNameNode { <> };
 
 TypeNameWithVoid: QLType = {
@@ -67,13 +72,16 @@ TypeNameWithVoid: QLType = {
 TypeName: QLType = {
     "int" => QLType::Integer,
     "bool" => QLType::Bool,
-    "str" => QLType::String
+    "str" => QLType::String,
+    ProperQName => QLType::Table(<>)
 }
 
 Int: i32 = r"-?[0-9]+" => i32::from_str(<>).unwrap();
 Bool: bool = { "true" => true, "false" => false };
 QLString: String = <s:r#""[^"]*""#> => s[1..s.len()-1].to_string();
-QName: String = r"[a-zA-Z_][a-zA-Z0-9_]*" => String::from(<>);
+
+ProperQName: String = r"_*[A-Z][a-zA-Z0-9]*" => String::from(<>);
+QName: String = r"_*[a-z][a-zA-Z0-9_]*" => String::from(<>);
 
 Comma<T>: Vec<T> = _Comma<T>? => match <> {
     Some(xs) => xs,

@@ -137,9 +137,9 @@ impl<'ctxt> CodeGen<'ctxt> {
             name: runtime_function.name.to_string(),
             llvm_function: runtime_function.llvm_function,
             return_type,
-            params: param_types.iter().enumerate().map(|(i, &t)| QLParameter {
+            params: param_types.iter().enumerate().map(|(i, t)| QLParameter {
                 name: format!("arg{}", i),
-                ql_type: t,
+                ql_type: t.clone(),
             }).collect(),
         });
     }

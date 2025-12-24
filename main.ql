@@ -1,9 +1,13 @@
-function input_wrapper() -> str {
-  str x <- inputs();
-  return x;
+table Person {
+  int age,
+  str name,
+  bool is_married
 }
 
 function main() -> int {
-  str foo <- input_wrapper();
-  prints(foo);
+  Person person <- Person {
+    name: "Monty Mole",
+    age: 67,
+    is_married: true
+  };
 }

@@ -7,7 +7,6 @@ use inkwell::targets::{FileType, Target, TargetMachine};
 use inkwell::types::{PointerType, BasicTypeEnum, IntType, VoidType};
 use inkwell::basic_block::BasicBlock;
 
-use crate::codegen::variable::QLScopeType;
 use crate::tokens::{ProgramNode, StatementNode};
 
 mod control_flow;
@@ -16,10 +15,13 @@ mod data;
 mod error;
 mod function;
 mod variable;
+mod table;
 mod runtime;
 
 use variable::QLScope;
+use variable::QLScopeType;
 use function::QLFunction;
+use table::QLTable;
 use control_flow::QLLoop;
 use runtime::RuntimeFunctions;
 pub use error::CodeGenError;
@@ -30,6 +32,7 @@ pub use operations::ComparisonOp;
 pub struct CodeGen<'ctxt> {
     scopes: Vec<QLScope<'ctxt>>,
     functions: HashMap<String, QLFunction<'ctxt>>,
+    tables: HashMap<String, QLTable<'ctxt>>,
     runtime_functions: RuntimeFunctions<'ctxt>,
     loops: Vec<QLLoop<'ctxt>>,
 
@@ -40,26 +43,30 @@ pub struct CodeGen<'ctxt> {
 }
 
 impl<'ctxt> CodeGen<'ctxt> {
-    fn gen_code(mut self, program: ProgramNode) -> Result<Module<'ctxt>, CodeGenError> {
+    fn gen_code(mut self, program: &ProgramNode) -> Result<Module<'ctxt>, CodeGenError> {
         self.expose_runtime_function(self.runtime_functions.print_integer, QLType::Void, &[QLType::Integer]);
         self.expose_runtime_function(self.runtime_functions.print_boolean, QLType::Void, &[QLType::Bool]);
         self.expose_runtime_function(self.runtime_functions.print_string, QLType::Void, &[QLType::String]);
         self.expose_runtime_function(self.runtime_functions.input_integer, QLType::Integer, &[]);
         self.expose_runtime_function(self.runtime_functions.input_string, QLType::String, &[]);
 
-        for function in program.functions {
-            self.declare_user_function(&function.name, function.return_type, function.params)?;
+        for table in &program.tables {
+            self.gen_table(&table.name, &table.columns)?;
+        }
+
+        for function in &program.functions {
+            self.declare_user_function(&function.name, &function.return_type, &function.params)?;
             self.cur_fn_name = Some(function.name.to_string());
 
             let entry_block = self.append_block(format!("{}_entry", function.name).as_str());
-            let function_terminates = self.gen_block_stmts(entry_block, function.body, QLScopeType::FunctionScope)?;
+            let function_terminates = self.gen_block_stmts(entry_block, &function.body, QLScopeType::FunctionScope)?;
             if !function_terminates {
                 if function.return_type == QLType::Void {
                     self.builder.build_return(None)?;
                 } else if function.name == "main" {
                     self.builder.build_return(Some(&self.int_type().const_zero()))?;
                 } else {
-                    return Err(CodeGenError::InexhaustiveReturnError(function.name));
+                    return Err(CodeGenError::InexhaustiveReturnError(function.name.clone()));
                 }
             }
         }
@@ -85,7 +92,7 @@ impl<'ctxt> CodeGen<'ctxt> {
     fn gen_block_stmts(
         &mut self,
         block: BasicBlock<'ctxt>,
-        stmts: Vec<StatementNode>,
+        stmts: &[StatementNode],
         scope_type: QLScopeType
     ) -> Result<bool, CodeGenError> {
         self.scopes.push(QLScope::new(scope_type));
@@ -121,12 +128,13 @@ impl<'ctxt> CodeGen<'ctxt> {
             QLType::Integer => Ok(self.int_type().into()),
             QLType::Bool => Ok(self.bool_type().into()),
             QLType::String => Ok(self.ptr_type().into()),
+            QLType::Table(_) => Ok(self.ptr_type().into()),
             QLType::Void => Err(CodeGenError::UnexpectedTypeError)
         }
     }
 }
 
-pub fn gen_code(program: ProgramNode) -> Result<(), CodeGenError> {
+pub fn gen_code(program: &ProgramNode) -> Result<(), CodeGenError> {
     let context = Context::create();
     let builder = context.create_builder();
     let module = context.create_module("main");
@@ -134,6 +142,7 @@ pub fn gen_code(program: ProgramNode) -> Result<(), CodeGenError> {
     let codegen = CodeGen {
         scopes: Vec::new(),
         functions: HashMap::new(),
+        tables: HashMap::new(),
         runtime_functions: RuntimeFunctions::new(&context, &module),
         loops: Vec::new(),
         cur_fn_name: None,
