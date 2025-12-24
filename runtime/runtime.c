@@ -16,6 +16,7 @@ void printb(bool x) {
 int inputi() {
     int x;
     scanf("%d", &x);
+    while(getchar() != '\n');
     return x;
 }
 
