@@ -4,7 +4,7 @@ use crate::{codegen::QLValue, tokens::{ColumnValueNode, TypedQNameNode}};
 
 use super::{CodeGen, CodeGenError, QLType};
 
-struct QLTableColumn {
+pub(super) struct QLTableColumn {
     name: String,
     ql_type: QLType,
 }
@@ -19,8 +19,8 @@ impl From<&TypedQNameNode> for QLTableColumn {
 }
 
 pub(super) struct QLTable<'ctxt> {
-    struct_type: StructType<'ctxt>,
-    fields: Vec<QLTableColumn>,
+    pub(super) struct_type: StructType<'ctxt>,
+    pub(super) fields: Vec<QLTableColumn>,
 }
 
 impl<'ctxt> CodeGen<'ctxt> {
@@ -46,7 +46,7 @@ impl<'ctxt> CodeGen<'ctxt> {
         let table = self.tables.get(table_name)
             .ok_or_else(|| CodeGenError::UndefinedTableError(table_name.to_string()))?;
 
-        let row_ptr = self.builder.build_alloca(table.struct_type, &format!("{}.row", table_name))?;
+        let row_ptr = self.builder.build_alloca(table.struct_type, &format!("{}.row.store", table_name))?;
         for column in columns {
             let column_index = table.fields.iter()
                 .position(|c| c.name == column.name)
@@ -67,6 +67,11 @@ impl<'ctxt> CodeGen<'ctxt> {
             self.builder.build_store(column_ptr, BasicValueEnum::try_from(column_value)?)?;
         }
 
-        Ok(QLValue::TableRow(row_ptr, table_name.to_string()))
+        let struct_val = self.builder.build_load(
+            table.struct_type,
+            row_ptr,
+            &format!("{}.row.load", table_name)
+        )?.into_struct_value();
+        Ok(QLValue::TableRow(struct_val, table_name.to_string()))
     }
 }

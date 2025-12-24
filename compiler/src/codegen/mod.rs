@@ -4,7 +4,7 @@ use inkwell::context::Context;
 use inkwell::module::Module;
 use inkwell::builder::Builder;
 use inkwell::targets::{FileType, Target, TargetMachine};
-use inkwell::types::{PointerType, BasicTypeEnum, IntType, VoidType};
+use inkwell::types::{BasicTypeEnum, IntType, PointerType, VoidType};
 use inkwell::basic_block::BasicBlock;
 
 use crate::tokens::{ProgramNode, StatementNode};
@@ -120,7 +120,8 @@ impl<'ctxt> CodeGen<'ctxt> {
 
     fn int_type(&self) -> IntType<'ctxt> { self.context.i32_type() }
     fn bool_type(&self) -> IntType<'ctxt> { self.context.bool_type() }
-    fn ptr_type(&self) -> PointerType<'ctxt> { self.context.ptr_type(Default::default())  }
+    fn ptr_type(&self) -> PointerType<'ctxt> { self.context.ptr_type(Default::default()) }
+
     fn void_type(&self) -> VoidType<'ctxt> { self.context.void_type() }
     
     fn try_get_nonvoid_type(&self, ql_type: &QLType) -> Result<BasicTypeEnum<'ctxt>, CodeGenError> {

@@ -57,7 +57,9 @@ impl<'ctxt> CodeGen<'ctxt> {
 			QLType::Integer => self.int_type().fn_type(&llvm_param_types, false),
 			QLType::Bool => self.bool_type().fn_type(&llvm_param_types, false),
 			QLType::String => self.ptr_type().fn_type(&llvm_param_types, false),
-			QLType::Table(_) => self.ptr_type().fn_type(&llvm_param_types, false),
+			QLType::Table(table_name) => self.tables.get(table_name)
+				.ok_or_else(|| CodeGenError::UndefinedTableError(table_name.clone()))?
+				.struct_type.fn_type(&llvm_param_types, false),
 			QLType::Void => self.void_type().fn_type(&llvm_param_types, false),
 		};
 		Ok(fn_type)

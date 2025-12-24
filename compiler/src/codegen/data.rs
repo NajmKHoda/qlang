@@ -1,4 +1,4 @@
-use inkwell::values::{AnyValue, BasicValueEnum, IntValue, PointerValue};
+use inkwell::values::{AnyValue, BasicValueEnum, IntValue, PointerValue, StructValue};
 
 use crate::{codegen::QLScope, tokens::ExpressionNode};
 
@@ -19,7 +19,7 @@ impl QLType {
             QLType::Integer => QLValue::Integer(value.into_int_value()),
             QLType::Bool => QLValue::Bool(value.into_int_value()),
             QLType::String => QLValue::String(value.into_pointer_value(), is_owned),
-            QLType::Table(table_name) => QLValue::TableRow(value.into_pointer_value(), table_name.clone()),
+            QLType::Table(table_name) => QLValue::TableRow(value.into_struct_value(), table_name.clone()),
             QLType::Void => panic!("Mismatch between void type and basic value"),
         }
     }
@@ -30,7 +30,7 @@ pub enum QLValue<'a> {
     Integer(IntValue<'a>),
     Bool(IntValue<'a>),
     String(PointerValue<'a>, bool),
-    TableRow(PointerValue<'a>, String),
+    TableRow(StructValue<'a>, String),
     Void
 }
 
@@ -54,7 +54,7 @@ impl<'a> TryFrom<QLValue<'a>> for BasicValueEnum<'a> {
             QLValue::Integer(int_val) => Ok(BasicValueEnum::IntValue(int_val)),
             QLValue::Bool(int_val) => Ok(BasicValueEnum::IntValue(int_val)),
             QLValue::String(str_val, _) => Ok(BasicValueEnum::PointerValue(str_val)),
-            QLValue::TableRow(ptr_val, _) => Ok(BasicValueEnum::PointerValue(ptr_val)),
+            QLValue::TableRow(struct_val, _) => Ok(BasicValueEnum::StructValue(struct_val)),
             QLValue::Void => Err(CodeGenError::UnexpectedTypeError),
         }
     }

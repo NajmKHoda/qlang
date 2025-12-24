@@ -1,13 +1,12 @@
-table Person {
-  int age,
-  str name,
-  bool is_married
+table Point {
+  int x,
+  int y
+}
+
+function genPoint() -> Point {
+  return Point { x: 0, y: 0 };
 }
 
 function main() -> int {
-  Person person <- Person {
-    name: "Monty Mole",
-    age: 67,
-    is_married: true
-  };
+  Point point <- genPoint();
 }
