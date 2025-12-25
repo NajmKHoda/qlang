@@ -57,6 +57,7 @@ void __ql__QLString_remove_ref(QLString* str) {
             free(str->raw_string);
         }
         free(str);
+        fprintf(stderr, "free(%p)\n", (void*)str);
     }
 }
 
@@ -85,4 +86,8 @@ QLString* inputs() {
     }
 
     return __ql__QLString_new(buffer, i, false);
+}
+
+void _print_rc(QLString* str) {
+    fprintf(stderr, "RC(%p) = %u\n", (void*)str, str->ref_count);
 }

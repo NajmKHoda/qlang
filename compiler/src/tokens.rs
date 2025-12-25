@@ -82,6 +82,7 @@ pub struct ConditionalBranchNode {
 
 pub enum ExpressionNode {
     QName(String),
+    Column(Box<ExpressionNode>, String),
     IntegerLiteral(i32),
     BoolLiteral(bool),
     StringLiteral(String),
@@ -99,6 +100,10 @@ impl ExpressionNode {
             ExpressionNode::BoolLiteral(x) => Ok(code_gen.const_bool(*x)),
             ExpressionNode::StringLiteral(x) => Ok(code_gen.const_str(x)?),
             ExpressionNode::QName(name) => code_gen.load_var(&name),
+            ExpressionNode::Column(table_row_expr, column_name) => {
+                let table_row = table_row_expr.gen_eval(code_gen)?;
+                code_gen.get_column_value(table_row, column_name)
+            }
             ExpressionNode::Add(expr1, expr2) => {
                 let val1 = expr1.gen_eval(code_gen)?;
                 let val2 = expr2.gen_eval(code_gen)?;

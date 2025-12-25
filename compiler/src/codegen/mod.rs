@@ -49,6 +49,7 @@ impl<'ctxt> CodeGen<'ctxt> {
         self.expose_runtime_function(self.runtime_functions.print_string, QLType::Void, &[QLType::String]);
         self.expose_runtime_function(self.runtime_functions.input_integer, QLType::Integer, &[]);
         self.expose_runtime_function(self.runtime_functions.input_string, QLType::String, &[]);
+        self.expose_runtime_function(self.runtime_functions.print_rc, QLType::Void, &[QLType::String]);
 
         for table in &program.tables {
             self.gen_table(&table.name, &table.columns)?;
@@ -121,7 +122,6 @@ impl<'ctxt> CodeGen<'ctxt> {
     fn int_type(&self) -> IntType<'ctxt> { self.context.i32_type() }
     fn bool_type(&self) -> IntType<'ctxt> { self.context.bool_type() }
     fn ptr_type(&self) -> PointerType<'ctxt> { self.context.ptr_type(Default::default()) }
-
     fn void_type(&self) -> VoidType<'ctxt> { self.context.void_type() }
     
     fn try_get_nonvoid_type(&self, ql_type: &QLType) -> Result<BasicTypeEnum<'ctxt>, CodeGenError> {
@@ -129,7 +129,9 @@ impl<'ctxt> CodeGen<'ctxt> {
             QLType::Integer => Ok(self.int_type().into()),
             QLType::Bool => Ok(self.bool_type().into()),
             QLType::String => Ok(self.ptr_type().into()),
-            QLType::Table(_) => Ok(self.ptr_type().into()),
+            QLType::Table(table_name) => Ok(self.tables.get(table_name)
+                .ok_or_else(|| CodeGenError::UndefinedTableError(table_name.clone()))?
+                .struct_type.into()),
             QLType::Void => Err(CodeGenError::UnexpectedTypeError)
         }
     }

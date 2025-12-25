@@ -5,8 +5,8 @@ use crate::{codegen::QLValue, tokens::{ColumnValueNode, TypedQNameNode}};
 use super::{CodeGen, CodeGenError, QLType};
 
 pub(super) struct QLTableColumn {
-    name: String,
-    ql_type: QLType,
+    pub(super) name: String,
+    pub(super) ql_type: QLType,
 }
 
 impl From<&TypedQNameNode> for QLTableColumn {
@@ -17,10 +17,19 @@ impl From<&TypedQNameNode> for QLTableColumn {
         }
     }
 }
-
-pub(super) struct QLTable<'ctxt> {
-    pub(super) struct_type: StructType<'ctxt>,
+    
+pub(super) struct QLTable<'a> {
+    pub(super) name: String,
+    pub(super) struct_type: StructType<'a>,
     pub(super) fields: Vec<QLTableColumn>,
+}
+
+impl<'a> QLTable<'a> {
+    pub fn get_column_index(&self, column_name: &str) -> Result<u32, CodeGenError> {
+        self.fields.iter().position(|c| c.name == column_name)
+            .map(|idx| idx as u32)
+            .ok_or_else(|| CodeGenError::UndefinedTableColumnError(column_name.to_string(), self.name.clone()))
+    }
 }
 
 impl<'ctxt> CodeGen<'ctxt> {
@@ -33,6 +42,7 @@ impl<'ctxt> CodeGen<'ctxt> {
         struct_type.set_body(&field_types, false);
 
         let table = QLTable {
+            name: name.to_string(),
             struct_type,
             fields: fields.iter().map(|f| f.into()).collect(),
         };
@@ -48,10 +58,7 @@ impl<'ctxt> CodeGen<'ctxt> {
 
         let row_ptr = self.builder.build_alloca(table.struct_type, &format!("{}.row.store", table_name))?;
         for column in columns {
-            let column_index = table.fields.iter()
-                .position(|c| c.name == column.name)
-                .ok_or_else(|| CodeGenError::UndefinedTableColumnError(column.name.clone(), table_name.to_string()))? as u32;
-
+            let column_index = table.get_column_index(&column.name)?;
             let column_ptr = self.builder.build_struct_gep(
                 table.struct_type,
                 row_ptr, 
@@ -64,6 +71,7 @@ impl<'ctxt> CodeGen<'ctxt> {
                 return Err(CodeGenError::UnexpectedTypeError);
             }
 
+            self.add_ref(&column_value)?;
             self.builder.build_store(column_ptr, BasicValueEnum::try_from(column_value)?)?;
         }
 
@@ -72,6 +80,25 @@ impl<'ctxt> CodeGen<'ctxt> {
             row_ptr,
             &format!("{}.row.load", table_name)
         )?.into_struct_value();
-        Ok(QLValue::TableRow(struct_val, table_name.to_string()))
+        Ok(QLValue::TableRow(struct_val, table_name.to_string(), false))
+    }
+
+    pub fn get_column_value(&self, table_row: QLValue<'ctxt>, column_name: &str) -> Result<QLValue<'ctxt>, CodeGenError> {
+        if let QLValue::TableRow(struct_val, table_name, _) = table_row {
+            let table = self.tables.get(&table_name)
+                .ok_or_else(|| CodeGenError::UndefinedTableError(table_name.clone()))?;
+
+            let column_index = table.get_column_index(column_name)?;
+            let column_type = &table.fields[column_index as usize].ql_type;
+            let loaded_val = self.builder.build_extract_value(
+                struct_val,
+                column_index,
+                &format!("{}.{}", table_name, column_name)
+            )?;
+
+            Ok(column_type.to_value(loaded_val, true))
+        } else {
+            Err(CodeGenError::UnexpectedTypeError)
+        }
     }
 }

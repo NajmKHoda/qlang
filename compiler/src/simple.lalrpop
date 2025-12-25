@@ -45,6 +45,7 @@ Expression: Box<ExpressionNode> = {
     Bool => Box::new(ExpressionNode::BoolLiteral(<>)),
     QLString => Box::new(ExpressionNode::StringLiteral(<>)),
     <name:ProperQName> "{" <cols:Comma<ColumnValue>> "}" => Box::new(ExpressionNode::TableRow(<>)),
+    <Expression> "." <QName> => Box::new(ExpressionNode::Column(<>)),
     QName => Box::new(ExpressionNode::QName(<>)),
     #[precedence(level="1")] #[assoc(side="left")]
     <Expression> "+" <Expression> => Box::new(ExpressionNode::Add(<>)),

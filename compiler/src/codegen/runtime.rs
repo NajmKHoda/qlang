@@ -30,6 +30,8 @@ pub(super) struct RuntimeFunctions<'ctxt> {
     pub(super) remove_string_ref: RuntimeFunction<'ctxt>,
     pub(super) concat_string: RuntimeFunction<'ctxt>,
     pub(super) compare_string: RuntimeFunction<'ctxt>,
+
+    pub(super) print_rc: RuntimeFunction<'ctxt>,
 }
 
 impl<'ctxt> RuntimeFunctions<'ctxt> {
@@ -110,6 +112,12 @@ impl<'ctxt> RuntimeFunctions<'ctxt> {
             int_type.fn_type(&[ptr_type.into(), ptr_type.into()], false),
         );
 
+        let print_rc = Self::add_runtime_function(
+            module,
+            "_print_rc",
+            void_type.fn_type(&[ptr_type.into()], false),
+        );
+
         RuntimeFunctions {
             print_integer,
             print_boolean,
@@ -121,6 +129,7 @@ impl<'ctxt> RuntimeFunctions<'ctxt> {
             remove_string_ref,
             concat_string,
             compare_string,
+            print_rc,
         }
     }
 }

@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap};
 
 use inkwell::values::{BasicValueEnum, PointerValue};
 
@@ -52,6 +52,8 @@ impl<'ctxt> CodeGen<'ctxt> {
 
     pub fn define_var(&mut self, name: &str, _var_type: &QLType, value: QLValue<'ctxt>) -> Result<(), CodeGenError> {
         let var_type = _var_type.clone();
+
+        self.add_ref(&value)?;
         let llvm_type = self.try_get_nonvoid_type(&var_type)?;
         let cur_scope = self.scopes.last_mut().unwrap();
         if cur_scope.vars.contains_key(name) {
@@ -62,6 +64,7 @@ impl<'ctxt> CodeGen<'ctxt> {
 
         let pointer = self.builder.build_alloca(llvm_type, name)?;
         self.builder.build_store::<BasicValueEnum>(pointer, value.try_into()?)?;
+
         let var = QLVariable {
             ql_type: var_type,
             pointer
