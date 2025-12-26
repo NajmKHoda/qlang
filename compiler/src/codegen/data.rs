@@ -105,23 +105,12 @@ impl<'ctxt> CodeGen<'ctxt> {
                 )?;
             }
             QLValue::TableRow(struct_value, table_name, true) => {
-                let table = self.tables.get(table_name)
-                    .ok_or_else(|| CodeGenError::UndefinedTableError(table_name.clone()))?;
-
-                for (i, field) in table.fields.iter().enumerate() {
-                    if field.ql_type == QLType::String {
-                        let field_value = self.builder.build_extract_value(
-                            *struct_value,
-                            i as u32,
-                            &format!("{}.{}", table_name, field.name)
-                        )?;
-
-                        self.builder.build_call(
-                            self.runtime_functions.add_string_ref.into(),
-                            &[field_value.into()],
-                            "add_string_ref"
-                        )?;
-                    }
+                if let Some(ref copy_fn) = self.get_table(table_name)?.copy_fn {
+                    self.builder.build_call(
+                        copy_fn.llvm_function,
+                        &[(*struct_value).into()],
+                        "table_copy"
+                    )?;
                 }
             }
             _ => { }
@@ -146,19 +135,12 @@ impl<'ctxt> CodeGen<'ctxt> {
                 )?;
             }
             QLValue::TableRow(struct_value, table_name, _) => {
-                let table = self.tables.get(&table_name)
-                    .ok_or_else(|| CodeGenError::UndefinedTableError(table_name.clone()))?;
-
-                for (i, field) in table.fields.iter().enumerate() {
-                    if !field.ql_type.is_primitive() {
-                        let field_llvm_value = self.builder.build_extract_value(
-                            struct_value,
-                            i as u32,
-                            &format!("{}.{}", table_name, field.name)
-                        )?;
-                        let field_value = field.ql_type.to_value(field_llvm_value, true);
-                        self.remove_ref(field_value)?;
-                    }
+                if let Some(ref drop_fn) = self.get_table(&table_name)?.drop_fn {
+                    self.builder.build_call(
+                        drop_fn.llvm_function,
+                        &[struct_value.into()],
+                        "table_row_drop"
+                    )?;
                 }
             }
             _ => { }

@@ -41,15 +41,24 @@ impl<'ctxt> CodeGen<'ctxt> {
             self.builder.build_store(elem_ptr, elem_basic)?;
         }
 
+        let type_info = match elem_type {
+            QLType::Integer => self.runtime_functions.int_type_info.as_pointer_value(),
+            QLType::Bool => self.runtime_functions.bool_type_info.as_pointer_value(),
+            QLType::String => self.runtime_functions.string_type_info.as_pointer_value(),
+            QLType::Table(table_name) => self.get_table(table_name)?.type_info.as_pointer_value(),
+            QLType::Array(_) => self.runtime_functions.array_type_info.as_pointer_value(),
+            _ => self.ptr_type().const_null(),
+        };
+
         // Call __ql__QLArray_new
         let num_elems = self.context.i32_type().const_int(elems.len() as u64, false);
         let array_ptr = self.builder.build_call(
             self.runtime_functions.new_array.into(),
-            &[array_alloca.into(), num_elems.into(), elem_size.into()],
+            &[array_alloca.into(), num_elems.into(), type_info.into()],
             "array_alloc"
         )?.as_any_value_enum().into_pointer_value();
 
-        Ok(QLValue::Array(array_ptr, elem_type.clone(), true))
+        Ok(QLValue::Array(array_ptr, elem_type.clone(), false))
     }
 
     pub fn gen_array_index(&self, array: QLValue<'ctxt>, index: QLValue<'ctxt>) -> Result<QLValue<'ctxt>, CodeGenError> {

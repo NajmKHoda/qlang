@@ -1,10 +1,10 @@
 use std::collections::HashSet;
 
-use inkwell::{types::{BasicTypeEnum, StructType}, values::{BasicValueEnum}};
+use inkwell::{AddressSpace, types::{BasicTypeEnum, StructType}, values::{BasicValueEnum, GlobalValue}};
 
-use crate::{codegen::QLValue, tokens::{ColumnValueNode, TypedQNameNode}};
+use crate::{codegen::QLFunction, tokens::{ColumnValueNode, TypedQNameNode}};
 
-use super::{CodeGen, CodeGenError, QLType};
+use super::{CodeGen, CodeGenError, QLType, QLValue};
 
 pub(super) struct QLTableColumn {
     pub(super) name: String,
@@ -24,6 +24,9 @@ pub(super) struct QLTable<'a> {
     pub(super) name: String,
     pub(super) struct_type: StructType<'a>,
     pub(super) fields: Vec<QLTableColumn>,
+    pub(super) type_info: GlobalValue<'a>,
+    pub(super) copy_fn: Option<QLFunction<'a>>,
+    pub(super) drop_fn: Option<QLFunction<'a>>,
 }
 
 impl<'a> QLTable<'a> {
@@ -35,6 +38,11 @@ impl<'a> QLTable<'a> {
 }
 
 impl<'ctxt> CodeGen<'ctxt> {
+    pub(super) fn get_table(&self, name: &str) -> Result<&QLTable<'ctxt>, CodeGenError> {
+        self.tables.get(name)
+            .ok_or_else(|| CodeGenError::UndefinedTableError(name.to_string()))
+    }
+
     pub fn gen_table(&mut self, name: &str, fields: &[TypedQNameNode]) -> Result<(), CodeGenError> {
         let field_types = fields.iter()
             .map(|f| self.try_get_nonvoid_type(&f.ql_type))
@@ -43,10 +51,141 @@ impl<'ctxt> CodeGen<'ctxt> {
         let struct_type = self.context.opaque_struct_type(name);
         struct_type.set_body(&field_types, false);
 
+        let table_fields: Vec<QLTableColumn> = fields.iter().map(|f| f.into()).collect();
+        
+        // Check if any fields are heap-allocated
+        let has_heap_fields = table_fields.iter().any(|f| !f.ql_type.is_primitive());
+        
+        let (copy_fn, drop_fn) = if has_heap_fields {
+            // Create copy function
+            let copy_fn_type = self.context.void_type().fn_type(&[struct_type.into()], false);
+            let copy_fn_value = self.module.add_function(
+                &format!("__ql__{}_copy", name),
+                copy_fn_type,
+                None
+            );
+            let copy_entry = self.context.append_basic_block(copy_fn_value, "entry");
+            self.builder.position_at_end(copy_entry);
+            
+            let struct_arg = copy_fn_value.get_nth_param(0).unwrap().into_struct_value();
+            
+            for (i, field) in table_fields.iter().enumerate() {
+                if !field.ql_type.is_primitive() {
+                    let field_value = self.builder.build_extract_value(
+                        struct_arg,
+                        i as u32,
+                        &format!("{}.{}", name, field.name)
+                    )?;
+                    let ql_value = field.ql_type.to_value(field_value, true);
+                    self.add_ref(&ql_value)?;
+                }
+            }
+            
+            self.builder.build_return(None)?;
+            
+            // Create drop function
+            let drop_fn_type = self.context.void_type().fn_type(&[struct_type.into()], false);
+            let drop_fn_value = self.module.add_function(
+                &format!("__ql__{}_drop", name),
+                drop_fn_type,
+                None
+            );
+            let drop_entry = self.context.append_basic_block(drop_fn_value, "entry");
+            self.builder.position_at_end(drop_entry);
+            
+            let struct_arg = drop_fn_value.get_nth_param(0).unwrap().into_struct_value();
+            
+            for (i, field) in table_fields.iter().enumerate() {
+                if !field.ql_type.is_primitive() {
+                    let field_llvm_value = self.builder.build_extract_value(
+                        struct_arg,
+                        i as u32,
+                        &format!("{}.{}", name, field.name)
+                    )?;
+                    let field_value = field.ql_type.to_value(field_llvm_value, true);
+                    self.remove_ref(field_value)?;
+                }
+            }
+            
+            self.builder.build_return(None)?;
+            
+            (Some(QLFunction {
+                name: format!("__ql__{}_copy", name),
+                llvm_function: copy_fn_value,
+                return_type: QLType::Void,
+                params: vec![],
+            }), Some(QLFunction {
+                name: format!("__ql__{}_drop", name),
+                llvm_function: drop_fn_value,
+                return_type: QLType::Void,
+                params: vec![],
+            }))
+        } else {
+            (None, None)
+        };
+        
+        // Create elem_drop wrapper if drop_fn exists
+        let elem_drop_fn_ptr = if let Some(ref drop_fn_ref) = drop_fn {
+            let elem_drop_type = self.context.void_type().fn_type(
+                &[self.context.ptr_type(Default::default()).into()],
+                false
+            );
+            let elem_drop_fn = self.module.add_function(
+                &format!("__ql__{}_elem_drop", name),
+                elem_drop_type,
+                None
+            );
+            let elem_drop_entry = self.context.append_basic_block(elem_drop_fn, "entry");
+            self.builder.position_at_end(elem_drop_entry);
+            
+            let ptr_arg = elem_drop_fn.get_nth_param(0).unwrap().into_pointer_value();
+            let struct_val = self.builder.build_load(
+                struct_type,
+                ptr_arg,
+                "struct_val"
+            )?.into_struct_value();
+            
+            self.builder.build_call(
+                drop_fn_ref.llvm_function,
+                &[struct_val.into()],
+                "call_drop"
+            )?;
+            
+            self.builder.build_return(None)?;
+            
+            Some(elem_drop_fn.as_global_value().as_pointer_value())
+        } else {
+            None
+        };
+        
+        // Create and initialize type_info global
+        let type_info = self.module.add_global(
+            self.runtime_functions.type_info_type,
+            Some(AddressSpace::default()),
+            &format!("__ql__{}_type_info", name)
+        );
+        
+        // Initialize with struct size and elem_drop function pointer
+        let size_value = struct_type.size_of().unwrap();
+        let elem_drop_value = if let Some(fn_ptr) = elem_drop_fn_ptr {
+            fn_ptr
+        } else {
+            self.context.ptr_type(Default::default()).const_null()
+        };
+        
+        let type_info_init = self.runtime_functions.type_info_type.const_named_struct(&[
+            size_value.into(),
+            elem_drop_value.into(),
+        ]);
+        type_info.set_initializer(&type_info_init);
+
         let table = QLTable {
             name: name.to_string(),
             struct_type,
-            fields: fields.iter().map(|f| f.into()).collect(),
+            fields: table_fields,
+            type_info,
+            copy_fn,
+            drop_fn,
         };
 
         self.tables.insert(name.to_string(), table);
@@ -55,9 +194,7 @@ impl<'ctxt> CodeGen<'ctxt> {
     }
 
     pub fn gen_table_row(&self, table_name: &str, columns: &[ColumnValueNode]) -> Result<QLValue<'ctxt>, CodeGenError> {
-        let table = self.tables.get(table_name)
-            .ok_or_else(|| CodeGenError::UndefinedTableError(table_name.to_string()))?;
-
+        let table = self.get_table(table_name)?;
         let row_ptr = self.builder.build_alloca(table.struct_type, &format!("{}.row.store", table_name))?;
         let mut remaining_columns: HashSet<_> = (0..table.fields.len() as u32).collect();
         for column in columns {
@@ -97,9 +234,7 @@ impl<'ctxt> CodeGen<'ctxt> {
 
     pub fn get_column_value(&self, table_row: QLValue<'ctxt>, column_name: &str) -> Result<QLValue<'ctxt>, CodeGenError> {
         if let QLValue::TableRow(struct_val, table_name, _) = table_row {
-            let table = self.tables.get(&table_name)
-                .ok_or_else(|| CodeGenError::UndefinedTableError(table_name.clone()))?;
-
+            let table = self.get_table(&table_name)?;
             let column_index = table.get_column_index(column_name)?;
             let column_type = &table.fields[column_index as usize].ql_type;
             let loaded_val = self.builder.build_extract_value(

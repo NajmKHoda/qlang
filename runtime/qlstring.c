@@ -3,7 +3,13 @@
 #include <string.h>
 #include <unistd.h>
 #include <stdbool.h>
+#include "metadata.h"
 #include "qlstring.h"
+
+QLTypeInfo __ql__QLString_type_info = {
+    .size = sizeof(QLString*),
+    .elem_drop = __ql__QLString_elem_drop
+};
 
 QLString* __ql__QLString_new(char* raw_string, int length, bool is_global) {
     QLString* result = malloc(sizeof(QLString));
@@ -36,11 +42,16 @@ void __ql__QLString_add_ref(QLString* str) {
 void __ql__QLString_remove_ref(QLString* str) {
     str->ref_count--;
     if (str->ref_count == 0) {
+        fprintf(stderr, "free(\"%.*s\")\n", str->length, str->raw_string);
         if (!str->is_global) {
             free(str->raw_string);
         }
         free(str);
     }
+}
+
+void __ql__QLString_elem_drop(void* elem_ptr) {
+    __ql__QLString_remove_ref(*(QLString**)elem_ptr);
 }
 
 void prints(QLString* str) {

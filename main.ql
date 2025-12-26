@@ -1,15 +1,19 @@
-table Student {
-  int age,
-  int score
-}
-
 function main() -> int {
-  Student[] students <- Student [
-    Student { age: 10, score: 100 },
-    Student { age: 8, score: 90 },
-    Student { age: 7, score: 85 },
-    Student { age: 6, score: 60 }
+  str[][] matrix <- str[] [
+    str [ "a", "b", "c", "d", "e" ],
+    str [ "f", "g", "h", "i", "j" ]
   ];
 
-  printi(students[1].score);
+  str concat <- "";
+  int i <- 0;
+  while i < 2 {
+    int j <- 0;
+    while j < 5 {
+      concat <- concat + matrix[i][j];
+      j <- j + 1;
+    }
+    i <- i + 1;
+  }
+
+  prints(concat);
 }

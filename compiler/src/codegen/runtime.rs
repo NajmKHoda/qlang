@@ -1,7 +1,8 @@
-use inkwell::types::{FunctionType};
+use inkwell::AddressSpace;
+use inkwell::types::{FunctionType, StructType};
 use inkwell::{context::Context};
-use inkwell::module::Module;
-use inkwell::values::FunctionValue;
+use inkwell::module::{Linkage, Module};
+use inkwell::values::{FunctionValue, GlobalValue};
 
 use super::function::QLParameter;
 use super::{CodeGen, QLFunction, QLType};
@@ -19,6 +20,12 @@ impl<'ctxt> From<RuntimeFunction<'ctxt>> for FunctionValue<'ctxt> {
 }
 
 pub(super) struct RuntimeFunctions<'ctxt> {
+    pub(super) type_info_type: StructType<'ctxt>,
+    pub(super) int_type_info: GlobalValue<'ctxt>,
+    pub(super) bool_type_info: GlobalValue<'ctxt>,
+    pub(super) string_type_info: GlobalValue<'ctxt>,
+    pub(super) array_type_info: GlobalValue<'ctxt>,
+
     pub(super) print_integer: RuntimeFunction<'ctxt>,
     pub(super) print_boolean: RuntimeFunction<'ctxt>,
     pub(super) print_string: RuntimeFunction<'ctxt>,
@@ -127,7 +134,7 @@ impl<'ctxt> RuntimeFunctions<'ctxt> {
         let new_array = Self::add_runtime_function(
             module,
             "__ql__QLArray_new",
-            ptr_type.fn_type(&[ptr_type.into(), int_type.into(), long_type.into()], false),
+            ptr_type.fn_type(&[ptr_type.into(), int_type.into(), ptr_type.into()], false),
         );
 
         let add_array_ref = Self::add_runtime_function(
@@ -148,7 +155,47 @@ impl<'ctxt> RuntimeFunctions<'ctxt> {
             ptr_type.fn_type(&[ptr_type.into(), int_type.into()], false),
         );
 
+        let type_info_type = context.opaque_struct_type("QLTypeInfo");
+        type_info_type.set_body(
+            &[long_type.into(), ptr_type.into()],
+            false,
+        );
+
+        let int_type_info = module.add_global(
+            type_info_type,
+            Some(AddressSpace::default()),
+            "__ql__int_type_info"
+        );
+        int_type_info.set_linkage(Linkage::External);
+
+        let bool_type_info = module.add_global(
+            type_info_type,
+            Some(AddressSpace::default()),
+            "__ql__bool_type_info"
+        );
+        bool_type_info.set_linkage(Linkage::External);
+
+        let string_type_info = module.add_global(
+            type_info_type,
+            Some(AddressSpace::default()),
+            "__ql__QLString_type_info"
+        );
+        string_type_info.set_linkage(Linkage::External);
+
+        let array_type_info = module.add_global(
+            type_info_type,
+            Some(AddressSpace::default()),
+            "__ql__QLArray_type_info"
+        );
+        array_type_info.set_linkage(Linkage::External);
+
         RuntimeFunctions {
+            type_info_type,
+            int_type_info,
+            bool_type_info,
+            string_type_info,
+            array_type_info,
+
             print_integer,
             print_boolean,
             print_string,
@@ -158,7 +205,7 @@ impl<'ctxt> RuntimeFunctions<'ctxt> {
             add_string_ref,
             remove_string_ref,
             concat_string,
-            compare_string,
+            compare_string, 
             new_array,
             add_array_ref,
             remove_array_ref,
