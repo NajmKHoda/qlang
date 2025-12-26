@@ -1,7 +1,7 @@
 CC=clang
 DEBUG=true
 RUNTIME_OBJ=./out/runtime.o
-RUNTIME_SRC=./runtime/runtime.c
+RUNTIME_SRC=./runtime/*.c
 COMPILER_MANIFEST=./compiler/Cargo.toml
 PROGRAM_SRC=./main.ql
 PROGRAM_OBJ=./out/main
@@ -15,10 +15,12 @@ endif
 $(PROGRAM_OBJ): $(PROGRAM_SRC) compiler
 	@$(COMPILER_OBJ) $(PROGRAM_SRC) $(PROGRAM_OBJ)
 
-compiler: $(COMPILER_OBJ) $(RUNTIME_OBJ)
-
 run: $(PROGRAM_OBJ)
 	@$(PROGRAM_OBJ)
+
+compiler: runtime $(COMPILER_OBJ)
+
+runtime: $(RUNTIME_OBJ)
 
 .PHONY: $(COMPILER_OBJ)
 $(COMPILER_OBJ):
@@ -26,7 +28,7 @@ $(COMPILER_OBJ):
 
 $(RUNTIME_OBJ): $(RUNTIME_SRC)
 	@mkdir -p out
-	@$(CC) -c $(RUNTIME_SRC) -o $(RUNTIME_OBJ)
+	@$(CC) -r $(RUNTIME_SRC) -o $(RUNTIME_OBJ)
 
 clean:
 	@rm -rf out/

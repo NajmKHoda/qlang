@@ -1,8 +1,3 @@
-void printi(int);
-void printb(bool);
-int inputi();
-
-// String type
 typedef struct {
     char* raw_string;
     unsigned int length;
