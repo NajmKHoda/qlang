@@ -16,6 +16,7 @@ mod error;
 mod function;
 mod variable;
 mod table;
+mod array;
 mod runtime;
 
 use variable::QLScope;
@@ -129,6 +130,7 @@ impl<'ctxt> CodeGen<'ctxt> {
             QLType::Integer => Ok(self.int_type().into()),
             QLType::Bool => Ok(self.bool_type().into()),
             QLType::String => Ok(self.ptr_type().into()),
+            QLType::Array(_) => Ok(self.ptr_type().into()),
             QLType::Table(table_name) => Ok(self.tables.get(table_name)
                 .ok_or_else(|| CodeGenError::UndefinedTableError(table_name.clone()))?
                 .struct_type.into()),

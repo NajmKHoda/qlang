@@ -9,6 +9,7 @@ pub enum QLType {
     Integer,
     Bool,
     String,
+    Array(Box<QLType>),
     Table(String),
     Void
 }
@@ -19,6 +20,7 @@ impl QLType {
             QLType::Integer => QLValue::Integer(value.into_int_value()),
             QLType::Bool => QLValue::Bool(value.into_int_value()),
             QLType::String => QLValue::String(value.into_pointer_value(), is_owned),
+            QLType::Array(array_type) => QLValue::Array(value.into_pointer_value(), *array_type.clone(), is_owned),
             QLType::Table(table_name) => QLValue::TableRow(value.into_struct_value(), table_name.clone(), is_owned),
             QLType::Void => panic!("Mismatch between void type and basic value"),
         }
@@ -39,6 +41,7 @@ pub enum QLValue<'a> {
     Integer(IntValue<'a>),
     Bool(IntValue<'a>),
     String(PointerValue<'a>, bool),
+    Array(PointerValue<'a>, QLType, bool),
     TableRow(StructValue<'a>, String, bool),
     Void
 }
@@ -49,6 +52,7 @@ impl<'a> QLValue<'a> {
             QLValue::Integer(_) => QLType::Integer,
             QLValue::Bool(_) => QLType::Bool,
             QLValue::String(_, _) => QLType::String,
+            QLValue::Array(_, elem_type, _) => QLType::Array(Box::new(elem_type.clone())),
             QLValue::TableRow(_, table_name, _) => QLType::Table(table_name.clone()),
             QLValue::Void => QLType::Void
         }
@@ -61,6 +65,7 @@ impl<'a> QLValue<'a> {
     pub fn is_owned(&self) -> bool {
         match self {
             QLValue::String(_, is_owned) => *is_owned,
+            QLValue::Array(_, _, is_owned) => *is_owned,
             QLValue::TableRow(_, _, is_owned) => *is_owned,
             _ => true
         }
@@ -75,6 +80,7 @@ impl<'a> TryFrom<QLValue<'a>> for BasicValueEnum<'a> {
             QLValue::Integer(int_val) => Ok(BasicValueEnum::IntValue(int_val)),
             QLValue::Bool(int_val) => Ok(BasicValueEnum::IntValue(int_val)),
             QLValue::String(str_val, _) => Ok(BasicValueEnum::PointerValue(str_val)),
+            QLValue::Array(arr_val, _, _) => Ok(BasicValueEnum::PointerValue(arr_val)),
             QLValue::TableRow(struct_val, _, _) => Ok(BasicValueEnum::StructValue(struct_val)),
             QLValue::Void => Err(CodeGenError::UnexpectedTypeError),
         }
@@ -89,6 +95,13 @@ impl<'ctxt> CodeGen<'ctxt> {
                     self.runtime_functions.add_string_ref.into(),
                     &[(*str_ptr).into()],
                     "add_string_ref"
+                )?;
+            }
+            QLValue::Array(array_ptr, _, true) => {
+                self.builder.build_call(
+                    self.runtime_functions.add_array_ref.into(),
+                    &[(*array_ptr).into()],
+                    "add_array_ref"
                 )?;
             }
             QLValue::TableRow(struct_value, table_name, true) => {
@@ -123,6 +136,13 @@ impl<'ctxt> CodeGen<'ctxt> {
                     self.runtime_functions.remove_string_ref.into(),
                     &[str_ptr.into()],
                     "remove_string_ref"
+                )?;
+            }
+            QLValue::Array(array_ptr, _, _) => {
+                self.builder.build_call(
+                    self.runtime_functions.remove_array_ref.into(),
+                    &[array_ptr.into()],
+                    "remove_array_ref"
                 )?;
             }
             QLValue::TableRow(struct_value, table_name, _) => {

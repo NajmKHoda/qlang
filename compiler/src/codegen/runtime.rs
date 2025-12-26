@@ -31,6 +31,11 @@ pub(super) struct RuntimeFunctions<'ctxt> {
     pub(super) concat_string: RuntimeFunction<'ctxt>,
     pub(super) compare_string: RuntimeFunction<'ctxt>,
 
+    pub(super) new_array: RuntimeFunction<'ctxt>,
+    pub(super) add_array_ref: RuntimeFunction<'ctxt>,
+    pub(super) remove_array_ref: RuntimeFunction<'ctxt>,
+    pub(super) index_array: RuntimeFunction<'ctxt>,
+
     pub(super) print_rc: RuntimeFunction<'ctxt>,
 }
 
@@ -49,6 +54,7 @@ impl<'ctxt> RuntimeFunctions<'ctxt> {
     pub(super) fn new(context: &'ctxt Context, module: &Module<'ctxt>) -> Self {
         let void_type = context.void_type();
         let int_type = context.i32_type();
+        let long_type = context.i64_type();
         let bool_type = context.bool_type();
         let ptr_type = context.ptr_type(Default::default());
 
@@ -118,6 +124,30 @@ impl<'ctxt> RuntimeFunctions<'ctxt> {
             void_type.fn_type(&[ptr_type.into()], false),
         );
 
+        let new_array = Self::add_runtime_function(
+            module,
+            "__ql__QLArray_new",
+            ptr_type.fn_type(&[ptr_type.into(), int_type.into(), long_type.into()], false),
+        );
+
+        let add_array_ref = Self::add_runtime_function(
+            module,
+            "__ql__QLArray_add_ref",
+            void_type.fn_type(&[ptr_type.into()], false),
+        );
+
+        let remove_array_ref = Self::add_runtime_function(
+            module,
+            "__ql__QLArray_remove_ref",
+            void_type.fn_type(&[ptr_type.into()], false),
+        );
+
+        let index_array = Self::add_runtime_function(
+            module,
+            "__ql__QLArray_index",
+            ptr_type.fn_type(&[ptr_type.into(), int_type.into()], false),
+        );
+
         RuntimeFunctions {
             print_integer,
             print_boolean,
@@ -129,6 +159,10 @@ impl<'ctxt> RuntimeFunctions<'ctxt> {
             remove_string_ref,
             concat_string,
             compare_string,
+            new_array,
+            add_array_ref,
+            remove_array_ref,
+            index_array,
             print_rc,
         }
     }

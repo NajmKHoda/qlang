@@ -91,6 +91,8 @@ pub enum ExpressionNode {
     Comparison(Box<ExpressionNode>, Box<ExpressionNode>, ComparisonOp),
     FunctionCall(String, Vec<Box<ExpressionNode>>),
     TableRow(String, Vec<ColumnValueNode>),
+    Array(QLType, Vec<Box<ExpressionNode>>),
+    ArrayIndex(Box<ExpressionNode>, Box<ExpressionNode>),
 }
 
 impl ExpressionNode {
@@ -127,6 +129,17 @@ impl ExpressionNode {
             }
             ExpressionNode::TableRow(table_name, columns) => {
                 code_gen.gen_table_row(&table_name, columns)
+            }
+            ExpressionNode::Array(elem_type, elem_exprs) => {
+                let elems = elem_exprs.into_iter()
+                    .map(|expr| expr.gen_eval(code_gen))
+                    .collect::<Result<Vec<QLValue>, CodeGenError>>()?;
+                code_gen.gen_array(elems, elem_type)
+            }
+            ExpressionNode::ArrayIndex(array_expr, index_expr) => {
+                let array_val = array_expr.gen_eval(code_gen)?;
+                let index_val = index_expr.gen_eval(code_gen)?;
+                code_gen.gen_array_index(array_val, index_val)
             }
         }
     }

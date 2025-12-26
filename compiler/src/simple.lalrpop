@@ -45,6 +45,8 @@ Expression: Box<ExpressionNode> = {
     Bool => Box::new(ExpressionNode::BoolLiteral(<>)),
     QLString => Box::new(ExpressionNode::StringLiteral(<>)),
     <name:ProperQName> "{" <cols:Comma<ColumnValue>> "}" => Box::new(ExpressionNode::TableRow(<>)),
+    <TypeName> "[" <Comma<Expression>> "]" => Box::new(ExpressionNode::Array(<>)),
+    <Expression> "[" <Expression> "]" => Box::new(ExpressionNode::ArrayIndex(<>)),
     <Expression> "." <QName> => Box::new(ExpressionNode::Column(<>)),
     QName => Box::new(ExpressionNode::QName(<>)),
     #[precedence(level="1")] #[assoc(side="left")]
@@ -74,7 +76,8 @@ TypeName: QLType = {
     "int" => QLType::Integer,
     "bool" => QLType::Bool,
     "str" => QLType::String,
-    ProperQName => QLType::Table(<>)
+    ProperQName => QLType::Table(<>),
+    <TypeName> "[]" => QLType::Array(Box::new(<>))
 }
 
 Int: i32 = r"-?[0-9]+" => i32::from_str(<>).unwrap();
