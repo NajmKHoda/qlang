@@ -57,7 +57,6 @@ void __ql__QLString_remove_ref(QLString* str) {
             free(str->raw_string);
         }
         free(str);
-        fprintf(stderr, "free(%p)\n", (void*)str);
     }
 }
 

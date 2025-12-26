@@ -8,6 +8,8 @@ pub enum CodeGenError {
     UndefinedLoopLabelError(String),
     UndefinedTableError(String),
     UndefinedTableColumnError(String, String),
+    DuplicateColumnAssignmentError(String, String),
+    MissingColumnAssignmentError(String),
 
     BadLoopControlError,
     DuplicateDefinitionError(String),
@@ -32,6 +34,8 @@ impl fmt::Display for CodeGenError {
             CodeGenError::UndefinedLoopLabelError(name) => write!(f, "Undefined loop label: {name}"),
             CodeGenError::UndefinedTableError(name) => write!(f, "Undefined table: {name}"),
             CodeGenError::UndefinedTableColumnError(column_name, table_name) => write!(f, "Undefined column {column_name} in table {table_name}"),
+            CodeGenError::DuplicateColumnAssignmentError(column_name, table_name) => write!(f, "Duplicate assignment to column {column_name} in table {table_name}"),
+            CodeGenError::MissingColumnAssignmentError(table_name) => write!(f, "Missing assignment to one or more columns in table {table_name}"),
 
             CodeGenError::BadLoopControlError => write!(f, "No loop to break/continue from"),
             CodeGenError::DuplicateDefinitionError(name) => write!(f, "Duplicate definition for {name}"),

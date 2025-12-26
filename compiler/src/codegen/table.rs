@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use inkwell::{types::{BasicTypeEnum, StructType}, values::{BasicValueEnum}};
 
 use crate::{codegen::QLValue, tokens::{ColumnValueNode, TypedQNameNode}};
@@ -57,8 +59,13 @@ impl<'ctxt> CodeGen<'ctxt> {
             .ok_or_else(|| CodeGenError::UndefinedTableError(table_name.to_string()))?;
 
         let row_ptr = self.builder.build_alloca(table.struct_type, &format!("{}.row.store", table_name))?;
+        let mut remaining_columns: HashSet<_> = (0..table.fields.len() as u32).collect();
         for column in columns {
             let column_index = table.get_column_index(&column.name)?;
+            if !remaining_columns.contains(&column_index) {
+                return Err(CodeGenError::DuplicateColumnAssignmentError(column.name.clone(), table_name.to_string()));
+            }
+
             let column_ptr = self.builder.build_struct_gep(
                 table.struct_type,
                 row_ptr, 
@@ -73,6 +80,11 @@ impl<'ctxt> CodeGen<'ctxt> {
 
             self.add_ref(&column_value)?;
             self.builder.build_store(column_ptr, BasicValueEnum::try_from(column_value)?)?;
+            remaining_columns.remove(&column_index);
+        }
+
+        if remaining_columns.len() != 0 {
+            return Err(CodeGenError::MissingColumnAssignmentError(table_name.to_string()));
         }
 
         let struct_val = self.builder.build_load(
