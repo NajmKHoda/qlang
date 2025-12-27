@@ -8,6 +8,7 @@ pub enum CodeGenError {
     UndefinedLoopLabelError(String),
     UndefinedTableError(String),
     UndefinedTableColumnError(String, String),
+    UndefinedMethodError(String, String),
     DuplicateColumnAssignmentError(String, String),
     MissingColumnAssignmentError(String),
 
@@ -34,6 +35,7 @@ impl fmt::Display for CodeGenError {
             CodeGenError::UndefinedLoopLabelError(name) => write!(f, "Undefined loop label: {name}"),
             CodeGenError::UndefinedTableError(name) => write!(f, "Undefined table: {name}"),
             CodeGenError::UndefinedTableColumnError(column_name, table_name) => write!(f, "Undefined column {column_name} in table {table_name}"),
+            CodeGenError::UndefinedMethodError(method_name, type_name) => write!(f, "Type {type_name} has no method \"{method_name}\""),
             CodeGenError::DuplicateColumnAssignmentError(column_name, table_name) => write!(f, "Duplicate assignment to column {column_name} in table {table_name}"),
             CodeGenError::MissingColumnAssignmentError(table_name) => write!(f, "Missing assignment to one or more columns in table {table_name}"),
 

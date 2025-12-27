@@ -47,6 +47,7 @@ Expression: Box<ExpressionNode> = {
     <name:ProperQName> "{" <cols:Comma<ColumnValue>> "}" => Box::new(ExpressionNode::TableRow(<>)),
     <TypeName> "[" <Comma<Expression>> "]" => Box::new(ExpressionNode::Array(<>)),
     <Expression> "[" <Expression> "]" => Box::new(ExpressionNode::ArrayIndex(<>)),
+    <Expression> "." <QName> "(" <Comma<Expression>> ")" => Box::new(ExpressionNode::MethodCall(<>)),
     <Expression> "." <QName> => Box::new(ExpressionNode::Column(<>)),
     QName => Box::new(ExpressionNode::QName(<>)),
     #[precedence(level="1")] #[assoc(side="left")]

@@ -6,7 +6,15 @@ impl<'ctxt> CodeGen<'ctxt> {
     pub fn gen_array(&self, elems: Vec<QLValue<'ctxt>>, elem_type: &QLType) -> Result<QLValue<'ctxt>, CodeGenError> {
         // Get the LLVM type for the array elements
         let llvm_elem_type = self.try_get_nonvoid_type(elem_type)?;
-        let elem_size = llvm_elem_type.size_of().unwrap();
+
+        let type_info = match elem_type {
+            QLType::Integer => self.runtime_functions.int_type_info.as_pointer_value(),
+            QLType::Bool => self.runtime_functions.bool_type_info.as_pointer_value(),
+            QLType::String => self.runtime_functions.string_type_info.as_pointer_value(),
+            QLType::Table(table_name) => self.get_table(table_name)?.type_info.as_pointer_value(),
+            QLType::Array(_) => self.runtime_functions.array_type_info.as_pointer_value(),
+            _ => self.ptr_type().const_null(),
+        };
         
         if elems.is_empty() {
             // Create an empty array
@@ -15,11 +23,11 @@ impl<'ctxt> CodeGen<'ctxt> {
             
             let array_ptr = self.builder.build_call(
                 self.runtime_functions.new_array.into(),
-                &[null_ptr.into(), zero.into(), elem_size.into()],
+                &[null_ptr.into(), zero.into(), type_info.into()],
                 "empty_array"
             )?.as_any_value_enum().into_pointer_value();
             
-            return Ok(QLValue::Array(array_ptr, elem_type.clone(), true));
+            return Ok(QLValue::Array(array_ptr, elem_type.clone(), false));
         }
 
         // Allocate memory for the elements array
@@ -40,15 +48,6 @@ impl<'ctxt> CodeGen<'ctxt> {
             };
             self.builder.build_store(elem_ptr, elem_basic)?;
         }
-
-        let type_info = match elem_type {
-            QLType::Integer => self.runtime_functions.int_type_info.as_pointer_value(),
-            QLType::Bool => self.runtime_functions.bool_type_info.as_pointer_value(),
-            QLType::String => self.runtime_functions.string_type_info.as_pointer_value(),
-            QLType::Table(table_name) => self.get_table(table_name)?.type_info.as_pointer_value(),
-            QLType::Array(_) => self.runtime_functions.array_type_info.as_pointer_value(),
-            _ => self.ptr_type().const_null(),
-        };
 
         // Call __ql__QLArray_new
         let num_elems = self.context.i32_type().const_int(elems.len() as u64, false);

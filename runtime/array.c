@@ -69,3 +69,33 @@ void* __ql__QLArray_index(QLArray* array, unsigned int index) {
     }
     return __ql__QLArray_get_nth_elem(array, index);
 }
+
+void __ql__QLArray_append(QLArray* array, void* elem_ptr) {
+    if (array->num_elems >= array->capacity) {
+        unsigned int new_capacity = array->capacity * 2;
+        void* new_elems = malloc(new_capacity * array->type_info->size);
+        memcpy(new_elems, array->elems, array->num_elems * array->type_info->size);
+        free(array->elems);
+        array->elems = new_elems;
+        array->capacity = new_capacity;
+    }
+    void* dest_ptr = __ql__QLArray_get_nth_elem(array, array->num_elems);
+    memcpy(dest_ptr, elem_ptr, array->type_info->size);
+    array->num_elems++;
+}
+
+int __ql__QLArray_length(QLArray* array) {
+    return array->num_elems;
+}
+
+void* __ql__QLArray_pop(QLArray* array) {
+    if (array->num_elems == 0) {
+        fprintf(stderr, "Array.pop from empty array\n");
+        exit(1);
+    }
+
+    unsigned int index = array->num_elems - 1;
+    void* elem_ptr = __ql__QLArray_get_nth_elem(array, index);
+    array->num_elems--;
+    return elem_ptr;
+}

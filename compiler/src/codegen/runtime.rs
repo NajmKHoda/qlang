@@ -42,6 +42,9 @@ pub(super) struct RuntimeFunctions<'ctxt> {
     pub(super) add_array_ref: RuntimeFunction<'ctxt>,
     pub(super) remove_array_ref: RuntimeFunction<'ctxt>,
     pub(super) index_array: RuntimeFunction<'ctxt>,
+    pub(super) append_array: RuntimeFunction<'ctxt>,
+    pub(super) array_length: RuntimeFunction<'ctxt>,
+    pub(super) pop_array: RuntimeFunction<'ctxt>,
 
     pub(super) print_rc: RuntimeFunction<'ctxt>,
 }
@@ -155,6 +158,24 @@ impl<'ctxt> RuntimeFunctions<'ctxt> {
             ptr_type.fn_type(&[ptr_type.into(), int_type.into()], false),
         );
 
+        let append_array = Self::add_runtime_function(
+            module,
+            "__ql__QLArray_append",
+            void_type.fn_type(&[ptr_type.into(), ptr_type.into()], false),
+        );
+
+        let pop_array = Self::add_runtime_function(
+            module,
+            "__ql__QLArray_pop",
+            ptr_type.fn_type(&[ptr_type.into()], false),
+        );
+
+        let array_length = Self::add_runtime_function(
+            module,
+            "__ql__QLArray_length",
+            int_type.fn_type(&[ptr_type.into()], false),
+        );
+
         let type_info_type = context.opaque_struct_type("QLTypeInfo");
         type_info_type.set_body(
             &[long_type.into(), ptr_type.into()],
@@ -210,6 +231,10 @@ impl<'ctxt> RuntimeFunctions<'ctxt> {
             add_array_ref,
             remove_array_ref,
             index_array,
+            append_array,
+            pop_array,
+            array_length,
+
             print_rc,
         }
     }

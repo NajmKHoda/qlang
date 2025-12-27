@@ -93,6 +93,7 @@ pub enum ExpressionNode {
     TableRow(String, Vec<ColumnValueNode>),
     Array(QLType, Vec<Box<ExpressionNode>>),
     ArrayIndex(Box<ExpressionNode>, Box<ExpressionNode>),
+    MethodCall(Box<ExpressionNode>, String, Vec<Box<ExpressionNode>>),
 }
 
 impl ExpressionNode {
@@ -140,6 +141,13 @@ impl ExpressionNode {
                 let array_val = array_expr.gen_eval(code_gen)?;
                 let index_val = index_expr.gen_eval(code_gen)?;
                 code_gen.gen_array_index(array_val, index_val)
+            }
+            ExpressionNode::MethodCall(object_expr, method_name, arg_exprs) => {
+                let object_val = object_expr.gen_eval(code_gen)?;
+                let args = arg_exprs.into_iter()
+                    .map(|expr| expr.gen_eval(code_gen))
+                    .collect::<Result<Vec<QLValue>, CodeGenError>>()?;
+                code_gen.gen_method_call(object_val, method_name, args)
             }
         }
     }
