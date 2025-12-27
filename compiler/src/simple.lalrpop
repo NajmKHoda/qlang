@@ -1,5 +1,5 @@
 use std::str::FromStr;
-use crate::tokens::{ProgramNode, FunctionNode, StatementNode, ConditionalBranchNode, ExpressionNode, TypedQNameNode, ColumnValueNode, TableNode};
+use crate::tokens::*;
 use crate::codegen::{ComparisonOp, QLType};
 
 grammar;
@@ -54,6 +54,7 @@ Expression: Box<ExpressionNode> = {
     <Expression> "+" <Expression> => Box::new(ExpressionNode::Add(<>)),
     <Expression> "-" <Expression> => Box::new(ExpressionNode::Subtract(<>)),
     <QName> "(" <Comma<Expression>> ")" => Box::new(ExpressionNode::FunctionCall(<>)),
+    Query => Box::new(ExpressionNode::Query(<>)),
     #[precedence(level="2")] #[assoc(side="left")]
     <Expression> ">" <Expression> => Box::new(ExpressionNode::Comparison(<>, ComparisonOp::GreaterThan)),
     <Expression> "<" <Expression> => Box::new(ExpressionNode::Comparison(<>, ComparisonOp::LessThan)),
@@ -65,6 +66,13 @@ Expression: Box<ExpressionNode> = {
 }
 
 ColumnValue: ColumnValueNode = <name:QName> ":" <value:Expression> => ColumnValueNode { <> };
+
+Query: QueryNode = "query" "{"
+    "select" "from" <table_name:ProperQName>
+    <where_clause:WhereClause?>
+"}" => QueryNode { <> };
+
+WhereClause: WhereNode = "where" <column_name:QName> "=" <value:Expression> => WhereNode { <> };
 
 TypedQName: TypedQNameNode = <ql_type:TypeName> <name:QName> => TypedQNameNode { <> };
 

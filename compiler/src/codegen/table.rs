@@ -1,6 +1,6 @@
-use std::collections::HashSet;
+use std::{collections::HashSet};
 
-use inkwell::{AddressSpace, types::{BasicTypeEnum, StructType}, values::{BasicValueEnum, GlobalValue}};
+use inkwell::{AddressSpace, basic_block::BasicBlock, types::{BasicTypeEnum, StructType}, values::{BasicValueEnum, GlobalValue, IntValue}};
 
 use crate::{codegen::QLFunction, tokens::{ColumnValueNode, TypedQNameNode}};
 
@@ -158,6 +158,61 @@ impl<'ctxt> CodeGen<'ctxt> {
             None
         };
         
+        let set_nth_type = self.context.void_type().fn_type(
+            &[
+                self.context.ptr_type(Default::default()).into(),
+                self.context.i32_type().into(),
+                self.context.ptr_type(Default::default()).into()
+            ],
+            false
+        );
+        let set_nth_fn = self.module.add_function(
+            &format!("__ql__{}_set_nth", name),
+            set_nth_type,
+            None
+        );
+
+        // Construct the set-nth function
+        let set_nth_entry = self.context.append_basic_block(set_nth_fn, "entry");
+        self.builder.position_at_end(set_nth_entry);
+
+        let struct_ptr = set_nth_fn.get_nth_param(0).unwrap().into_pointer_value();
+        let struct_index = set_nth_fn.get_nth_param(1).unwrap().into_int_value();
+        let value_ptr = set_nth_fn.get_nth_param(2).unwrap().into_pointer_value();
+        
+        let cases = (0..table_fields.len())
+            .into_iter()
+            .map(|i| -> Result<(IntValue, BasicBlock), CodeGenError> {
+                let case_value = self.context.i32_type().const_int(i as u64, false);
+                let case_block = self.context.append_basic_block(set_nth_fn, &format!("case_{}", i));
+                self.builder.position_at_end(case_block);
+
+                let field_ptr = self.builder.build_struct_gep(
+                    struct_type,
+                    struct_ptr,
+                    i as u32,
+                    &format!("{}.{}", name, table_fields[i].name)
+                )?;
+
+                let loaded_value = self.builder.build_load(
+                    self.try_get_nonvoid_type(&table_fields[i].ql_type)?,
+                    value_ptr,
+                    "loaded_value"
+                )?;
+
+                self.builder.build_store(field_ptr, loaded_value)?;
+                self.builder.build_return(None)?;
+                Ok((case_value, case_block))
+            })
+            .collect::<Result<Vec<(IntValue, BasicBlock)>, CodeGenError>>()?;
+        
+        let else_block = self.context.append_basic_block(set_nth_fn, "else");
+        self.builder.position_at_end(else_block);
+        self.builder.build_return(None)?;
+
+        self.builder.position_at_end(set_nth_entry);
+        self.builder.build_switch(struct_index, else_block, &cases)?;
+
         // Create and initialize type_info global
         let type_info = self.module.add_global(
             self.runtime_functions.type_info_type,
@@ -176,6 +231,7 @@ impl<'ctxt> CodeGen<'ctxt> {
         let type_info_init = self.runtime_functions.type_info_type.const_named_struct(&[
             size_value.into(),
             elem_drop_value.into(),
+            set_nth_fn.as_global_value().as_pointer_value().into(),
         ]);
         type_info.set_initializer(&type_info_init);
 

@@ -94,6 +94,7 @@ pub enum ExpressionNode {
     Array(QLType, Vec<Box<ExpressionNode>>),
     ArrayIndex(Box<ExpressionNode>, Box<ExpressionNode>),
     MethodCall(Box<ExpressionNode>, String, Vec<Box<ExpressionNode>>),
+    Query(QueryNode)
 }
 
 impl ExpressionNode {
@@ -149,6 +150,9 @@ impl ExpressionNode {
                     .collect::<Result<Vec<QLValue>, CodeGenError>>()?;
                 code_gen.gen_method_call(object_val, method_name, args)
             }
+            ExpressionNode::Query(_query_node) => {
+                unimplemented!()
+            }
         }
     }
 }
@@ -156,4 +160,14 @@ impl ExpressionNode {
 pub struct ColumnValueNode {
     pub name: String,
     pub value: Box<ExpressionNode>
+}
+
+pub struct QueryNode {
+    pub table_name: String,
+    pub where_clause: Option<WhereNode>,
+}
+
+pub struct WhereNode {
+    pub column_name: String,
+    pub value: Box<ExpressionNode>,
 }

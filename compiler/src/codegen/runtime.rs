@@ -178,7 +178,7 @@ impl<'ctxt> RuntimeFunctions<'ctxt> {
 
         let type_info_type = context.opaque_struct_type("QLTypeInfo");
         type_info_type.set_body(
-            &[long_type.into(), ptr_type.into()],
+            &[long_type.into(), ptr_type.into(), ptr_type.into()],
             false,
         );
 

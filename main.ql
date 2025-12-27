@@ -1,20 +1,13 @@
-function input_nums() -> int[] {
-  int[] nums <- int [ ];
-  prints("Integer (or -1 to stop):");
-  int num <- inputi();
-  while num != -1 {
-    nums.append(num);
-    prints("Next integer:");
-    num <- inputi();
-  }
-
-  return nums;
+table Person {
+  int age;
+  str name;
 }
 
 function main() -> int {
-  int[] favorite_nums <- input_nums();
-
-  while favorite_nums.length() > 0 {
-    printi(favorite_nums.pop());
-  }
+  prints("Name a person:");
+  str target_name <- inputs();
+  Person[] persons = query {
+    select from Person
+    where name = target_name
+  };
 }

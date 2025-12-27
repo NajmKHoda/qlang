@@ -5,12 +5,14 @@
 
 QLTypeInfo __ql__int_type_info = {
     .size = sizeof(int),
-    .elem_drop = NULL
+    .elem_drop = NULL,
+    .set_nth = NULL
 };
 
 QLTypeInfo __ql__bool_type_info = {
     .size = sizeof(bool),
-    .elem_drop = NULL
+    .elem_drop = NULL,
+    .set_nth = NULL
 };
 
 void printi(int x) {
