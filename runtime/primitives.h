@@ -3,8 +3,8 @@
 
 typedef struct QLTypeInfo QLTypeInfo;
 
-QLTypeInfo __ql__int_type_info;
-QLTypeInfo __ql__bool_type_info;
+extern QLTypeInfo __ql__int_type_info;
+extern QLTypeInfo __ql__bool_type_info;
 
 void printi(int);
 void printb(bool);

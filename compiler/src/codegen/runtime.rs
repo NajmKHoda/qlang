@@ -46,6 +46,12 @@ pub(super) struct RuntimeFunctions<'ctxt> {
     pub(super) array_length: RuntimeFunction<'ctxt>,
     pub(super) pop_array: RuntimeFunction<'ctxt>,
 
+    pub(super) init_dbs: RuntimeFunction<'ctxt>,
+    pub(super) close_dbs: RuntimeFunction<'ctxt>,
+    pub(super) query_plan_new: RuntimeFunction<'ctxt>,
+    pub(super) query_plan_set_where: RuntimeFunction<'ctxt>,
+    pub(super) query_plan_execute: RuntimeFunction<'ctxt>,
+
     pub(super) print_rc: RuntimeFunction<'ctxt>,
 }
 
@@ -176,6 +182,49 @@ impl<'ctxt> RuntimeFunctions<'ctxt> {
             int_type.fn_type(&[ptr_type.into()], false),
         );
 
+        let init_dbs = Self::add_runtime_function(
+            module,
+            "__ql__init_dbs_from_args",
+            void_type.fn_type(&[
+                int_type.into(),
+                ptr_type.into(),
+                int_type.into(),
+                ptr_type.into(),
+            ], false),
+        );
+
+        let close_dbs = Self::add_runtime_function(
+            module,
+            "__ql__close_dbs",
+            void_type.fn_type(&[
+                int_type.into(),
+                ptr_type.into(),
+            ], false),
+        );
+
+        let query_plan_new = Self::add_runtime_function(
+            module,
+            "__ql__QueryPlan_new",
+            ptr_type.fn_type(&[ptr_type.into(), ptr_type.into()], false),
+        );
+
+        let query_plan_set_where = Self::add_runtime_function(
+            module,
+            "__ql__QueryPlan_set_where",
+            void_type.fn_type(&[
+                ptr_type.into(),
+                ptr_type.into(),
+                int_type.into(),
+                ptr_type.into(),
+            ], false),
+        );
+
+        let query_plan_execute = Self::add_runtime_function(
+            module,
+            "__ql__QueryPlan_execute",
+            ptr_type.fn_type(&[ptr_type.into(), ptr_type.into()], false),
+        );
+
         let type_info_type = context.opaque_struct_type("QLTypeInfo");
         type_info_type.set_body(
             &[long_type.into(), ptr_type.into(), ptr_type.into()],
@@ -234,6 +283,12 @@ impl<'ctxt> RuntimeFunctions<'ctxt> {
             append_array,
             pop_array,
             array_length,
+
+            init_dbs,
+            close_dbs,
+            query_plan_new,
+            query_plan_set_where,
+            query_plan_execute,
 
             print_rc,
         }

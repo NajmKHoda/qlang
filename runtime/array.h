@@ -11,7 +11,7 @@ typedef struct {
     void* elems;
 } QLArray;
 
-QLTypeInfo __ql__QLArray_type_info;
+extern QLTypeInfo __ql__QLArray_type_info;
 
 QLArray* __ql__QLArray_new(void* elems, unsigned int num_elems, QLTypeInfo* type_info);
 void __ql__QLArray_add_ref(QLArray* array);

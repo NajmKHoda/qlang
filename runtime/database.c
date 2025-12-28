@@ -10,13 +10,30 @@
 
 const unsigned int MAX_SQL_LENGTH = 512;
 
-sqlite3* __ql__init_database(char* db_filename) {
-    sqlite3* db;
-    if (sqlite3_open(db_filename, &db) != SQLITE_OK) {
-        fprintf(stderr, "Cannot open database: %s\n", sqlite3_errmsg(db));
+void __ql__init_dbs_from_args(int argc, char** argv, int num_dbs, sqlite3*** db_globals) {
+    argc--; argv++;
+    if (argc < num_dbs) {
+        fprintf(stderr, "Expected %d database file paths, got %d\n", num_dbs, argc);
         exit(1);
     }
-    return db;
+    for (int i = 0; i < argc; i++) {
+        sqlite3* db;
+        if (sqlite3_open(argv[i], &db) != SQLITE_OK) {
+            fprintf(stderr, "Cannot open database: %s\n", sqlite3_errmsg(db));
+            sqlite3_close(db);
+            for (int j = 0; j < i; j++) {
+                sqlite3_close(*(db_globals[j]));
+            }
+            exit(1);
+        }
+        *(db_globals[i]) = db;
+    }
+}
+
+void __ql__close_dbs(int num_dbs, sqlite3*** db_globals) {
+    for (int i = 0; i < num_dbs; i++) {
+        sqlite3_close(*(db_globals[i]));
+    }
 }
 
 QueryPlan* __ql__QueryPlan_new(char* table_name, QLTypeInfo* struct_type_info) {
@@ -46,13 +63,15 @@ QLArray* __ql__QueryPlan_execute(sqlite3* db, QueryPlan* plan) {
         sprintf(sql, "SELECT * FROM %s WHERE %s = ?;", plan->table_name, plan->where.column_name);
         sqlite3_prepare_v2(db, sql, -1, &stmt, NULL);
         switch (plan->where.column_type) {
-            case QUERY_INTEGER:
+            case QUERY_INTEGER: {
                 sqlite3_bind_int(stmt, 1, *((int*)plan->where.value));
                 break;
-            case QUERY_STRING:
+            }
+            case QUERY_STRING: {
                 QLString* ql_str = *(QLString**)plan->where.value;
                 sqlite3_bind_text(stmt, 1, ql_str->raw_string, ql_str->length, SQLITE_STATIC);
                 break;
+            }
         }
     } else {
         sprintf(sql, "SELECT * FROM %s;", plan->table_name);
@@ -88,6 +107,7 @@ QLArray* __ql__QueryPlan_execute(sqlite3* db, QueryPlan* plan) {
 
     sqlite3_finalize(stmt);
     free(sql);
+    free(plan);
 
     return results;
 }

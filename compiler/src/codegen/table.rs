@@ -1,6 +1,6 @@
 use std::{collections::HashSet};
 
-use inkwell::{AddressSpace, basic_block::BasicBlock, types::{BasicTypeEnum, StructType}, values::{BasicValueEnum, GlobalValue, IntValue}};
+use inkwell::{AddressSpace, basic_block::BasicBlock, builder::BuilderError, types::{BasicTypeEnum, StructType}, values::{BasicValueEnum, GlobalValue, IntValue}};
 
 use crate::{codegen::QLFunction, tokens::{ColumnValueNode, TypedQNameNode}};
 
@@ -22,9 +22,14 @@ impl From<&TypedQNameNode> for QLTableColumn {
     
 pub(super) struct QLTable<'a> {
     pub(super) name: String,
-    pub(super) struct_type: StructType<'a>,
+    pub(super) datasource_name: String,
     pub(super) fields: Vec<QLTableColumn>,
+
+    pub(super) struct_type: StructType<'a>,
     pub(super) type_info: GlobalValue<'a>,
+    pub(super) name_str: GlobalValue<'a>,
+    pub(super) column_name_strs: Vec<GlobalValue<'a>>,
+
     pub(super) copy_fn: Option<QLFunction<'a>>,
     pub(super) drop_fn: Option<QLFunction<'a>>,
 }
@@ -43,7 +48,11 @@ impl<'ctxt> CodeGen<'ctxt> {
             .ok_or_else(|| CodeGenError::UndefinedTableError(name.to_string()))
     }
 
-    pub fn gen_table(&mut self, name: &str, fields: &[TypedQNameNode]) -> Result<(), CodeGenError> {
+    pub fn gen_table(&mut self, name: &str, datasource_name: &str, fields: &[TypedQNameNode]) -> Result<(), CodeGenError> {
+        if !self.datasources.contains_key(datasource_name) {
+            return Err(CodeGenError::UndefinedDatasourceError(datasource_name.to_string()));
+        }
+
         let field_types = fields.iter()
             .map(|f| self.try_get_nonvoid_type(&f.ql_type))
             .collect::<Result<Vec<BasicTypeEnum>, CodeGenError>>()?;
@@ -235,8 +244,16 @@ impl<'ctxt> CodeGen<'ctxt> {
         ]);
         type_info.set_initializer(&type_info_init);
 
+        let name_str = self.builder.build_global_string_ptr(name, &format!("{}_name", name))?;
+        let column_name_strs = table_fields.iter().enumerate().map(|(i, col)| {
+            self.builder.build_global_string_ptr(&col.name, &format!("{}_col_{}", name, i))
+        }).collect::<Result<Vec<GlobalValue>, BuilderError>>()?;
+        
         let table = QLTable {
             name: name.to_string(),
+            datasource_name: datasource_name.to_string(),
+            name_str,
+            column_name_strs,
             struct_type,
             fields: table_fields,
             type_info,

@@ -70,9 +70,10 @@ impl<'ctxt> CodeGen<'ctxt> {
 		let param_types: Vec<QLType> = params.iter().map(|p| p.ql_type.clone()).collect();
 		let fn_type = self.get_fn_type(return_type, &param_types)?;
 
+		let llvm_name = if name == "main" { "__ql__user_main" } else { name };
 		self.functions.insert(name.to_string(), QLFunction {
 			name: name.to_string(),
-			llvm_function: self.module.add_function(name, fn_type, None),
+			llvm_function: self.module.add_function(llvm_name, fn_type, None),
 			return_type: return_type.clone(),
 			params
 		});

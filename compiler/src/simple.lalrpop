@@ -4,9 +4,16 @@ use crate::codegen::{ComparisonOp, QLType};
 
 grammar;
 
-pub Program: ProgramNode = <tables:Table*> <functions:Function*> => ProgramNode { <> };
+pub Program: ProgramNode =
+    <datasources:Datasource*>
+    <tables:Table*>
+    <functions:Function*> => ProgramNode { <> };
 
-Table: TableNode = "table" <name:ProperQName> "{" <columns:Comma<TypedQName>> "}" => TableNode { <> };
+Datasource: DatasourceNode = "datasource" <name:QName> ";" => DatasourceNode { <> };
+
+Table: TableNode =
+    "table" <name:ProperQName> "from" <datasource_name:QName>
+    "{" <columns:Comma<TypedQName>> "}" => TableNode { <> };
 
 Function: FunctionNode =
     "function" <name:QName>

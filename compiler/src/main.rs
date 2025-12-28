@@ -36,7 +36,7 @@ fn main() -> Result<(), IOError> {
     })?;
 
     Command::new("cc")
-        .args(&["out/main.o", "out/runtime.o", "-o", obj_filepath])
+        .args(&["out/main.o", "out/runtime.o", "-o", obj_filepath, "-lsqlite3"])
         .status()?;
 
     Ok(())

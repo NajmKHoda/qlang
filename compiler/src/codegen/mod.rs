@@ -6,6 +6,7 @@ use inkwell::builder::Builder;
 use inkwell::targets::{FileType, Target, TargetMachine};
 use inkwell::types::{BasicTypeEnum, IntType, PointerType, VoidType};
 use inkwell::basic_block::BasicBlock;
+use inkwell::values::{AnyValue, PointerValue};
 
 use crate::tokens::{ProgramNode, StatementNode};
 
@@ -17,6 +18,7 @@ mod function;
 mod variable;
 mod table;
 mod array;
+mod database;
 mod runtime;
 
 use variable::QLScope;
@@ -34,6 +36,7 @@ pub struct CodeGen<'ctxt> {
     scopes: Vec<QLScope<'ctxt>>,
     functions: HashMap<String, QLFunction<'ctxt>>,
     tables: HashMap<String, QLTable<'ctxt>>,
+    datasources: HashMap<String, PointerValue<'ctxt>>,
     runtime_functions: RuntimeFunctions<'ctxt>,
     loops: Vec<QLLoop<'ctxt>>,
 
@@ -52,8 +55,9 @@ impl<'ctxt> CodeGen<'ctxt> {
         self.expose_runtime_function(self.runtime_functions.input_string, QLType::String, &[]);
         self.expose_runtime_function(self.runtime_functions.print_rc, QLType::Void, &[QLType::String]);
 
+        self.gen_database_ptrs(&program.datasources);
         for table in &program.tables {
-            self.gen_table(&table.name, &table.columns)?;
+            self.gen_table(&table.name, &table.datasource_name, &table.columns)?;
         }
 
         for function in &program.functions {
@@ -73,10 +77,31 @@ impl<'ctxt> CodeGen<'ctxt> {
             }
         }
         
-        let main_fn = self.functions.get("main").ok_or(CodeGenError::MissingMainError)?;
-        if main_fn.return_type != QLType::Integer || !main_fn.params.is_empty() {
+        let user_main_fn = self.functions.get("main").ok_or(CodeGenError::MissingMainError)?;
+        let user_main_llvm_fn = user_main_fn.llvm_function;
+        if user_main_fn.return_type != QLType::Integer || !user_main_fn.params.is_empty() {
             return Err(CodeGenError::BadMainSignatureError);
         }
+
+        let main_fn_type = self.int_type().fn_type(
+            &[self.int_type().into(), self.ptr_type().into()],
+            false
+        );
+        let main_fn = self.module.add_function("main", main_fn_type, None);
+        let main_entry_block = self.context.append_basic_block(main_fn, "main_entry");
+        self.builder.position_at_end(main_entry_block);
+
+        let db_ptr_arr = self.init_databases(&program.datasources, main_fn)?;
+
+        let call_site = self.builder.build_call(
+            user_main_llvm_fn,
+            &[],
+            "call_user_main"
+        )?.as_any_value_enum().into_int_value();
+
+        self.close_databases(db_ptr_arr)?;
+
+        self.builder.build_return(Some(&call_site))?;
 
         if let Err(msg) = self.module.print_to_file("out/main.debug") {
             eprintln!("Failed to write debug LLVM IR: {}", msg);
@@ -146,6 +171,7 @@ pub fn gen_code(program: &ProgramNode) -> Result<(), CodeGenError> {
         scopes: Vec::new(),
         functions: HashMap::new(),
         tables: HashMap::new(),
+        datasources: HashMap::new(),
         runtime_functions: RuntimeFunctions::new(&context, &module),
         loops: Vec::new(),
         cur_fn_name: None,

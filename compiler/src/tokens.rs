@@ -1,12 +1,18 @@
 use crate::codegen::{CodeGen, CodeGenError, QLValue, QLType, ComparisonOp};
 
 pub struct ProgramNode {
+    pub datasources: Vec<DatasourceNode>,
     pub tables: Vec<TableNode>,
     pub functions: Vec<FunctionNode>,
 }
 
+pub struct DatasourceNode {
+    pub name: String
+}
+
 pub struct TableNode {
     pub name: String,
+    pub datasource_name: String,
     pub columns: Vec<TypedQNameNode>,
 }
 
@@ -150,8 +156,8 @@ impl ExpressionNode {
                     .collect::<Result<Vec<QLValue>, CodeGenError>>()?;
                 code_gen.gen_method_call(object_val, method_name, args)
             }
-            ExpressionNode::Query(_query_node) => {
-                unimplemented!()
+            ExpressionNode::Query(query_node) => {
+                code_gen.gen_query(query_node)
             }
         }
     }

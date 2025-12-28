@@ -3,7 +3,7 @@
 
 typedef struct QLTypeInfo QLTypeInfo;
 
-QLTypeInfo __ql__QLString_type_info;
+extern QLTypeInfo __ql__QLString_type_info;
 
 typedef struct {
     char* raw_string;
