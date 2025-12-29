@@ -160,6 +160,7 @@ impl ExpressionNode {
                 match query_node {
                     QueryNode::Select(select_query) => code_gen.gen_select_query(select_query),
                     QueryNode::Insert(insert_query) => code_gen.gen_insert_query(insert_query),
+                    QueryNode::Delete(delete_query) => code_gen.gen_delete_query(delete_query),
                 }
             }
         }
@@ -176,6 +177,7 @@ pub struct ColumnValueNode {
 pub enum QueryNode {
     Select(SelectQueryNode),
     Insert(InsertQueryNode),
+    Delete(DeleteQueryNode),
 }
 
 pub struct SelectQueryNode {
@@ -191,4 +193,9 @@ pub struct WhereNode {
 pub struct InsertQueryNode {
     pub table_name: String,
     pub data_expr: Box<ExpressionNode>,
+}
+
+pub struct DeleteQueryNode {
+    pub table_name: String,
+    pub where_clause: Option<WhereNode>,
 }

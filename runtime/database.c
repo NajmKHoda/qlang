@@ -36,6 +36,8 @@ void __ql__close_dbs(int num_dbs, sqlite3*** db_globals) {
     }
 }
 
+// --- SELECT ---
+
 SelectQueryPlan* __ql__SelectQueryPlan_new(char* table_name, QLTypeInfo* struct_type_info) {
     SelectQueryPlan* plan = malloc(sizeof(SelectQueryPlan));
     plan->table_name = table_name;
@@ -112,6 +114,8 @@ QLArray* __ql__SelectQueryPlan_execute(sqlite3* db, SelectQueryPlan* plan) {
     return results;
 }
 
+// --- INSERT ---
+
 InsertQueryPlan* __ql__InsertQueryPlan_new(
     char* table_name,
     QLTypeInfo* struct_type_info,
@@ -180,6 +184,57 @@ void __ql__InsertQueryPlan_execute(sqlite3* db, InsertQueryPlan* plan) {
         }
     }
 
+    sqlite3_finalize(stmt);
+    free(sql);
+    free(plan);
+}
+
+// --- DELETE ---
+
+DeleteQueryPlan* __ql__DeleteQueryPlan_new(char* table_name) {
+    DeleteQueryPlan* plan = malloc(sizeof(DeleteQueryPlan));
+    plan->table_name = table_name;
+    plan->where.is_present = false;
+    return plan;
+}
+
+void __ql__DeleteQueryPlan_set_where(
+    DeleteQueryPlan* plan,
+    char* column_name,
+    QueryDataType column_type,
+    void* value
+) {
+    plan->where.is_present = true;
+    plan->where.column_name = column_name;
+    plan->where.column_type = column_type;
+    plan->where.value = value;
+}
+
+void __ql__DeleteQueryPlan_execute(sqlite3* db, DeleteQueryPlan* plan) {
+    char* sql = malloc(MAX_SQL_LENGTH);
+    sqlite3_stmt* stmt;
+    
+    if (plan->where.is_present) {
+        sprintf(sql, "DELETE FROM %s WHERE %s = ?;", plan->table_name, plan->where.column_name);
+        sqlite3_prepare_v2(db, sql, -1, &stmt, NULL);
+        switch (plan->where.column_type) {
+            case QUERY_DATA_INTEGER: {
+                sqlite3_bind_int(stmt, 1, *((int*)plan->where.value));
+                break;
+            }
+            case QUERY_DATA_STRING: {
+                QLString* ql_str = *(QLString**)plan->where.value;
+                sqlite3_bind_text(stmt, 1, ql_str->raw_string, ql_str->length, SQLITE_STATIC);
+                break;
+            }
+        }
+    } else {
+        sprintf(sql, "DELETE FROM %s;", plan->table_name);
+        sqlite3_prepare_v2(db, sql, -1, &stmt, NULL);
+    }
+    
+    sqlite3_step(stmt);
+    
     sqlite3_finalize(stmt);
     free(sql);
     free(plan);

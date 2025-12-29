@@ -24,4 +24,10 @@ function main() -> int {
   }
 
   query { insert people into Person };
+
+  prints("Remove a person by name (or blank):");
+  name <- inputs();
+  if name != "" {
+    query { delete from Person where name = name };
+  }
 }

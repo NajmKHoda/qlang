@@ -13,16 +13,18 @@ typedef enum {
     QUERY_DATA_STRING
 } QueryDataType;
 
+typedef struct {
+    bool is_present;
+    char* column_name;
+    QueryDataType column_type;
+    void* value;
+} WhereClause;
+
 
 typedef struct {
     char* table_name;
     QLTypeInfo* struct_type_info;
-    struct {
-        bool is_present;
-        char* column_name;
-        QueryDataType column_type;
-        void* value;
-    } where;
+    WhereClause where;
 } SelectQueryPlan;
 
 SelectQueryPlan* __ql__SelectQueryPlan_new(char* table_name, QLTypeInfo* struct_type_info);
@@ -49,5 +51,20 @@ InsertQueryPlan* __ql__InsertQueryPlan_new(
     void* data
 );
 void __ql__InsertQueryPlan_execute(sqlite3* db, InsertQueryPlan* plan);
+
+
+typedef struct {
+    char* table_name;
+    WhereClause where;
+} DeleteQueryPlan;
+
+DeleteQueryPlan* __ql__DeleteQueryPlan_new(char* table_name);
+void __ql__DeleteQueryPlan_set_where(
+    DeleteQueryPlan* plan,
+    char* column_name,
+    QueryDataType column_type,
+    void* value
+);
+void __ql__DeleteQueryPlan_execute(sqlite3* db, DeleteQueryPlan* plan);
 
 #endif

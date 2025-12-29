@@ -53,6 +53,9 @@ pub(super) struct RuntimeFunctions<'ctxt> {
     pub(super) select_query_plan_execute: RuntimeFunction<'ctxt>,
     pub(super) insert_query_plan_new: RuntimeFunction<'ctxt>,
     pub(super) insert_query_plan_execute: RuntimeFunction<'ctxt>,
+    pub(super) delete_query_plan_new: RuntimeFunction<'ctxt>,
+    pub(super) delete_query_plan_set_where: RuntimeFunction<'ctxt>,
+    pub(super) delete_query_plan_execute: RuntimeFunction<'ctxt>,
 
     pub(super) print_rc: RuntimeFunction<'ctxt>,
 }
@@ -244,6 +247,29 @@ impl<'ctxt> RuntimeFunctions<'ctxt> {
             void_type.fn_type(&[ptr_type.into(), ptr_type.into()], false),
         );
 
+        let delete_query_plan_new = Self::add_runtime_function(
+            module,
+            "__ql__DeleteQueryPlan_new",
+            ptr_type.fn_type(&[ptr_type.into()], false),
+        );
+
+        let delete_query_plan_set_where = Self::add_runtime_function(
+            module,
+            "__ql__DeleteQueryPlan_set_where",
+            void_type.fn_type(&[
+                ptr_type.into(),
+                ptr_type.into(),
+                int_type.into(),
+                ptr_type.into(),
+            ], false),
+        );
+
+        let delete_query_plan_execute = Self::add_runtime_function(
+            module,
+            "__ql__DeleteQueryPlan_execute",
+            void_type.fn_type(&[ptr_type.into(), ptr_type.into()], false),
+        );
+
         let type_info_type = context.opaque_struct_type("QLTypeInfo");
         type_info_type.set_body(
             &[
@@ -316,6 +342,9 @@ impl<'ctxt> RuntimeFunctions<'ctxt> {
             select_query_plan_execute,
             insert_query_plan_new,
             insert_query_plan_execute,
+            delete_query_plan_new,
+            delete_query_plan_set_where,
+            delete_query_plan_execute,
 
             print_rc,
         }

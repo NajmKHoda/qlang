@@ -79,7 +79,8 @@ ColumnValue: ColumnValueNode = <name:QName> ":" <value:Expression> => ColumnValu
 
 Query: QueryNode = {
     SelectQuery => QueryNode::Select(<>),
-    InsertQuery => QueryNode::Insert(<>)
+    InsertQuery => QueryNode::Insert(<>),
+    DeleteQuery => QueryNode::Delete(<>)
 }
 
 SelectQuery: SelectQueryNode =
@@ -91,6 +92,10 @@ WhereClause: WhereNode = "where" <column_name:QName> "=" <value:Expression> => W
 InsertQuery: InsertQueryNode =
     "insert" <data_expr:Expression> "into" <table_name:ProperQName>
     => InsertQueryNode { <> };
+
+DeleteQuery: DeleteQueryNode =
+    "delete" "from" <table_name:ProperQName>
+    <where_clause:WhereClause?> => DeleteQueryNode { <> };
 
 // --- MISCELLANEOUS ---
 
