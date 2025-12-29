@@ -161,6 +161,7 @@ impl ExpressionNode {
                     QueryNode::Select(select_query) => code_gen.gen_select_query(select_query),
                     QueryNode::Insert(insert_query) => code_gen.gen_insert_query(insert_query),
                     QueryNode::Delete(delete_query) => code_gen.gen_delete_query(delete_query),
+                    QueryNode::Update(update_query) => code_gen.gen_update_query(update_query),
                 }
             }
         }
@@ -178,6 +179,7 @@ pub enum QueryNode {
     Select(SelectQueryNode),
     Insert(InsertQueryNode),
     Delete(DeleteQueryNode),
+    Update(UpdateQueryNode),
 }
 
 pub struct SelectQueryNode {
@@ -198,4 +200,15 @@ pub struct InsertQueryNode {
 pub struct DeleteQueryNode {
     pub table_name: String,
     pub where_clause: Option<WhereNode>,
+}
+
+pub struct UpdateQueryNode {
+    pub table_name: String,
+    pub assignments: Vec<UpdateAssignmentNode>,
+    pub where_clause: Option<WhereNode>,
+}
+
+pub struct UpdateAssignmentNode {
+    pub column_name: String,
+    pub value_expr: Box<ExpressionNode>,
 }

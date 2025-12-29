@@ -67,4 +67,35 @@ void __ql__DeleteQueryPlan_set_where(
 );
 void __ql__DeleteQueryPlan_execute(sqlite3* db, DeleteQueryPlan* plan);
 
+
+typedef struct {
+    char* column_name;
+    QueryDataType column_type;
+    void* value;
+} UpdateAssignment;
+
+typedef struct {
+    char* table_name;
+    QLTypeInfo* struct_type_info;
+    UpdateAssignment* assignments;
+    unsigned int num_assignments;
+    unsigned int assignments_capacity;
+    WhereClause where;
+} UpdateQueryPlan;
+
+UpdateQueryPlan* __ql__UpdateQueryPlan_new(char* table_name, QLTypeInfo* struct_type_info);
+void __ql__UpdateQueryPlan_add_assignment(
+    UpdateQueryPlan* plan,
+    char* column_name,
+    QueryDataType column_type,
+    void* value
+);
+void __ql__UpdateQueryPlan_set_where(
+    UpdateQueryPlan* plan,
+    char* column_name,
+    QueryDataType column_type,
+    void* value
+);
+void __ql__UpdateQueryPlan_execute(sqlite3* db, UpdateQueryPlan* plan);
+
 #endif

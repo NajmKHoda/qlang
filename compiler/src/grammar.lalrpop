@@ -80,7 +80,8 @@ ColumnValue: ColumnValueNode = <name:QName> ":" <value:Expression> => ColumnValu
 Query: QueryNode = {
     SelectQuery => QueryNode::Select(<>),
     InsertQuery => QueryNode::Insert(<>),
-    DeleteQuery => QueryNode::Delete(<>)
+    DeleteQuery => QueryNode::Delete(<>),
+    UpdateQuery => QueryNode::Update(<>)
 }
 
 SelectQuery: SelectQueryNode =
@@ -96,6 +97,15 @@ InsertQuery: InsertQueryNode =
 DeleteQuery: DeleteQueryNode =
     "delete" "from" <table_name:ProperQName>
     <where_clause:WhereClause?> => DeleteQueryNode { <> };
+
+UpdateQuery: UpdateQueryNode =
+    "update" <table_name:ProperQName> "set"
+    <assignments:NonEmptyComma<UpdateAssignment>>
+    <where_clause:WhereClause?> => UpdateQueryNode { <> };
+
+UpdateAssignment: UpdateAssignmentNode =
+    <column_name:QName> "<-" <value_expr:Expression>
+    => UpdateAssignmentNode { <> };
 
 // --- MISCELLANEOUS ---
 
@@ -121,12 +131,12 @@ QLString: String = <s:r#""[^"]*""#> => s[1..s.len()-1].to_string();
 ProperQName: String = r"_*[A-Z][a-zA-Z0-9]*" => String::from(<>);
 QName: String = r"_*[a-z][a-zA-Z0-9_]*" => String::from(<>);
 
-Comma<T>: Vec<T> = _Comma<T>? => match <> {
+Comma<T>: Vec<T> = NonEmptyComma<T>? => match <> {
     Some(xs) => xs,
     None => vec![]
 };
 
-_Comma<T>: Vec<T> = <head:T> <tail:("," <T>)*> => {
+NonEmptyComma<T>: Vec<T> = <head:T> <tail:("," <T>)*> => {
     let mut vals = vec![head];
     vals.extend(tail.into_iter());
     vals

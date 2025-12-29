@@ -239,3 +239,105 @@ void __ql__DeleteQueryPlan_execute(sqlite3* db, DeleteQueryPlan* plan) {
     free(sql);
     free(plan);
 }
+
+// --- UPDATE ---
+
+UpdateQueryPlan* __ql__UpdateQueryPlan_new(char* table_name, QLTypeInfo* struct_type_info) {
+    UpdateQueryPlan* plan = malloc(sizeof(UpdateQueryPlan));
+    plan->table_name = table_name;
+    plan->struct_type_info = struct_type_info;
+    plan->num_assignments = 0;
+    plan->assignments_capacity = 4;
+    plan->assignments = malloc(sizeof(UpdateAssignment) * plan->assignments_capacity);
+    plan->where.is_present = false;
+    return plan;
+}
+
+void __ql__UpdateQueryPlan_add_assignment(
+    UpdateQueryPlan* plan,
+    char* column_name,
+    QueryDataType column_type,
+    void* value
+) {
+    if (plan->num_assignments >= plan->assignments_capacity) {
+        plan->assignments_capacity *= 2;
+        plan->assignments = realloc(plan->assignments, sizeof(UpdateAssignment) * plan->assignments_capacity);
+    }
+    plan->assignments[plan->num_assignments].column_name = column_name;
+    plan->assignments[plan->num_assignments].column_type = column_type;
+    plan->assignments[plan->num_assignments].value = value;
+    plan->num_assignments++;
+}
+
+void __ql__UpdateQueryPlan_set_where(
+    UpdateQueryPlan* plan,
+    char* column_name,
+    QueryDataType column_type,
+    void* value
+) {
+    plan->where.is_present = true;
+    plan->where.column_name = column_name;
+    plan->where.column_type = column_type;
+    plan->where.value = value;
+}
+
+void __ql__UpdateQueryPlan_execute(sqlite3* db, UpdateQueryPlan* plan) {
+    char* sql = malloc(MAX_SQL_LENGTH);
+    sqlite3_stmt* stmt;
+    
+    // Build SET clause
+    int offset = sprintf(sql, "UPDATE %s SET ", plan->table_name);
+    for (unsigned int i = 0; i < plan->num_assignments; i++) {
+        if (i > 0) {
+            offset += sprintf(sql + offset, ", ");
+        }
+        offset += sprintf(sql + offset, "%s = ?", plan->assignments[i].column_name);
+    }
+    
+    // Add WHERE clause if present
+    if (plan->where.is_present) {
+        sprintf(sql + offset, " WHERE %s = ?;", plan->where.column_name);
+    } else {
+        sprintf(sql + offset, ";");
+    }
+    
+    sqlite3_prepare_v2(db, sql, -1, &stmt, NULL);
+    
+    // Bind assignment values
+    for (unsigned int i = 0; i < plan->num_assignments; i++) {
+        switch (plan->assignments[i].column_type) {
+            case QUERY_DATA_INTEGER: {
+                sqlite3_bind_int(stmt, i + 1, *((int*)plan->assignments[i].value));
+                break;
+            }
+            case QUERY_DATA_STRING: {
+                QLString* ql_str = *(QLString**)plan->assignments[i].value;
+                sqlite3_bind_text(stmt, i + 1, ql_str->raw_string, ql_str->length, SQLITE_STATIC);
+                break;
+            }
+        }
+    }
+    
+    // Bind WHERE value if present
+    if (plan->where.is_present) {
+        unsigned int where_index = plan->num_assignments + 1;
+        switch (plan->where.column_type) {
+            case QUERY_DATA_INTEGER: {
+                sqlite3_bind_int(stmt, where_index, *((int*)plan->where.value));
+                break;
+            }
+            case QUERY_DATA_STRING: {
+                QLString* ql_str = *(QLString**)plan->where.value;
+                sqlite3_bind_text(stmt, where_index, ql_str->raw_string, ql_str->length, SQLITE_STATIC);
+                break;
+            }
+        }
+    }
+    
+    sqlite3_step(stmt);
+    sqlite3_finalize(stmt);
+
+    free(sql);
+    free(plan->assignments);
+    free(plan);
+}

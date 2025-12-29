@@ -56,6 +56,10 @@ pub(super) struct RuntimeFunctions<'ctxt> {
     pub(super) delete_query_plan_new: RuntimeFunction<'ctxt>,
     pub(super) delete_query_plan_set_where: RuntimeFunction<'ctxt>,
     pub(super) delete_query_plan_execute: RuntimeFunction<'ctxt>,
+    pub(super) update_query_plan_new: RuntimeFunction<'ctxt>,
+    pub(super) update_query_plan_add_assignment: RuntimeFunction<'ctxt>,
+    pub(super) update_query_plan_set_where: RuntimeFunction<'ctxt>,
+    pub(super) update_query_plan_execute: RuntimeFunction<'ctxt>,
 
     pub(super) print_rc: RuntimeFunction<'ctxt>,
 }
@@ -270,6 +274,40 @@ impl<'ctxt> RuntimeFunctions<'ctxt> {
             void_type.fn_type(&[ptr_type.into(), ptr_type.into()], false),
         );
 
+        let update_query_plan_new = Self::add_runtime_function(
+            module,
+            "__ql__UpdateQueryPlan_new",
+            ptr_type.fn_type(&[ptr_type.into(), ptr_type.into()], false),
+        );
+
+        let update_query_plan_add_assignment = Self::add_runtime_function(
+            module,
+            "__ql__UpdateQueryPlan_add_assignment",
+            void_type.fn_type(&[
+                ptr_type.into(),
+                ptr_type.into(),
+                int_type.into(),
+                ptr_type.into(),
+            ], false),
+        );
+
+        let update_query_plan_set_where = Self::add_runtime_function(
+            module,
+            "__ql__UpdateQueryPlan_set_where",
+            void_type.fn_type(&[
+                ptr_type.into(),
+                ptr_type.into(),
+                int_type.into(),
+                ptr_type.into(),
+            ], false),
+        );
+
+        let update_query_plan_execute = Self::add_runtime_function(
+            module,
+            "__ql__UpdateQueryPlan_execute",
+            void_type.fn_type(&[ptr_type.into(), ptr_type.into()], false),
+        );
+
         let type_info_type = context.opaque_struct_type("QLTypeInfo");
         type_info_type.set_body(
             &[
@@ -345,6 +383,10 @@ impl<'ctxt> RuntimeFunctions<'ctxt> {
             delete_query_plan_new,
             delete_query_plan_set_where,
             delete_query_plan_execute,
+            update_query_plan_new,
+            update_query_plan_add_assignment,
+            update_query_plan_set_where,
+            update_query_plan_execute,
 
             print_rc,
         }

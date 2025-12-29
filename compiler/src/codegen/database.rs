@@ -1,6 +1,6 @@
 use inkwell::{AddressSpace, values::{AnyValue, BasicValueEnum, FunctionValue, PointerValue}};
 
-use crate::tokens::{DatasourceNode, DeleteQueryNode, InsertQueryNode, SelectQueryNode};
+use crate::tokens::{DatasourceNode, DeleteQueryNode, InsertQueryNode, SelectQueryNode, UpdateQueryNode};
 
 use super::{CodeGen, CodeGenError, QLValue, QLType};
 
@@ -258,6 +258,127 @@ impl<'ctxt> CodeGen<'ctxt> {
             self.runtime_functions.delete_query_plan_execute.into(),
             &[db_ptr.into(), query_plan.into()],
             "execute_delete"
+        )?;
+
+        Ok(QLValue::Void)
+    }
+
+    pub fn gen_update_query(&self, query: &UpdateQueryNode) -> Result<QLValue<'ctxt>, CodeGenError> {
+        let table = self.get_table(&query.table_name)?;
+
+        let db_global_ptr = *self.datasources.get(&table.datasource_name).unwrap();
+        let db_ptr = self.builder.build_load(self.ptr_type(), db_global_ptr, "db_ptr")?.into_pointer_value();
+        
+        let table_name_str = table.name_str.as_pointer_value();
+        let type_info_ptr = table.type_info.as_pointer_value();
+        
+        let query_plan = self.builder.build_call(
+            self.runtime_functions.update_query_plan_new.into(),
+            &[table_name_str.into(), type_info_ptr.into()],
+            "update_query_plan"
+        )?.as_any_value_enum().into_pointer_value();
+        
+        // Add all assignments
+        for assignment in &query.assignments {
+            let column_index = table.get_column_index(&assignment.column_name)?;
+            let column_type = &table.fields[column_index as usize].ql_type;
+            let column_name_str = table.column_name_strs[column_index as usize].as_pointer_value();
+            
+            // Evaluate the assignment value
+            let assignment_value = assignment.value_expr.gen_eval(self)?;
+            if assignment_value.get_type() != *column_type {
+                return Err(CodeGenError::UnexpectedTypeError);
+            }
+            
+            // Determine the QueryDataType enum value
+            let query_data_type = match column_type {
+                QLType::Integer => 0, // QUERY_DATA_INTEGER
+                QLType::String => 1,  // QUERY_DATA_STRING
+                _ => return Err(CodeGenError::UnexpectedTypeError),
+            };
+            let query_data_type_val = self.context.i32_type().const_int(query_data_type, false);
+            
+            // Allocate space for the value and store it
+            let value_ptr = match assignment_value {
+                QLValue::Integer(int_val) => {
+                    let ptr = self.builder.build_alloca(self.int_type(), "assignment_value")?;
+                    self.builder.build_store(ptr, int_val)?;
+                    ptr
+                },
+                QLValue::String(str_ptr, _) => {
+                    let ptr = self.builder.build_alloca(self.ptr_type(), "assignment_value")?;
+                    self.builder.build_store(ptr, str_ptr)?;
+                    ptr
+                },
+                _ => return Err(CodeGenError::UnexpectedTypeError),
+            };
+            
+            // Call __ql__UpdateQueryPlan_add_assignment
+            self.builder.build_call(
+                self.runtime_functions.update_query_plan_add_assignment.into(),
+                &[
+                    query_plan.into(),
+                    column_name_str.into(),
+                    query_data_type_val.into(),
+                    value_ptr.into(),
+                ],
+                "add_assignment"
+            )?;
+        }
+        
+        // Handle WHERE clause if present
+        if let Some(where_clause) = &query.where_clause {
+            let column_index = table.get_column_index(&where_clause.column_name)?;
+            let column_type = &table.fields[column_index as usize].ql_type;
+            let column_name_str = table.column_name_strs[column_index as usize].as_pointer_value();
+            
+            // Evaluate the where clause value
+            let where_value = where_clause.value.gen_eval(self)?;
+            if where_value.get_type() != *column_type {
+                return Err(CodeGenError::UnexpectedTypeError);
+            }
+            
+            // Determine the QueryDataType enum value
+            let query_data_type = match column_type {
+                QLType::Integer => 0, // QUERY_DATA_INTEGER
+                QLType::String => 1,  // QUERY_DATA_STRING
+                _ => return Err(CodeGenError::UnexpectedTypeError),
+            };
+            let query_data_type_val = self.context.i32_type().const_int(query_data_type, false);
+            
+            // Allocate space for the value and store it
+            let value_ptr = match where_value {
+                QLValue::Integer(int_val) => {
+                    let ptr = self.builder.build_alloca(self.int_type(), "where_value")?;
+                    self.builder.build_store(ptr, int_val)?;
+                    ptr
+                },
+                QLValue::String(str_ptr, _) => {
+                    let ptr = self.builder.build_alloca(self.ptr_type(), "where_value")?;
+                    self.builder.build_store(ptr, str_ptr)?;
+                    ptr
+                },
+                _ => return Err(CodeGenError::UnexpectedTypeError),
+            };
+            
+            // Call __ql__UpdateQueryPlan_set_where
+            self.builder.build_call(
+                self.runtime_functions.update_query_plan_set_where.into(),
+                &[
+                    query_plan.into(),
+                    column_name_str.into(),
+                    query_data_type_val.into(),
+                    value_ptr.into(),
+                ],
+                "set_where"
+            )?;
+        }
+        
+        // Execute the update query plan
+        self.builder.build_call(
+            self.runtime_functions.update_query_plan_execute.into(),
+            &[db_ptr.into(), query_plan.into()],
+            "execute_update"
         )?;
 
         Ok(QLValue::Void)

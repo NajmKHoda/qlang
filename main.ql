@@ -30,4 +30,19 @@ function main() -> int {
   if name != "" {
     query { delete from Person where name = name };
   }
+
+  prints("Change a person by name (or blank):");
+  name <- inputs();
+  if name != "" {
+    prints("Input new name:");
+    str new_name <- inputs();
+    prints("Input new age:");
+    int new_age <- inputi();
+    query {
+      update Person set
+        name <- new_name,
+        age <- new_age
+      where name = name
+    };
+  }
 }
