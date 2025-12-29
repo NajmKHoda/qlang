@@ -1,5 +1,5 @@
 use inkwell::types::{BasicMetadataTypeEnum, BasicType, FunctionType};
-use inkwell::values::{AnyValue, BasicMetadataValueEnum, BasicValue, BasicValueEnum, FunctionValue, ValueKind};
+use inkwell::values::{BasicMetadataValueEnum, BasicValue, BasicValueEnum, FunctionValue, ValueKind};
 
 use super::{CodeGen, CodeGenError, QLValue, QLType};
 use crate::tokens::TypedQNameNode;
@@ -134,62 +134,26 @@ impl<'ctxt> CodeGen<'ctxt> {
 
 	pub fn gen_method_call(&self, object: QLValue<'ctxt>, method_name: &str, mut args: Vec<QLValue<'ctxt>>) -> Result<QLValue<'ctxt>, CodeGenError> {
 		match object {
-			QLValue::Array(array_ptr, elem_type, _) => {
+			QLValue::Array(_, _, _) => {
 				match method_name {
 					"append" => {
 						if args.len() != 1 {
 							return Err(CodeGenError::BadFunctionCallError("Array.append".to_string()));
 						}
 						let elem = args.remove(0);
-						if elem.get_type() != elem_type {
-							return Err(CodeGenError::UnexpectedTypeError);
-						}
-						let elem_basic: BasicValueEnum = elem.clone().try_into()?;
-						let elem_ptr = self.builder.build_alloca(
-							self.try_get_nonvoid_type(&elem_type)?,
-							"append_elem_ptr"
-						)?;
-						self.builder.build_store(elem_ptr, elem_basic)?;
-
-						self.builder.build_call(
-							self.runtime_functions.append_array.into(),
-							&[array_ptr.into(), elem_ptr.into()],
-							"array_append"
-						)?;
-
-						self.remove_if_temp(elem)?;
-						Ok(QLValue::Void)
+						self.gen_array_append(object, elem)
 					}
 					"length" => {
 						if !args.is_empty() {
 							return Err(CodeGenError::BadFunctionCallError("Array.length".to_string()));
 						}
-						let length_value = self.builder.build_call(
-							self.runtime_functions.array_length.into(),
-							&[array_ptr.into()],
-							"array_length"
-						)?.as_any_value_enum().into_int_value();
-
-						Ok(QLValue::Integer(length_value))
+						self.gen_array_length(object)
 					}
 					"pop" => {
 						if !args.is_empty() {
 							return Err(CodeGenError::BadFunctionCallError("Array.pop".to_string()));
 						}
-
-						let elem_ptr = self.builder.build_call(
-							self.runtime_functions.pop_array.into(),
-							&[array_ptr.into()],
-							"array_pop"
-						)?.as_any_value_enum().into_pointer_value();
-
-						let loaded_elem = self.builder.build_load(
-							self.try_get_nonvoid_type(&elem_type)?,
-							elem_ptr,
-							"pop_elem_load"
-						)?;
-
-						Ok(elem_type.to_value(loaded_elem, false))
+						self.gen_array_pop(object)
 					}
 					_ => Err(CodeGenError::UndefinedMethodError(method_name.to_string(), "Array".to_string())),
 				}

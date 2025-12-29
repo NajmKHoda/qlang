@@ -171,7 +171,7 @@ void __ql__InsertQueryPlan_execute(sqlite3* db, InsertQueryPlan* plan) {
         bind_row(stmt, plan->struct_type_info, struct_ptr);
         sqlite3_step(stmt);
     } else {
-        QLArray* array = plan->data;
+        QLArray* array = *(QLArray**)plan->data;
         for (unsigned int j = 0; j < array->num_elems; j++) {
             void* struct_ptr = __ql__QLArray_index(array, j);
             bind_row(stmt, plan->struct_type_info, struct_ptr);
@@ -179,7 +179,7 @@ void __ql__InsertQueryPlan_execute(sqlite3* db, InsertQueryPlan* plan) {
             sqlite3_reset(stmt);
         }
     }
-    
+
     sqlite3_finalize(stmt);
     free(sql);
     free(plan);

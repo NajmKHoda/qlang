@@ -36,6 +36,7 @@ impl<'ctxt> CodeGen<'ctxt> {
 
         // Store each element in the array
         for (i, elem) in elems.iter().enumerate() {
+            self.add_ref(elem)?;
             let elem_basic: BasicValueEnum = elem.clone().try_into()?;
             let index = self.context.i32_type().const_int(i as u64, false);
             let elem_ptr = unsafe {
@@ -80,6 +81,66 @@ impl<'ctxt> CodeGen<'ctxt> {
             )?;
 
             Ok(elem_type.to_value(loaded_elem, true))
+        } else {
+            Err(CodeGenError::UnexpectedTypeError)
+        }
+    }
+
+    pub fn gen_array_length(&self, array: QLValue<'ctxt>) -> Result<QLValue<'ctxt>, CodeGenError> {
+        if let QLValue::Array(array_ptr, _, _) = array {
+            let length_value = self.builder.build_call(
+                self.runtime_functions.array_length.into(),
+                &[array_ptr.into()],
+                "array_length"
+            )?.as_any_value_enum().into_int_value();
+
+            Ok(QLValue::Integer(length_value))
+        } else {
+            Err(CodeGenError::UnexpectedTypeError)
+        }
+    }
+
+    pub fn gen_array_append(&self, array: QLValue<'ctxt>, elem: QLValue<'ctxt>) -> Result<QLValue<'ctxt>, CodeGenError> {
+        if let QLValue::Array(array_ptr, elem_type, _) = array {
+            if elem.get_type() != elem_type {
+                return Err(CodeGenError::UnexpectedTypeError);
+            }
+
+            self.add_ref(&elem)?;
+            let elem_basic: BasicValueEnum = elem.try_into()?;
+            let elem_ptr = self.builder.build_alloca(
+                self.try_get_nonvoid_type(&elem_type)?,
+                "append_elem_ptr"
+            )?;
+            self.builder.build_store(elem_ptr, elem_basic)?;
+
+            self.builder.build_call(
+                self.runtime_functions.append_array.into(),
+                &[array_ptr.into(), elem_ptr.into()],
+                "array_append"
+            )?;
+
+            Ok(QLValue::Void)
+        } else {
+            Err(CodeGenError::UnexpectedTypeError)
+        }
+    }
+
+    pub fn gen_array_pop(&self, array: QLValue<'ctxt>) -> Result<QLValue<'ctxt>, CodeGenError> {
+        if let QLValue::Array(array_ptr, elem_type, _) = array {
+            let elem_ptr = self.builder.build_call(
+                self.runtime_functions.pop_array.into(),
+                &[array_ptr.into()],
+                "array_pop"
+            )?.as_any_value_enum().into_pointer_value();
+
+            let loaded_elem = self.builder.build_load(
+                self.try_get_nonvoid_type(&elem_type)?,
+                elem_ptr,
+                "pop_elem_load"
+            )?;
+
+            Ok(elem_type.to_value(loaded_elem, false))
         } else {
             Err(CodeGenError::UnexpectedTypeError)
         }

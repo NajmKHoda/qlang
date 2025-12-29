@@ -6,10 +6,22 @@ table Person from main_db {
 }
 
 function main() -> int {
-  Person person <- Person {
-    age: inputi(),
-    name: inputs()
-  };
+  Person[] people <- Person [ ];
 
-  query { insert person into Person };
+  prints("Input the name of a person (or STOP):");
+  str name <- inputs();
+  while name != "STOP" {
+    prints("Input their age:");
+    int age <- inputi();
+
+    people.append(Person {
+      age: age,
+      name: name
+    });
+
+    prints("Input another person's name (or STOP):");
+    name <- inputs();
+  }
+
+  query { insert people into Person };
 }
