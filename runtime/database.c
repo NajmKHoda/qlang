@@ -36,16 +36,16 @@ void __ql__close_dbs(int num_dbs, sqlite3*** db_globals) {
     }
 }
 
-QueryPlan* __ql__QueryPlan_new(char* table_name, QLTypeInfo* struct_type_info) {
-    QueryPlan* plan = malloc(sizeof(QueryPlan));
+SelectQueryPlan* __ql__SelectQueryPlan_new(char* table_name, QLTypeInfo* struct_type_info) {
+    SelectQueryPlan* plan = malloc(sizeof(SelectQueryPlan));
     plan->table_name = table_name;
     plan->struct_type_info = struct_type_info;
     plan->where.is_present = false;
     return plan;
 }
 
-void __ql__QueryPlan_set_where(
-    QueryPlan* plan,
+void __ql__SelectQueryPlan_set_where(
+    SelectQueryPlan* plan,
     char* column_name,
     QueryDataType column_type,
     void* value
@@ -56,18 +56,18 @@ void __ql__QueryPlan_set_where(
     plan->where.value = value;
 }
 
-QLArray* __ql__QueryPlan_execute(sqlite3* db, QueryPlan* plan) {
+QLArray* __ql__SelectQueryPlan_execute(sqlite3* db, SelectQueryPlan* plan) {
     char* sql = malloc(MAX_SQL_LENGTH);
     sqlite3_stmt* stmt;
     if (plan->where.is_present) {
         sprintf(sql, "SELECT * FROM %s WHERE %s = ?;", plan->table_name, plan->where.column_name);
         sqlite3_prepare_v2(db, sql, -1, &stmt, NULL);
         switch (plan->where.column_type) {
-            case QUERY_INTEGER: {
+            case QUERY_DATA_INTEGER: {
                 sqlite3_bind_int(stmt, 1, *((int*)plan->where.value));
                 break;
             }
-            case QUERY_STRING: {
+            case QUERY_DATA_STRING: {
                 QLString* ql_str = *(QLString**)plan->where.value;
                 sqlite3_bind_text(stmt, 1, ql_str->raw_string, ql_str->length, SQLITE_STATIC);
                 break;
@@ -110,4 +110,77 @@ QLArray* __ql__QueryPlan_execute(sqlite3* db, QueryPlan* plan) {
     free(plan);
 
     return results;
+}
+
+InsertQueryPlan* __ql__InsertQueryPlan_new(
+    char* table_name,
+    QLTypeInfo* struct_type_info,
+    bool is_single_row,
+    void* data
+) {
+    InsertQueryPlan* plan = malloc(sizeof(InsertQueryPlan));
+    plan->table_name = table_name;
+    plan->struct_type_info = struct_type_info;
+    plan->is_single_row = is_single_row;
+    plan->data = data;
+    return plan;
+}
+
+void bind_row(sqlite3_stmt* stmt, QLTypeInfo* struct_type_info, void* struct_ptr) {
+    unsigned int num_columns = struct_type_info->num_columns;
+    for (unsigned int i = 0; i < num_columns; i++) {
+        int datatype;
+        void* column_ptr;
+        struct_type_info->get_nth(struct_ptr, i, &datatype, &column_ptr);
+        switch (datatype) {
+            case QUERY_DATA_INTEGER: {
+                int val = *(int*)column_ptr;
+                sqlite3_bind_int(stmt, i + 1, val);
+                break;
+            }
+            case QUERY_DATA_STRING: {
+                QLString* ql_str = *(QLString**)column_ptr;
+                sqlite3_bind_text(stmt, i + 1, ql_str->raw_string, ql_str->length, SQLITE_STATIC);
+                break;
+            }
+        }
+    }
+}
+
+void __ql__InsertQueryPlan_execute(sqlite3* db, InsertQueryPlan* plan) {
+    char* sql = malloc(MAX_SQL_LENGTH);
+    sqlite3_stmt* stmt;
+
+    unsigned int num_columns = plan->struct_type_info->num_columns;
+    unsigned int placeholders_size = num_columns * 2;
+    char* placeholders = malloc(placeholders_size);
+    placeholders[0] = '?';
+    placeholders[placeholders_size - 1] = '\0';
+    for (int i = 1; i < num_columns; i++) {
+        placeholders[i * 2 - 1] = ',';
+        placeholders[i * 2] = '?';
+    }
+
+    sprintf(sql, "INSERT INTO %s VALUES (%s);", plan->table_name, placeholders);
+    free(placeholders);
+
+    sqlite3_prepare_v2(db, sql, -1, &stmt, NULL);
+
+    if (plan->is_single_row) {
+        void* struct_ptr = plan->data;
+        bind_row(stmt, plan->struct_type_info, struct_ptr);
+        sqlite3_step(stmt);
+    } else {
+        QLArray* array = plan->data;
+        for (unsigned int j = 0; j < array->num_elems; j++) {
+            void* struct_ptr = __ql__QLArray_index(array, j);
+            bind_row(stmt, plan->struct_type_info, struct_ptr);
+            sqlite3_step(stmt);
+            sqlite3_reset(stmt);
+        }
+    }
+    
+    sqlite3_finalize(stmt);
+    free(sql);
+    free(plan);
 }

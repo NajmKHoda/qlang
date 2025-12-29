@@ -222,6 +222,77 @@ impl<'ctxt> CodeGen<'ctxt> {
         self.builder.position_at_end(set_nth_entry);
         self.builder.build_switch(struct_index, else_block, &cases)?;
 
+
+        // Create get_nth function
+        let get_nth_type = self.context.void_type().fn_type(
+            &[
+                self.context.ptr_type(Default::default()).into(),
+                self.context.i32_type().into(),
+                self.context.ptr_type(Default::default()).into(),
+                self.context.ptr_type(Default::default()).into()
+            ],
+            false
+        );
+        let get_nth_fn = self.module.add_function(
+            &format!("__ql__{}_get_nth", name),
+            get_nth_type,
+            None
+        );
+
+        // Construct the get-nth function
+        let get_nth_entry = self.context.append_basic_block(get_nth_fn, "entry");
+        self.builder.position_at_end(get_nth_entry);
+
+        let get_struct_ptr = get_nth_fn.get_nth_param(0).unwrap().into_pointer_value();
+        let get_struct_index = get_nth_fn.get_nth_param(1).unwrap().into_int_value();
+        let datatype_ptr = get_nth_fn.get_nth_param(2).unwrap().into_pointer_value();
+        let out_value_ptr = get_nth_fn.get_nth_param(3).unwrap().into_pointer_value();
+        
+        let get_cases = (0..table_fields.len())
+            .into_iter()
+            .map(|i| -> Result<(IntValue, BasicBlock), CodeGenError> {
+                let case_value = self.context.i32_type().const_int(i as u64, false);
+                let case_block = self.context.append_basic_block(get_nth_fn, &format!("get_case_{}", i));
+                self.builder.position_at_end(case_block);
+
+                let field_ptr = self.builder.build_struct_gep(
+                    struct_type,
+                    get_struct_ptr,
+                    i as u32,
+                    &format!("{}.{}", name, table_fields[i].name)
+                )?;
+
+                // Determine QueryDataType based on QLType
+                let datatype_value = match &table_fields[i].ql_type {
+                    QLType::Integer => self.context.i32_type().const_int(0, false), // QUERY_DATA_INTEGER = 0
+                    QLType::String => self.context.i32_type().const_int(1, false),  // QUERY_DATA_STRING = 1
+                    _ => return Err(CodeGenError::UnexpectedTypeError),
+                };
+
+                // Store the datatype
+                self.builder.build_store(datatype_ptr, datatype_value)?;
+
+                // Store the field pointer into out_value_ptr
+                let field_ptr_as_opaque = self.builder.build_pointer_cast(
+                    field_ptr,
+                    self.context.ptr_type(Default::default()),
+                    "field_ptr_cast"
+                )?;
+                self.builder.build_store(out_value_ptr, field_ptr_as_opaque)?;
+                
+                self.builder.build_return(None)?;
+                Ok((case_value, case_block))
+            })
+            .collect::<Result<Vec<(IntValue, BasicBlock)>, CodeGenError>>()?;
+        
+        let get_else_block = self.context.append_basic_block(get_nth_fn, "get_else");
+        self.builder.position_at_end(get_else_block);
+        self.builder.build_return(None)?;
+
+        self.builder.position_at_end(get_nth_entry);
+        self.builder.build_switch(get_struct_index, get_else_block, &get_cases)?;
+
+
         // Create and initialize type_info global
         let type_info = self.module.add_global(
             self.runtime_functions.type_info_type,
@@ -229,18 +300,21 @@ impl<'ctxt> CodeGen<'ctxt> {
             &format!("__ql__{}_type_info", name)
         );
         
-        // Initialize with struct size and elem_drop function pointer
+        // Initialize with struct size, elem_drop, num_columns, set_nth, and get_nth function pointers
         let size_value = struct_type.size_of().unwrap();
         let elem_drop_value = if let Some(fn_ptr) = elem_drop_fn_ptr {
             fn_ptr
         } else {
             self.context.ptr_type(Default::default()).const_null()
         };
+        let num_columns_value = self.context.i32_type().const_int(table_fields.len() as u64, false);
         
         let type_info_init = self.runtime_functions.type_info_type.const_named_struct(&[
             size_value.into(),
             elem_drop_value.into(),
+            num_columns_value.into(),
             set_nth_fn.as_global_value().as_pointer_value().into(),
+            get_nth_fn.as_global_value().as_pointer_value().into(),
         ]);
         type_info.set_initializer(&type_info_init);
 

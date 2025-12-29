@@ -51,6 +51,7 @@ Expression: Box<ExpressionNode> = {
     Int => Box::new(ExpressionNode::IntegerLiteral(<>)),
     Bool => Box::new(ExpressionNode::BoolLiteral(<>)),
     QLString => Box::new(ExpressionNode::StringLiteral(<>)),
+    "(" <Expression> ")",
     <name:ProperQName> "{" <cols:Comma<ColumnValue>> "}" => Box::new(ExpressionNode::TableRow(<>)),
     <TypeName> "[" <Comma<Expression>> "]" => Box::new(ExpressionNode::Array(<>)),
     <Expression> "[" <Expression> "]" => Box::new(ExpressionNode::ArrayIndex(<>)),
@@ -61,7 +62,7 @@ Expression: Box<ExpressionNode> = {
     <Expression> "+" <Expression> => Box::new(ExpressionNode::Add(<>)),
     <Expression> "-" <Expression> => Box::new(ExpressionNode::Subtract(<>)),
     <QName> "(" <Comma<Expression>> ")" => Box::new(ExpressionNode::FunctionCall(<>)),
-    Query => Box::new(ExpressionNode::Query(<>)),
+    "query" "{" <Query> "}" => Box::new(ExpressionNode::Query(<>)),
     #[precedence(level="2")] #[assoc(side="left")]
     <Expression> ">" <Expression> => Box::new(ExpressionNode::Comparison(<>, ComparisonOp::GreaterThan)),
     <Expression> "<" <Expression> => Box::new(ExpressionNode::Comparison(<>, ComparisonOp::LessThan)),
@@ -74,12 +75,24 @@ Expression: Box<ExpressionNode> = {
 
 ColumnValue: ColumnValueNode = <name:QName> ":" <value:Expression> => ColumnValueNode { <> };
 
-Query: QueryNode = "query" "{"
+// --- QUERIES ---
+
+Query: QueryNode = {
+    SelectQuery => QueryNode::Select(<>),
+    InsertQuery => QueryNode::Insert(<>)
+}
+
+SelectQuery: SelectQueryNode =
     "select" "from" <table_name:ProperQName>
-    <where_clause:WhereClause?>
-"}" => QueryNode { <> };
+    <where_clause:WhereClause?> => SelectQueryNode { <> };
 
 WhereClause: WhereNode = "where" <column_name:QName> "=" <value:Expression> => WhereNode { <> };
+
+InsertQuery: InsertQueryNode =
+    "insert" <data_expr:Expression> "into" <table_name:ProperQName>
+    => InsertQueryNode { <> };
+
+// --- MISCELLANEOUS ---
 
 TypedQName: TypedQNameNode = <ql_type:TypeName> <name:QName> => TypedQNameNode { <> };
 

@@ -48,9 +48,11 @@ pub(super) struct RuntimeFunctions<'ctxt> {
 
     pub(super) init_dbs: RuntimeFunction<'ctxt>,
     pub(super) close_dbs: RuntimeFunction<'ctxt>,
-    pub(super) query_plan_new: RuntimeFunction<'ctxt>,
-    pub(super) query_plan_set_where: RuntimeFunction<'ctxt>,
-    pub(super) query_plan_execute: RuntimeFunction<'ctxt>,
+    pub(super) select_query_plan_new: RuntimeFunction<'ctxt>,
+    pub(super) select_query_plan_set_where: RuntimeFunction<'ctxt>,
+    pub(super) select_query_plan_execute: RuntimeFunction<'ctxt>,
+    pub(super) insert_query_plan_new: RuntimeFunction<'ctxt>,
+    pub(super) insert_query_plan_execute: RuntimeFunction<'ctxt>,
 
     pub(super) print_rc: RuntimeFunction<'ctxt>,
 }
@@ -202,15 +204,15 @@ impl<'ctxt> RuntimeFunctions<'ctxt> {
             ], false),
         );
 
-        let query_plan_new = Self::add_runtime_function(
+        let select_query_plan_new = Self::add_runtime_function(
             module,
-            "__ql__QueryPlan_new",
+            "__ql__SelectQueryPlan_new",
             ptr_type.fn_type(&[ptr_type.into(), ptr_type.into()], false),
         );
 
-        let query_plan_set_where = Self::add_runtime_function(
+        let select_query_plan_set_where = Self::add_runtime_function(
             module,
-            "__ql__QueryPlan_set_where",
+            "__ql__SelectQueryPlan_set_where",
             void_type.fn_type(&[
                 ptr_type.into(),
                 ptr_type.into(),
@@ -219,15 +221,38 @@ impl<'ctxt> RuntimeFunctions<'ctxt> {
             ], false),
         );
 
-        let query_plan_execute = Self::add_runtime_function(
+        let select_query_plan_execute = Self::add_runtime_function(
             module,
-            "__ql__QueryPlan_execute",
+            "__ql__SelectQueryPlan_execute",
             ptr_type.fn_type(&[ptr_type.into(), ptr_type.into()], false),
+        );
+
+        let insert_query_plan_new = Self::add_runtime_function(
+            module,
+            "__ql__InsertQueryPlan_new",
+            ptr_type.fn_type(&[
+                ptr_type.into(),
+                ptr_type.into(),
+                bool_type.into(),
+                ptr_type.into(),
+            ], false),
+        );
+
+        let insert_query_plan_execute = Self::add_runtime_function(
+            module,
+            "__ql__InsertQueryPlan_execute",
+            void_type.fn_type(&[ptr_type.into(), ptr_type.into()], false),
         );
 
         let type_info_type = context.opaque_struct_type("QLTypeInfo");
         type_info_type.set_body(
-            &[long_type.into(), ptr_type.into(), ptr_type.into()],
+            &[
+                long_type.into(),      // size
+                ptr_type.into(),       // elem_drop
+                int_type.into(),       // num_columns
+                ptr_type.into(),       // set_nth
+                ptr_type.into(),       // get_nth
+            ],
             false,
         );
 
@@ -286,9 +311,11 @@ impl<'ctxt> RuntimeFunctions<'ctxt> {
 
             init_dbs,
             close_dbs,
-            query_plan_new,
-            query_plan_set_where,
-            query_plan_execute,
+            select_query_plan_new,
+            select_query_plan_set_where,
+            select_query_plan_execute,
+            insert_query_plan_new,
+            insert_query_plan_execute,
 
             print_rc,
         }

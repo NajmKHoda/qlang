@@ -157,7 +157,10 @@ impl ExpressionNode {
                 code_gen.gen_method_call(object_val, method_name, args)
             }
             ExpressionNode::Query(query_node) => {
-                code_gen.gen_query(query_node)
+                match query_node {
+                    QueryNode::Select(select_query) => code_gen.gen_select_query(select_query),
+                    QueryNode::Insert(insert_query) => code_gen.gen_insert_query(insert_query),
+                }
             }
         }
     }
@@ -168,7 +171,14 @@ pub struct ColumnValueNode {
     pub value: Box<ExpressionNode>
 }
 
-pub struct QueryNode {
+// --- QUERIES ---
+
+pub enum QueryNode {
+    Select(SelectQueryNode),
+    Insert(InsertQueryNode),
+}
+
+pub struct SelectQueryNode {
     pub table_name: String,
     pub where_clause: Option<WhereNode>,
 }
@@ -176,4 +186,9 @@ pub struct QueryNode {
 pub struct WhereNode {
     pub column_name: String,
     pub value: Box<ExpressionNode>,
+}
+
+pub struct InsertQueryNode {
+    pub table_name: String,
+    pub data_expr: Box<ExpressionNode>,
 }

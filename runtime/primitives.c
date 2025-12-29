@@ -4,15 +4,11 @@
 #include "primitives.h"
 
 QLTypeInfo __ql__int_type_info = {
-    .size = sizeof(int),
-    .elem_drop = NULL,
-    .set_nth = NULL
+    .size = sizeof(int)
 };
 
 QLTypeInfo __ql__bool_type_info = {
-    .size = sizeof(bool),
-    .elem_drop = NULL,
-    .set_nth = NULL
+    .size = sizeof(bool)
 };
 
 void printi(int x) {

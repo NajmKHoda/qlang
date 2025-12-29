@@ -1,6 +1,6 @@
-use inkwell::{AddressSpace, values::{AnyValue, FunctionValue, PointerValue}};
+use inkwell::{AddressSpace, values::{AnyValue, BasicValueEnum, FunctionValue, PointerValue}};
 
-use crate::tokens::{DatasourceNode, QueryNode};
+use crate::tokens::{DatasourceNode, InsertQueryNode, SelectQueryNode};
 
 use super::{CodeGen, CodeGenError, QLValue, QLType};
 
@@ -69,7 +69,7 @@ impl<'ctxt> CodeGen<'ctxt> {
         Ok(())
     }
 
-    pub fn gen_query(&self, query: &QueryNode) -> Result<QLValue<'ctxt>, CodeGenError> {
+    pub fn gen_select_query(&self, query: &SelectQueryNode) -> Result<QLValue<'ctxt>, CodeGenError> {
         let table = self.get_table(&query.table_name)?;
 
         let db_global_ptr = *self.datasources.get(&table.datasource_name).unwrap();
@@ -79,7 +79,7 @@ impl<'ctxt> CodeGen<'ctxt> {
         let type_info_ptr = table.type_info.as_pointer_value();
         
         let query_plan = self.builder.build_call(
-            self.runtime_functions.query_plan_new.into(),
+            self.runtime_functions.select_query_plan_new.into(),
             &[table_name_str.into(), type_info_ptr.into()],
             "query_plan"
         )?.as_any_value_enum().into_pointer_value();
@@ -118,9 +118,9 @@ impl<'ctxt> CodeGen<'ctxt> {
                 _ => return Err(CodeGenError::UnexpectedTypeError),
             };
             
-            // Call __ql__QueryPlan_set_where
+            // Call __ql__SelectQueryPlan_set_where
             self.builder.build_call(
-                self.runtime_functions.query_plan_set_where.into(),
+                self.runtime_functions.select_query_plan_set_where.into(),
                 &[
                     query_plan.into(),
                     column_name_str.into(),
@@ -131,9 +131,9 @@ impl<'ctxt> CodeGen<'ctxt> {
             )?;
         }
         
-        // Call __ql__QueryPlan_execute to execute the query
+        // Call __ql__SelectQueryPlan_execute to execute the query
         let result_array = self.builder.build_call(
-            self.runtime_functions.query_plan_execute.into(),
+            self.runtime_functions.select_query_plan_execute.into(),
             &[db_ptr.into(), query_plan.into()],
             "query_result"
         )?.as_any_value_enum().into_pointer_value();
@@ -144,5 +144,51 @@ impl<'ctxt> CodeGen<'ctxt> {
             QLType::Table(query.table_name.clone()),
             false
         ))
+    }
+
+    pub fn gen_insert_query(&self, query: &InsertQueryNode) -> Result<QLValue<'ctxt>, CodeGenError> {
+        let table = self.get_table(&query.table_name)?;
+
+        let db_global_ptr = *self.datasources.get(&table.datasource_name).unwrap();
+        let db_ptr = self.builder.build_load(self.ptr_type(), db_global_ptr, "db_ptr")?.into_pointer_value();
+        
+        let table_name_str = table.name_str.as_pointer_value();
+        let type_info_ptr = table.type_info.as_pointer_value();
+        
+        // Evaluate the row expression
+        let insert_data = query.data_expr.gen_eval(self)?;
+        let (is_singular, llvm_insert_data): (bool, BasicValueEnum) = match &insert_data {
+            QLValue::TableRow(struct_val, data_table_name, _)
+                if data_table_name == &query.table_name => (true, (*struct_val).into()),
+            QLValue::Array(ptr_val, QLType::Table(data_table_name), _)
+                if data_table_name == &query.table_name => (false, (*ptr_val).into()),
+            _ => return Err(CodeGenError::UnexpectedTypeError),
+        };
+
+        let insert_data_ptr = self.builder.build_alloca(llvm_insert_data.get_type(), "insert_data")?;
+        self.builder.build_store(insert_data_ptr, llvm_insert_data)?;
+        
+        // Create the insert query plan
+        let query_plan_ptr = self.builder.build_call(
+            self.runtime_functions.insert_query_plan_new.into(),
+            &[
+                table_name_str.into(),
+                type_info_ptr.into(),
+                self.bool_type().const_int(is_singular as u64, false).into(),
+                insert_data_ptr.into(),
+            ],
+            "insert_query_plan"
+        )?.as_any_value_enum().into_pointer_value();
+
+        // Execute the insert query plan
+        self.builder.build_call(
+            self.runtime_functions.insert_query_plan_execute.into(),
+            &[db_ptr.into(), query_plan_ptr.into()],
+            "execute_insert"
+        )?;
+        
+        self.remove_if_temp(insert_data)?;
+
+        Ok(QLValue::Void)
     }
 }
