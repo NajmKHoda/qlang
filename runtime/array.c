@@ -73,12 +73,8 @@ void* __ql__QLArray_index(QLArray* array, unsigned int index) {
 
 void __ql__QLArray_append(QLArray* array, void* elem_ptr) {
     if (array->num_elems >= array->capacity) {
-        unsigned int new_capacity = array->capacity * 2;
-        void* new_elems = malloc(new_capacity * array->type_info->size);
-        memcpy(new_elems, array->elems, array->num_elems * array->type_info->size);
-        free(array->elems);
-        array->elems = new_elems;
-        array->capacity = new_capacity;
+        array->capacity *= 2;
+        array->elems = realloc(array->elems, array->capacity * array->type_info->size);
     }
     void* dest_ptr = __ql__QLArray_get_nth_elem(array, array->num_elems);
     memcpy(dest_ptr, elem_ptr, array->type_info->size);

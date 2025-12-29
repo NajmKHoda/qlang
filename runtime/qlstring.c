@@ -67,12 +67,8 @@ QLString* inputs() {
     size_t i;
     for (i = 0; c != EOF && c != '\n'; i++) {
         if (i == capacity) {
-            // Reallocate
             capacity <<= 1;
-            char* new_buffer = malloc(capacity);
-            memcpy(new_buffer, buffer, i);
-            free(buffer);
-            buffer = new_buffer;
+            buffer = realloc(buffer, capacity);
         }
         buffer[i] = c;
         c = getchar();
