@@ -8,7 +8,7 @@ use lalrpop_util::lalrpop_mod;
 mod tokens;
 mod codegen;
 
-lalrpop_mod!(pub simple);
+lalrpop_mod!(pub grammar);
 
 fn main() -> Result<(), IOError> {
     let args: Vec<String> = args().collect();
@@ -20,7 +20,7 @@ fn main() -> Result<(), IOError> {
     let source_filepath = &args[1];
     let obj_filepath = &args[2];
 
-    let parser = simple::ProgramParser::new();
+    let parser = grammar::ProgramParser::new();
     let mut source = String::new();
     let mut file = File::open(source_filepath)?;
     file.read_to_string(&mut source)?;
