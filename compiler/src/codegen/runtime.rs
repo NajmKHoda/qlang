@@ -48,18 +48,25 @@ pub(super) struct RuntimeFunctions<'ctxt> {
 
     pub(super) init_dbs: RuntimeFunction<'ctxt>,
     pub(super) close_dbs: RuntimeFunction<'ctxt>,
+    
+    pub(super) prepared_query_execute: RuntimeFunction<'ctxt>,
+    pub(super) prepared_query_bind_scalar_param: RuntimeFunction<'ctxt>,
+    pub(super) prepared_query_bind_row_param: RuntimeFunction<'ctxt>,
+    pub(super) prepared_query_add_ref: RuntimeFunction<'ctxt>,
+    pub(super) prepared_query_remove_ref: RuntimeFunction<'ctxt>,
+    
     pub(super) select_query_plan_new: RuntimeFunction<'ctxt>,
     pub(super) select_query_plan_set_where: RuntimeFunction<'ctxt>,
-    pub(super) select_query_plan_execute: RuntimeFunction<'ctxt>,
+    pub(super) select_query_plan_prepare: RuntimeFunction<'ctxt>,
     pub(super) insert_query_plan_new: RuntimeFunction<'ctxt>,
-    pub(super) insert_query_plan_execute: RuntimeFunction<'ctxt>,
+    pub(super) insert_query_plan_prepare: RuntimeFunction<'ctxt>,
     pub(super) delete_query_plan_new: RuntimeFunction<'ctxt>,
     pub(super) delete_query_plan_set_where: RuntimeFunction<'ctxt>,
-    pub(super) delete_query_plan_execute: RuntimeFunction<'ctxt>,
+    pub(super) delete_query_plan_prepare: RuntimeFunction<'ctxt>,
     pub(super) update_query_plan_new: RuntimeFunction<'ctxt>,
     pub(super) update_query_plan_add_assignment: RuntimeFunction<'ctxt>,
     pub(super) update_query_plan_set_where: RuntimeFunction<'ctxt>,
-    pub(super) update_query_plan_execute: RuntimeFunction<'ctxt>,
+    pub(super) update_query_plan_prepare: RuntimeFunction<'ctxt>,
 
     pub(super) print_rc: RuntimeFunction<'ctxt>,
 }
@@ -211,10 +218,54 @@ impl<'ctxt> RuntimeFunctions<'ctxt> {
             ], false),
         );
 
+        let prepared_query_execute = Self::add_runtime_function(
+            module,
+            "__ql__PreparedQuery_execute",
+            ptr_type.fn_type(&[ptr_type.into()], false),
+        );
+
+        let prepared_query_bind_scalar_param = Self::add_runtime_function(
+            module,
+            "__ql__PreparedQuery_bind_scalar_param",
+            void_type.fn_type(&[
+                ptr_type.into(),
+                int_type.into(),
+                int_type.into(),
+                ptr_type.into(),
+            ], false),
+        );
+
+        let prepared_query_bind_row_param = Self::add_runtime_function(
+            module,
+            "__ql__PreparedQuery_bind_row_param",
+            void_type.fn_type(&[
+                ptr_type.into(),
+                int_type.into(),
+                ptr_type.into(),
+                ptr_type.into(),
+            ], false),
+        );
+
+        let prepared_query_add_ref = Self::add_runtime_function(
+            module,
+            "__ql__PreparedQuery_add_ref",
+            void_type.fn_type(&[ptr_type.into()], false),
+        );
+
+        let prepared_query_remove_ref = Self::add_runtime_function(
+            module,
+            "__ql__PreparedQuery_remove_ref",
+            void_type.fn_type(&[ptr_type.into()], false),
+        );
+
         let select_query_plan_new = Self::add_runtime_function(
             module,
             "__ql__SelectQueryPlan_new",
-            ptr_type.fn_type(&[ptr_type.into(), ptr_type.into()], false),
+            ptr_type.fn_type(&[
+                ptr_type.into(),
+                ptr_type.into(),
+                int_type.into(),
+            ], false),
         );
 
         let select_query_plan_set_where = Self::add_runtime_function(
@@ -228,9 +279,9 @@ impl<'ctxt> RuntimeFunctions<'ctxt> {
             ], false),
         );
 
-        let select_query_plan_execute = Self::add_runtime_function(
+        let select_query_plan_prepare = Self::add_runtime_function(
             module,
-            "__ql__SelectQueryPlan_execute",
+            "__ql__SelectQueryPlan_prepare",
             ptr_type.fn_type(&[ptr_type.into(), ptr_type.into()], false),
         );
 
@@ -240,21 +291,22 @@ impl<'ctxt> RuntimeFunctions<'ctxt> {
             ptr_type.fn_type(&[
                 ptr_type.into(),
                 ptr_type.into(),
+                int_type.into(),
                 bool_type.into(),
                 ptr_type.into(),
             ], false),
         );
 
-        let insert_query_plan_execute = Self::add_runtime_function(
+        let insert_query_plan_prepare = Self::add_runtime_function(
             module,
-            "__ql__InsertQueryPlan_execute",
-            void_type.fn_type(&[ptr_type.into(), ptr_type.into()], false),
+            "__ql__InsertQueryPlan_prepare",
+            ptr_type.fn_type(&[ptr_type.into(), ptr_type.into()], false),
         );
 
         let delete_query_plan_new = Self::add_runtime_function(
             module,
             "__ql__DeleteQueryPlan_new",
-            ptr_type.fn_type(&[ptr_type.into()], false),
+            ptr_type.fn_type(&[ptr_type.into(), int_type.into()], false),
         );
 
         let delete_query_plan_set_where = Self::add_runtime_function(
@@ -268,16 +320,20 @@ impl<'ctxt> RuntimeFunctions<'ctxt> {
             ], false),
         );
 
-        let delete_query_plan_execute = Self::add_runtime_function(
+        let delete_query_plan_prepare = Self::add_runtime_function(
             module,
-            "__ql__DeleteQueryPlan_execute",
-            void_type.fn_type(&[ptr_type.into(), ptr_type.into()], false),
+            "__ql__DeleteQueryPlan_prepare",
+            ptr_type.fn_type(&[ptr_type.into(), ptr_type.into()], false),
         );
 
         let update_query_plan_new = Self::add_runtime_function(
             module,
             "__ql__UpdateQueryPlan_new",
-            ptr_type.fn_type(&[ptr_type.into(), ptr_type.into()], false),
+            ptr_type.fn_type(&[
+                ptr_type.into(),
+                ptr_type.into(),
+                int_type.into(),
+            ], false),
         );
 
         let update_query_plan_add_assignment = Self::add_runtime_function(
@@ -302,10 +358,10 @@ impl<'ctxt> RuntimeFunctions<'ctxt> {
             ], false),
         );
 
-        let update_query_plan_execute = Self::add_runtime_function(
+        let update_query_plan_prepare = Self::add_runtime_function(
             module,
-            "__ql__UpdateQueryPlan_execute",
-            void_type.fn_type(&[ptr_type.into(), ptr_type.into()], false),
+            "__ql__UpdateQueryPlan_prepare",
+            ptr_type.fn_type(&[ptr_type.into(), ptr_type.into()], false),
         );
 
         let type_info_type = context.opaque_struct_type("QLTypeInfo");
@@ -375,18 +431,25 @@ impl<'ctxt> RuntimeFunctions<'ctxt> {
 
             init_dbs,
             close_dbs,
+            
+            prepared_query_execute,
+            prepared_query_bind_scalar_param,
+            prepared_query_bind_row_param,
+            prepared_query_add_ref,
+            prepared_query_remove_ref,
+            
             select_query_plan_new,
             select_query_plan_set_where,
-            select_query_plan_execute,
+            select_query_plan_prepare,
             insert_query_plan_new,
-            insert_query_plan_execute,
+            insert_query_plan_prepare,
             delete_query_plan_new,
             delete_query_plan_set_where,
-            delete_query_plan_execute,
+            delete_query_plan_prepare,
             update_query_plan_new,
             update_query_plan_add_assignment,
             update_query_plan_set_where,
-            update_query_plan_execute,
+            update_query_plan_prepare,
 
             print_rc,
         }

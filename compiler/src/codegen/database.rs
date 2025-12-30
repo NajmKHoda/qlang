@@ -85,7 +85,11 @@ impl<'ctxt> CodeGen<'ctxt> {
         
         let query_plan = self.builder.build_call(
             self.runtime_functions.select_query_plan_new.into(),
-            &[table_name_str.into(), type_info_ptr.into()],
+            &[
+                table_name_str.into(),
+                type_info_ptr.into(),
+                self.context.i32_type().const_zero().into(),
+            ],
             "query_plan"
         )?.as_any_value_enum().into_pointer_value();
         
@@ -101,8 +105,8 @@ impl<'ctxt> CodeGen<'ctxt> {
             
             // Determine the QueryDataType enum value
             let query_data_type = match column_type {
-                QLType::Integer => 0, // QUERY_INTEGER
-                QLType::String => 1,  // QUERY_STRING
+                QLType::Integer => 0, // QUERY_DATA_INTEGER
+                QLType::String => 1,  // QUERY_DATA_STRING
                 _ => return Err(CodeGenError::UnexpectedTypeError),
             };
             let query_data_type_val = self.context.i32_type().const_int(query_data_type, false);
@@ -135,12 +139,26 @@ impl<'ctxt> CodeGen<'ctxt> {
             )?;
         }
         
-        // Call __ql__SelectQueryPlan_execute to execute the query
-        let result_array = self.builder.build_call(
-            self.runtime_functions.select_query_plan_execute.into(),
+        // Prepare the query
+        let prepared_query = self.builder.build_call(
+            self.runtime_functions.select_query_plan_prepare.into(),
             &[db_ptr.into(), query_plan.into()],
+            "prepared_query"
+        )?.as_any_value_enum().into_pointer_value();
+        
+        // Execute the prepared query
+        let result_array = self.builder.build_call(
+            self.runtime_functions.prepared_query_execute.into(),
+            &[prepared_query.into()],
             "query_result"
         )?.as_any_value_enum().into_pointer_value();
+        
+        // Free the prepared query
+        self.builder.build_call(
+            self.runtime_functions.prepared_query_remove_ref.into(),
+            &[prepared_query.into()],
+            "free_prepared_query"
+        )?;
         
         // Return the result as a QLValue::Array
         Ok(QLValue::Array(
@@ -161,11 +179,10 @@ impl<'ctxt> CodeGen<'ctxt> {
         let table_name_str = table.name_str.as_pointer_value();
         let type_info_ptr = table.type_info.as_pointer_value();
         
-        let (is_singular, llvm_insert_data): (bool, BasicValueEnum) = match &insert_data {
+        // Only support single row inserts now
+        let llvm_insert_data: BasicValueEnum = match &insert_data {
             QLValue::TableRow(struct_val, data_table_name, _)
-                if data_table_name == &query.table_name => (true, (*struct_val).into()),
-            QLValue::Array(ptr_val, QLType::Table(data_table_name), _)
-                if data_table_name == &query.table_name => (false, (*ptr_val).into()),
+                if data_table_name == &query.table_name => (*struct_val).into(),
             _ => return Err(CodeGenError::UnexpectedTypeError),
         };
 
@@ -178,17 +195,32 @@ impl<'ctxt> CodeGen<'ctxt> {
             &[
                 table_name_str.into(),
                 type_info_ptr.into(),
-                self.bool_type().const_int(is_singular as u64, false).into(),
+                self.context.i32_type().const_zero().into(),
+                self.bool_type().const_int(false as u64, false).into(),
                 insert_data_ptr.into(),
             ],
             "insert_query_plan"
         )?.as_any_value_enum().into_pointer_value();
 
-        // Execute the insert query plan
-        self.builder.build_call(
-            self.runtime_functions.insert_query_plan_execute.into(),
+        // Prepare the query
+        let prepared_query = self.builder.build_call(
+            self.runtime_functions.insert_query_plan_prepare.into(),
             &[db_ptr.into(), query_plan_ptr.into()],
+            "prepared_query"
+        )?.as_any_value_enum().into_pointer_value();
+
+        // Execute the prepared query
+        self.builder.build_call(
+            self.runtime_functions.prepared_query_execute.into(),
+            &[prepared_query.into()],
             "execute_insert"
+        )?;
+        
+        // Free the prepared query
+        self.builder.build_call(
+            self.runtime_functions.prepared_query_remove_ref.into(),
+            &[prepared_query.into()],
+            "free_prepared_query"
         )?;
         
         self.remove_if_temp(insert_data)?;
@@ -211,7 +243,10 @@ impl<'ctxt> CodeGen<'ctxt> {
         
         let query_plan = self.builder.build_call(
             self.runtime_functions.delete_query_plan_new.into(),
-            &[table_name_str.into()],
+            &[
+                table_name_str.into(),
+                self.context.i32_type().const_zero().into(),
+            ],
             "delete_query_plan"
         )?.as_any_value_enum().into_pointer_value();
         
@@ -261,11 +296,25 @@ impl<'ctxt> CodeGen<'ctxt> {
             )?;
         }
         
-        // Execute the delete query plan
-        self.builder.build_call(
-            self.runtime_functions.delete_query_plan_execute.into(),
+        // Prepare the query
+        let prepared_query = self.builder.build_call(
+            self.runtime_functions.delete_query_plan_prepare.into(),
             &[db_ptr.into(), query_plan.into()],
+            "prepared_query"
+        )?.as_any_value_enum().into_pointer_value();
+        
+        // Execute the prepared query
+        self.builder.build_call(
+            self.runtime_functions.prepared_query_execute.into(),
+            &[prepared_query.into()],
             "execute_delete"
+        )?;
+        
+        // Free the prepared query
+        self.builder.build_call(
+            self.runtime_functions.prepared_query_remove_ref.into(),
+            &[prepared_query.into()],
+            "free_prepared_query"
         )?;
 
         Ok(QLValue::Void)
@@ -291,7 +340,11 @@ impl<'ctxt> CodeGen<'ctxt> {
         
         let query_plan = self.builder.build_call(
             self.runtime_functions.update_query_plan_new.into(),
-            &[table_name_str.into(), type_info_ptr.into()],
+            &[
+                table_name_str.into(),
+                type_info_ptr.into(),
+                self.context.i32_type().const_zero().into(),
+            ],
             "update_query_plan"
         )?.as_any_value_enum().into_pointer_value();
         
@@ -389,11 +442,25 @@ impl<'ctxt> CodeGen<'ctxt> {
             )?;
         }
         
-        // Execute the update query plan
-        self.builder.build_call(
-            self.runtime_functions.update_query_plan_execute.into(),
+        // Prepare the query
+        let prepared_query = self.builder.build_call(
+            self.runtime_functions.update_query_plan_prepare.into(),
             &[db_ptr.into(), query_plan.into()],
+            "prepared_query"
+        )?.as_any_value_enum().into_pointer_value();
+        
+        // Execute the prepared query
+        self.builder.build_call(
+            self.runtime_functions.prepared_query_execute.into(),
+            &[prepared_query.into()],
             "execute_update"
+        )?;
+        
+        // Free the prepared query
+        self.builder.build_call(
+            self.runtime_functions.prepared_query_remove_ref.into(),
+            &[prepared_query.into()],
+            "free_prepared_query"
         )?;
 
         Ok(QLValue::Void)

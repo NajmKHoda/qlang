@@ -23,7 +23,11 @@ function main() -> int {
     name <- inputs();
   }
 
-  query { insert people into Person };
+  int pi <- 0;
+  while pi < people.length() {
+    query { insert people[pi] into Person };
+    pi <- pi + 1;
+  }
 
   prints("Remove a person by name (or blank):");
   name <- inputs();
