@@ -50,9 +50,11 @@ pub(super) struct RuntimeFunctions<'ctxt> {
     pub(super) close_dbs: RuntimeFunction<'ctxt>,
     
     pub(super) prepared_query_execute: RuntimeFunction<'ctxt>,
+    /*
     pub(super) prepared_query_bind_scalar_param: RuntimeFunction<'ctxt>,
     pub(super) prepared_query_bind_row_param: RuntimeFunction<'ctxt>,
     pub(super) prepared_query_add_ref: RuntimeFunction<'ctxt>,
+    */
     pub(super) prepared_query_remove_ref: RuntimeFunction<'ctxt>,
     
     pub(super) select_query_plan_new: RuntimeFunction<'ctxt>,
@@ -224,6 +226,7 @@ impl<'ctxt> RuntimeFunctions<'ctxt> {
             ptr_type.fn_type(&[ptr_type.into()], false),
         );
 
+        /*
         let prepared_query_bind_scalar_param = Self::add_runtime_function(
             module,
             "__ql__PreparedQuery_bind_scalar_param",
@@ -251,6 +254,7 @@ impl<'ctxt> RuntimeFunctions<'ctxt> {
             "__ql__PreparedQuery_add_ref",
             void_type.fn_type(&[ptr_type.into()], false),
         );
+        */
 
         let prepared_query_remove_ref = Self::add_runtime_function(
             module,
@@ -433,9 +437,11 @@ impl<'ctxt> RuntimeFunctions<'ctxt> {
             close_dbs,
             
             prepared_query_execute,
+            /*
             prepared_query_bind_scalar_param,
             prepared_query_bind_row_param,
             prepared_query_add_ref,
+            */
             prepared_query_remove_ref,
             
             select_query_plan_new,

@@ -1,8 +1,8 @@
 CC=clang
 DEBUG=true
 RUNTIME_OBJ=./out/runtime.o
-RUNTIME_SRC=./runtime/*.c
-RUNTIME_HEADERS=./runtime/*.h
+RUNTIME_SRC=$(shell find ./runtime -name '*.c')
+RUNTIME_HEADERS=$(shell find ./runtime -name '*.h')
 COMPILER_MANIFEST=./compiler/Cargo.toml
 PROGRAM_SRC=./main.ql
 PROGRAM_OBJ=./out/main
