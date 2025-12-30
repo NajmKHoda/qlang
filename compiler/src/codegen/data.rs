@@ -1,4 +1,4 @@
-use inkwell::values::{AnyValue, BasicValueEnum, IntValue, PointerValue, StructValue};
+use inkwell::values::{BasicValueEnum, IntValue, PointerValue, StructValue};
 
 use crate::{codegen::QLScope, tokens::ExpressionNode};
 
@@ -171,17 +171,6 @@ impl<'ctxt> CodeGen<'ctxt> {
 
     pub fn const_bool(&self, value: bool) -> QLValue<'ctxt> {
         QLValue::Bool(self.bool_type().const_int(value as u64, false))
-    }
-
-    pub fn const_str(&self, value: &str) -> Result<QLValue<'ctxt>, CodeGenError> {
-        let raw_str = self.builder.build_global_string_ptr(value, "global_str")?.as_pointer_value();
-        let length = self.context.i32_type().const_int(value.len() as u64, false);
-        let str_ptr = self.builder.build_call(
-            self.runtime_functions.new_string.into(),
-            &[raw_str.into(), length.into(), self.bool_type().const_int(1, false).into()],
-            "string_alloc"
-        )?.as_any_value_enum().into_pointer_value();
-        Ok(QLValue::String(str_ptr, false))
     }
 
     pub fn gen_lone_expression(&mut self, expr: &Box<ExpressionNode>) -> Result<(), CodeGenError> {

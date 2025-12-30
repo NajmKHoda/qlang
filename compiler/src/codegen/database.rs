@@ -1,6 +1,6 @@
 use inkwell::{AddressSpace, values::{AnyValue, BasicValueEnum, FunctionValue, PointerValue}};
 
-use crate::tokens::{DatasourceNode, DeleteQueryNode, InsertQueryNode, SelectQueryNode, UpdateQueryNode};
+use crate::tokens::{DatasourceNode, DeleteQueryNode, InsertQueryNode, SelectQueryNode, UpdateAssignmentNode, UpdateQueryNode};
 
 use super::{CodeGen, CodeGenError, QLValue, QLType};
 
@@ -69,7 +69,12 @@ impl<'ctxt> CodeGen<'ctxt> {
         Ok(())
     }
 
-    pub fn gen_select_query(&self, query: &SelectQueryNode) -> Result<QLValue<'ctxt>, CodeGenError> {
+    pub fn gen_select_query(&mut self, query: &SelectQueryNode) -> Result<QLValue<'ctxt>, CodeGenError> {
+        let where_value = match query.where_clause {
+            Some(ref where_clause) => where_clause.value.gen_eval(self)?,
+            None => QLValue::Void,
+        };
+
         let table = self.get_table(&query.table_name)?;
 
         let db_global_ptr = *self.datasources.get(&table.datasource_name).unwrap();
@@ -90,7 +95,6 @@ impl<'ctxt> CodeGen<'ctxt> {
             let column_name_str = table.column_name_strs[column_index as usize].as_pointer_value();
             
             // Evaluate the where clause value
-            let where_value = where_clause.value.gen_eval(self)?;
             if where_value.get_type() != *column_type {
                 return Err(CodeGenError::UnexpectedTypeError);
             }
@@ -146,7 +150,9 @@ impl<'ctxt> CodeGen<'ctxt> {
         ))
     }
 
-    pub fn gen_insert_query(&self, query: &InsertQueryNode) -> Result<QLValue<'ctxt>, CodeGenError> {
+    pub fn gen_insert_query(&mut self, query: &InsertQueryNode) -> Result<QLValue<'ctxt>, CodeGenError> {
+        let insert_data = query.data_expr.gen_eval(self)?;
+
         let table = self.get_table(&query.table_name)?;
 
         let db_global_ptr = *self.datasources.get(&table.datasource_name).unwrap();
@@ -155,8 +161,6 @@ impl<'ctxt> CodeGen<'ctxt> {
         let table_name_str = table.name_str.as_pointer_value();
         let type_info_ptr = table.type_info.as_pointer_value();
         
-        // Evaluate the row expression
-        let insert_data = query.data_expr.gen_eval(self)?;
         let (is_singular, llvm_insert_data): (bool, BasicValueEnum) = match &insert_data {
             QLValue::TableRow(struct_val, data_table_name, _)
                 if data_table_name == &query.table_name => (true, (*struct_val).into()),
@@ -192,7 +196,12 @@ impl<'ctxt> CodeGen<'ctxt> {
         Ok(QLValue::Void)
     }
 
-    pub fn gen_delete_query(&self, query: &DeleteQueryNode) -> Result<QLValue<'ctxt>, CodeGenError> {
+    pub fn gen_delete_query(&mut self, query: &DeleteQueryNode) -> Result<QLValue<'ctxt>, CodeGenError> {
+        let where_value = match query.where_clause {
+            Some(ref where_clause) => where_clause.value.gen_eval(self)?,
+            None => QLValue::Void,
+        };
+
         let table = self.get_table(&query.table_name)?;
 
         let db_global_ptr = *self.datasources.get(&table.datasource_name).unwrap();
@@ -212,7 +221,6 @@ impl<'ctxt> CodeGen<'ctxt> {
             let column_name_str = table.column_name_strs[column_index as usize].as_pointer_value();
             
             // Evaluate the where clause value
-            let where_value = where_clause.value.gen_eval(self)?;
             if where_value.get_type() != *column_type {
                 return Err(CodeGenError::UnexpectedTypeError);
             }
@@ -263,7 +271,16 @@ impl<'ctxt> CodeGen<'ctxt> {
         Ok(QLValue::Void)
     }
 
-    pub fn gen_update_query(&self, query: &UpdateQueryNode) -> Result<QLValue<'ctxt>, CodeGenError> {
+    pub fn gen_update_query(&mut self, query: &UpdateQueryNode) -> Result<QLValue<'ctxt>, CodeGenError> {
+        let assignments = query.assignments.iter()
+            .map(|assignment| assignment.value_expr.gen_eval(self)
+                .map(|val| (assignment, val)))
+            .collect::<Result<Vec<(&UpdateAssignmentNode, QLValue<'ctxt>)>, CodeGenError>>()?;
+        let where_value = match query.where_clause {
+            Some(ref where_clause) => where_clause.value.gen_eval(self)?,
+            None => QLValue::Void,
+        };
+
         let table = self.get_table(&query.table_name)?;
 
         let db_global_ptr = *self.datasources.get(&table.datasource_name).unwrap();
@@ -279,13 +296,12 @@ impl<'ctxt> CodeGen<'ctxt> {
         )?.as_any_value_enum().into_pointer_value();
         
         // Add all assignments
-        for assignment in &query.assignments {
+        for (assignment, assignment_value) in assignments {
             let column_index = table.get_column_index(&assignment.column_name)?;
             let column_type = &table.fields[column_index as usize].ql_type;
             let column_name_str = table.column_name_strs[column_index as usize].as_pointer_value();
             
             // Evaluate the assignment value
-            let assignment_value = assignment.value_expr.gen_eval(self)?;
             if assignment_value.get_type() != *column_type {
                 return Err(CodeGenError::UnexpectedTypeError);
             }
@@ -333,7 +349,6 @@ impl<'ctxt> CodeGen<'ctxt> {
             let column_name_str = table.column_name_strs[column_index as usize].as_pointer_value();
             
             // Evaluate the where clause value
-            let where_value = where_clause.value.gen_eval(self)?;
             if where_value.get_type() != *column_type {
                 return Err(CodeGenError::UnexpectedTypeError);
             }

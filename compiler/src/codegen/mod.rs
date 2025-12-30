@@ -6,13 +6,14 @@ use inkwell::builder::Builder;
 use inkwell::targets::{FileType, Target, TargetMachine};
 use inkwell::types::{BasicTypeEnum, IntType, PointerType, VoidType};
 use inkwell::basic_block::BasicBlock;
-use inkwell::values::{AnyValue, PointerValue};
+use inkwell::values::{AnyValue, GlobalValue, PointerValue};
 
 use crate::tokens::{ProgramNode, StatementNode};
 
 mod control_flow;
 mod operations;
 mod data;
+mod string;
 mod error;
 mod function;
 mod variable;
@@ -39,6 +40,7 @@ pub struct CodeGen<'ctxt> {
     datasources: HashMap<String, PointerValue<'ctxt>>,
     runtime_functions: RuntimeFunctions<'ctxt>,
     loops: Vec<QLLoop<'ctxt>>,
+    strings: HashMap<String, GlobalValue<'ctxt>>,
 
     cur_fn_name: Option<String>,
     context: &'ctxt Context,
@@ -92,6 +94,7 @@ impl<'ctxt> CodeGen<'ctxt> {
         self.builder.position_at_end(main_entry_block);
 
         let db_ptr_arr = self.init_databases(&program.datasources, main_fn)?;
+        self.gen_const_strs()?;
 
         let call_site = self.builder.build_call(
             user_main_llvm_fn,
@@ -99,6 +102,7 @@ impl<'ctxt> CodeGen<'ctxt> {
             "call_user_main"
         )?.as_any_value_enum().into_int_value();
 
+        self.drop_const_strs()?;
         self.close_databases(db_ptr_arr)?;
 
         self.builder.build_return(Some(&call_site))?;
@@ -174,6 +178,7 @@ pub fn gen_code(program: &ProgramNode) -> Result<(), CodeGenError> {
         datasources: HashMap::new(),
         runtime_functions: RuntimeFunctions::new(&context, &module),
         loops: Vec::new(),
+        strings: HashMap::new(),
         cur_fn_name: None,
         context: &context,
         builder,

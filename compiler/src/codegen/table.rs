@@ -340,11 +340,15 @@ impl<'ctxt> CodeGen<'ctxt> {
         Ok(())
     }
 
-    pub fn gen_table_row(&self, table_name: &str, columns: &[ColumnValueNode]) -> Result<QLValue<'ctxt>, CodeGenError> {
+    pub fn gen_table_row(&mut self, table_name: &str, columns: &[ColumnValueNode]) -> Result<QLValue<'ctxt>, CodeGenError> {
+        let column_values = columns.iter()
+            .map(|col| col.value.gen_eval(self))
+            .collect::<Result<Vec<QLValue>, CodeGenError>>()?;
+
         let table = self.get_table(table_name)?;
         let row_ptr = self.builder.build_alloca(table.struct_type, &format!("{}.row.store", table_name))?;
         let mut remaining_columns: HashSet<_> = (0..table.fields.len() as u32).collect();
-        for column in columns {
+        for (column, column_value) in columns.iter().zip(column_values) {
             let column_index = table.get_column_index(&column.name)?;
             if !remaining_columns.contains(&column_index) {
                 return Err(CodeGenError::DuplicateColumnAssignmentError(column.name.clone(), table_name.to_string()));
@@ -357,7 +361,6 @@ impl<'ctxt> CodeGen<'ctxt> {
                 &format!("{}.{}", table_name, column.name)
             )?;
 
-            let column_value = column.value.gen_eval(&self)?;
             if column_value.get_type() != table.fields[column_index as usize].ql_type {
                 return Err(CodeGenError::UnexpectedTypeError);
             }

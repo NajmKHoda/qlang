@@ -104,7 +104,7 @@ pub enum ExpressionNode {
 }
 
 impl ExpressionNode {
-    pub fn gen_eval<'a>(&self, code_gen: &CodeGen<'a>) -> Result<QLValue<'a>, CodeGenError> {
+    pub fn gen_eval<'a>(&self, code_gen: &mut CodeGen<'a>) -> Result<QLValue<'a>, CodeGenError> {
         match self {
             ExpressionNode::IntegerLiteral(x) => Ok(code_gen.const_int(*x)),
             ExpressionNode::BoolLiteral(x) => Ok(code_gen.const_bool(*x)),
