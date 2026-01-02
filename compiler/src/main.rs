@@ -6,7 +6,8 @@ use std::process::Command;
 use lalrpop_util::lalrpop_mod;
 
 mod tokens;
-mod codegen;
+mod semantics;
+// mod codegen;
 
 lalrpop_mod!(pub grammar);
 

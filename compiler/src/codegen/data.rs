@@ -4,15 +4,6 @@ use crate::{codegen::QLScope, tokens::ExpressionNode};
 
 use super::{CodeGen, CodeGenError};
 
-#[derive(Clone, PartialEq, Debug)]
-pub enum QLType {
-    Integer,
-    Bool,
-    String,
-    Array(Box<QLType>),
-    Table(String),
-    Void
-}
 
 impl QLType {
     pub(super) fn to_value<'a>(&self, value: BasicValueEnum<'a>, is_owned: bool) -> QLValue<'a> {
@@ -23,15 +14,6 @@ impl QLType {
             QLType::Array(array_type) => QLValue::Array(value.into_pointer_value(), *array_type.clone(), is_owned),
             QLType::Table(table_name) => QLValue::TableRow(value.into_struct_value(), table_name.clone(), is_owned),
             QLType::Void => panic!("Mismatch between void type and basic value"),
-        }
-    }
-
-    pub fn is_primitive(&self) -> bool {
-        match self {
-            QLType::Integer => true,
-            QLType::Bool => true,
-            QLType::Void => true,
-            _ => false
         }
     }
 }
