@@ -9,14 +9,12 @@ pub Program: ProgramNode =
     <functions:Function*> => ProgramNode { <> };
 
 Datasource: DatasourceNode =
-    <readonly_key:"readonly"?>
+    <is_readonly:Present<"readonly">>
     "datasource" <name:QName> ";"
-    => DatasourceNode {
-        name,
-        is_readonly: readonly_key.is_some(),
-    };
+    => DatasourceNode { <> };
 
 Table: TableNode =
+    <is_readonly:Present<"readonly">>
     "table" <name:ProperQName> "from" <datasource_name:QName>
     "{" <columns:Comma<TypedQName>> "}" => TableNode { <> };
 
@@ -140,6 +138,8 @@ QLString: String = <s:r#""[^"]*""#> => s[1..s.len()-1].to_string();
 
 ProperQName: String = r"_*[A-Z][a-zA-Z0-9]*" => String::from(<>);
 QName: String = r"_*[a-z][a-zA-Z0-9_]*" => String::from(<>);
+
+Present<T>: bool = <t:T?> => t.is_some();
 
 Comma<T>: Vec<T> = NonEmptyComma<T>? => match <> {
     Some(xs) => xs,

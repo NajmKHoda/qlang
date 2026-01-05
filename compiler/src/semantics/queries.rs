@@ -8,6 +8,7 @@ pub struct SemanticDatasource {
 
 pub struct SemanticTable {
     pub name: String,
+    pub is_readonly: bool,
     pub associated_struct: Rc<SemanticStruct>,
     pub datasource: Rc<SemanticDatasource>,
 }
@@ -49,7 +50,13 @@ impl SemanticGen {
         Ok(())
     }
 
-    pub(super) fn define_table(&mut self, name: &str, fields: &[TypedQNameNode], datasource_name: &str) -> Result<(), SemanticError> {
+    pub(super) fn define_table(
+        &mut self,
+        name: &str,
+        fields: &[TypedQNameNode],
+        is_readonly: bool,
+        datasource_name: &str
+    ) -> Result<(), SemanticError> {
         if self.tables.contains_key(name) {
             return Err(SemanticError::DuplicateTableDefinition { name: name.to_string() });
         }
@@ -60,6 +67,13 @@ impl SemanticGen {
                 return Err(SemanticError::UndefinedDatasource { name: datasource_name.to_string() });
             }
         };
+
+        if !is_readonly && datasource.is_readonly {
+            return Err(SemanticError::DatasourceReadonly {
+                datasource_name: datasource_name.to_string(),
+                table_name: name.to_string(),
+            });
+        }
 
         let mut struct_fields = HashMap::new();
         for field in fields {
@@ -89,6 +103,7 @@ impl SemanticGen {
             name: name.to_string(),
             associated_struct,
             datasource,
+            is_readonly,
         });
         self.tables.insert(name.to_string(), table);
 
@@ -118,6 +133,13 @@ impl SemanticGen {
 
     pub(super) fn eval_insert_query(&self, query: &InsertQueryNode) -> Result<SemanticExpression, SemanticError> {
         if let Some(table) = self.tables.get(&query.table_name) {
+            if table.is_readonly {
+                return Err(SemanticError::ReadonlyTableMutation {
+                    table_name: table.name.clone(),
+                    operation: "INSERT",
+                });
+            }
+
             let sem_value = self.eval_expr(&query.data_expr)?;
             let expected_type = SemanticType::new(SemanticTypeKind::NamedStruct(table.associated_struct.clone()));
             let compatible = sem_value.sem_type.try_downcast(&expected_type);
@@ -144,6 +166,13 @@ impl SemanticGen {
 
     pub(super) fn eval_update_query(&self, query: &UpdateQueryNode) -> Result<SemanticExpression, SemanticError> {
         if let Some(table) = self.tables.get(&query.table_name) {
+            if table.is_readonly {
+                return Err(SemanticError::ReadonlyTableMutation {
+                    table_name: table.name.clone(),
+                    operation: "UPDATE",
+                });
+            }
+
             let assignments = query.assignments.iter().map(|UpdateAssignmentNode { column_name, value_expr }| {
                 let sem_expr = self.eval_expr(value_expr)?;
                 let column_type = table.associated_struct.fields.get(column_name);
@@ -190,6 +219,13 @@ impl SemanticGen {
 
     pub(super) fn eval_delete_query(&self, query: &DeleteQueryNode) -> Result<SemanticExpression, SemanticError> {
         if let Some(table) = self.tables.get(&query.table_name) {
+            if table.is_readonly {
+                return Err(SemanticError::ReadonlyTableMutation {
+                    table_name: table.name.clone(),
+                    operation: "DELETE",
+                });
+            }
+
             let where_clause = query.where_clause.as_ref().map(|where_node| {
                 self.eval_where_clause(where_node, table)
             }).transpose()?;

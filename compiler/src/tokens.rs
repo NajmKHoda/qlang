@@ -13,6 +13,7 @@ pub struct TableNode {
     pub name: String,
     pub datasource_name: String,
     pub columns: Vec<TypedQNameNode>,
+    pub is_readonly: bool,
 }
 
 pub struct FunctionNode {

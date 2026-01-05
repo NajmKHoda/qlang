@@ -156,7 +156,7 @@ impl SemanticGen {
         }
 
         for table in &program.tables {
-            self.define_table(&table.name, &table.columns, &table.datasource_name)?;
+            self.define_table(&table.name, &table.columns, table.is_readonly, &table.datasource_name)?;
         }
 
         for function in &program.functions {

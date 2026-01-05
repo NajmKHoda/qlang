@@ -15,6 +15,10 @@ pub enum SemanticError {
         table_name: String,
         column_name: String,
     },
+    DatasourceReadonly {
+        datasource_name: String,
+        table_name: String,
+    },
     IncompatibleColumnValue {
         table_name: String,
         column_name: String,
@@ -102,6 +106,11 @@ pub enum SemanticError {
         expected: SemanticType,
         found: SemanticType
     },
+
+    ReadonlyTableMutation {
+        table_name: String,
+        operation: &'static str,
+    },
     IncompatibleInsertData {
         table_name: String,
         found_type: SemanticType,
@@ -142,6 +151,11 @@ impl Display for SemanticError {
             }
             SemanticError::UndefinedColumn { table_name, column_name } => {
                 write!(f, "Table {} has no column named {}", table_name, column_name)
+            }
+            SemanticError::DatasourceReadonly { datasource_name, table_name } => {
+                write!(f,
+                    "Table {} must be declared read-only, as it is from a read-only datasource {}",
+                    table_name, datasource_name)
             }
             SemanticError::IncompatibleColumnValue { table_name, column_name, expected, found } => {
                 write!(f, "Value of type {} is incompatible with {} column {} of table {}", found, expected, column_name, table_name)
@@ -206,6 +220,9 @@ impl Display for SemanticError {
             }
             SemanticError::IncompatibleArgumentType { function_name, position, expected, found } => {
                 write!(f, "Cannot pass {} argument to {} argument {} of function {}", found, expected, position, function_name)
+            }
+            SemanticError::ReadonlyTableMutation { table_name, operation } => {
+                write!(f, "Cannot perform {} on read-only table {}", operation, table_name)
             }
             SemanticError::IncompatibleInsertData { table_name, found_type } => {
                 write!(f, "Expected {} row in INSERT, got {} instead", table_name, found_type)
