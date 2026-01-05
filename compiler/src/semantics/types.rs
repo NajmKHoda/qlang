@@ -189,7 +189,8 @@ impl SemanticGen {
                 } else {
                     Err(SemanticError::UndefinedStruct { name: struct_name.to_string() })
                 }
-            }
+            },
+            TypeNode::Void => Ok(SemanticType::new(SemanticTypeKind::Void)),
         }
     }
 }

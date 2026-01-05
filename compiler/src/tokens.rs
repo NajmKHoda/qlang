@@ -43,6 +43,7 @@ pub enum TypeNode {
     String,
     Array(Box<TypeNode>),
     Struct(String),
+    Void
 }
 
 pub struct ConditionalBranchNode {

@@ -5,7 +5,7 @@ use super::*;
 pub(super) struct SemanticFunction {
     pub(super) params: Vec<Rc<SemanticVariable>>,
     pub(super) return_type: SemanticType,
-    pub(super) body: Vec<SemanticStatement>,
+    pub(super) body: SemanticBlock,
 }
 
 impl SemanticGen {
@@ -22,6 +22,7 @@ impl SemanticGen {
             });
         }
 
+        self.cur_return_type = self.try_get_semantic_type(return_type)?;
         self.variables.push(HashMap::new());
         let mut params = Vec::new();
         for param_node in param_nodes {
@@ -32,19 +33,37 @@ impl SemanticGen {
             current_scope.insert(param_node.name.clone(), variable.clone());
             params.push(variable);
         }
+
+        if name == "main" && (!params.is_empty() || self.cur_return_type != SemanticTypeKind::Integer) {
+            return Err(SemanticError::InvalidMainSignature);
+        }
+
         self.variables.push(HashMap::new());
+        let mut body_block = self.eval_block(body)?;
+        self.variables.pop();
+        self.variables.pop();
 
-        let function = Rc::new(SemanticFunction {
+        if !body_block.terminates {
+            if self.cur_return_type == SemanticTypeKind::Void {
+                body_block.statements.push(SemanticStatement::Return(None));
+            } else if name == "main" {
+                let zero_expr = SemanticExpression {
+                    kind: SemanticExpressionKind::IntegerLiteral(0),
+                    sem_type: SemanticType::new(SemanticTypeKind::Integer),
+                };
+                body_block.statements.push(SemanticStatement::Return(Some(zero_expr)));
+            } else {
+                return Err(SemanticError::InexhaustiveReturnPaths {
+                    function_name: name.to_string(),
+                });
+            }
+        }
+
+        self.functions.insert(name.to_string(), Rc::new(SemanticFunction {
             params,
-            return_type: self.try_get_semantic_type(return_type)?,
-            body: body.iter()
-                .map(|stmt| self.eval_stmt(stmt))
-                .collect::<Result<Vec<SemanticStatement>, SemanticError>>()?,
-        });
-
-        self.variables.pop();
-        self.variables.pop();
-        self.functions.insert(name.to_string(), function);
+            return_type: self.cur_return_type.clone(),
+            body: body_block,
+        }));
         Ok(())
     }
 

@@ -1,5 +1,5 @@
 use std::{collections::HashMap, fmt::{Display, Formatter}};
-use super::SemanticType;
+use super::{SemanticType};
 
 pub enum SemanticError {
     UndefinedTable {
@@ -99,7 +99,24 @@ pub enum SemanticError {
     IncompatibleInsertData {
         table_name: String,
         found_type: SemanticType,
-    }
+    },
+
+    NonBoolCondition {
+        found_type: SemanticType,
+    },
+    MistypedReturnValue {
+        expected: SemanticType,
+        found: SemanticType,
+    },
+    InexhaustiveReturnPaths {
+        function_name: String,
+    },
+    InvalidMainSignature,
+    InvalidLoopLabel {
+        label: String,
+    },
+    BreakOutsideLoop,
+    ContinueOutsideLoop,
 }
 
 impl Display for SemanticError {
@@ -180,6 +197,27 @@ impl Display for SemanticError {
             }
             SemanticError::IncompatibleInsertData { table_name, found_type } => {
                 write!(f, "Expected {} row in INSERT, got {} instead", table_name, found_type)
+            }
+            SemanticError::NonBoolCondition { found_type } => {
+                write!(f, "Condition expression must be of boolean type, found {}", found_type)
+            }
+            SemanticError::MistypedReturnValue { expected, found } => {
+                write!(f, "Return value of type {} does not match expected type {}", found, expected)    
+            }
+            SemanticError::InexhaustiveReturnPaths { function_name } => {
+                write!(f, "Not all code paths in function {} return a value", function_name)
+            }
+            SemanticError::InvalidMainSignature => {
+                write!(f, "Function main must return an integer and accept no parameters")
+            }
+            SemanticError::InvalidLoopLabel { label } => {
+                write!(f, "No loop with label {} exists", label)
+            }
+            SemanticError::BreakOutsideLoop => {
+                write!(f, "break statement used outside of a loop")
+            }
+            SemanticError::ContinueOutsideLoop => {
+                write!(f, "continue statement used outside of a loop")
             }
         }
     }

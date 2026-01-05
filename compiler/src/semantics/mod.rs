@@ -3,6 +3,7 @@ mod ir;
 mod variables;
 mod queries;
 mod functions;
+mod control_flow;
 mod data;
 mod binops;
 mod errors;
@@ -13,6 +14,7 @@ use std::rc::Rc;
 use types::*;
 use variables::*;
 use functions::*;
+use control_flow::*;
 use ir::*;
 use queries::*;
 use errors::SemanticError;
@@ -30,6 +32,10 @@ struct SemanticGen {
     structs: HashMap<String, Rc<SemanticStruct>>,
     functions: HashMap<String, Rc<SemanticFunction>>,
     variables: Vec<HashMap<String, Rc<SemanticVariable>>>,
+    loops: Vec<(Option<String>, LoopId)>,
+
+    cur_return_type: SemanticType,
+    _next_loop_id: usize,
 }
 
 impl SemanticGen {
@@ -39,11 +45,40 @@ impl SemanticGen {
             structs: HashMap::new(),
             functions: HashMap::new(),
             variables: vec![],
+            loops: vec![],
+            cur_return_type: SemanticType::new(SemanticTypeKind::Void),
+            _next_loop_id: 0,
         }
     }
 
-    fn eval_stmt(&mut self, _: &StatementNode) -> Result<SemanticStatement, SemanticError> {
-        unimplemented!()
+    fn eval_stmt(&mut self, stmt: &StatementNode) -> Result<SemanticStatement, SemanticError> {
+        match stmt {
+            StatementNode::VariableDefinition(TypedQNameNode { name, type_node }, init_expr) => {
+                self.define_variable(name, type_node, init_expr)
+            },
+            StatementNode::Assignment(var_name, expr) => {
+                self.assign_variable(var_name, expr)
+            },
+            StatementNode::LoneExpression(expr) => {
+                let sem_expr = self.eval_expr(expr)?;
+                Ok(SemanticStatement::LoneExpression(sem_expr))
+            },
+            StatementNode::Conditional(branches, else_branch) => {
+                self.eval_conditional(branches, else_branch)
+            },
+            StatementNode::ConditionalLoop(condition, body, label) => {
+                self.eval_conditional_loop(condition, body, label)
+            },
+            StatementNode::Return(expr) => {
+                self.eval_return(expr)
+            },
+            StatementNode::Break(label) => {
+                self.eval_break(label)
+            },
+            StatementNode::Continue(label) => {
+                self.eval_continue(label)
+            },
+        }
     }
 
     fn eval_expr(&self, expr: &ExpressionNode) -> Result<SemanticExpression, SemanticError> {

@@ -1,5 +1,7 @@
 use std::{collections::HashMap, rc::Rc};
 
+use crate::semantics::control_flow::SemanticBlock;
+
 use super::*;
 
 pub enum SemanticStatement {
@@ -13,15 +15,22 @@ pub enum SemanticStatement {
     },
     LoneExpression(SemanticExpression),
     Conditional {
-        branches: Vec<(SemanticExpression, Vec<SemanticStatement>)>,
-        else_branch: Option<Vec<SemanticStatement>>,
+        branches: Vec<SemanticConditionalBranch>,
+        else_branch: Option<SemanticBlock>,
     },
     ConditionalLoop {
         condition: SemanticExpression,
-        body: Vec<SemanticStatement>,
-        label: Option<String>,
+        body: SemanticBlock,
+        id: LoopId,
     },
     Return(Option<SemanticExpression>),
+    Break(LoopId),
+    Continue(LoopId),
+}
+
+pub struct SemanticConditionalBranch {
+    pub condition: SemanticExpression,
+    pub body: SemanticBlock,
 }
 
 pub struct SemanticExpression {
