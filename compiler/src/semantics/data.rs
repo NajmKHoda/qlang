@@ -2,6 +2,12 @@ use std::collections::HashMap;
 
 use super::*;
 
+pub struct SemanticStruct {
+    pub name: String,
+    pub fields: HashMap<String, SemanticType>,
+    pub field_order: Vec<String>,
+}
+
 impl SemanticGen {
     pub fn eval_struct(&self, name: Option<&str>, column_values: &[ColumnValueNode]) -> Result<SemanticExpression, SemanticError> {
         let mut fields = HashMap::new();

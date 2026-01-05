@@ -3,7 +3,7 @@ use std::{cell::{Ref, RefCell, RefMut}, collections::HashMap, fmt::Display, rc::
 use super::*;
 
 #[derive(Clone)]
-pub(super) enum SemanticTypeKind {
+pub enum SemanticTypeKind {
     Any,
     Integer,
     Bool,
@@ -66,14 +66,14 @@ impl Display for SemanticTypeKind {
 }
 
 #[derive(Clone)]
-pub(super) struct SemanticType(Rc<RefCell<SemanticTypeKind>>);
+pub struct SemanticType(Rc<RefCell<SemanticTypeKind>>);
 
 impl SemanticType {
-    fn borrow(&self) -> Ref<SemanticTypeKind> {
+    fn borrow<'a>(&'a self) -> Ref<'a, SemanticTypeKind> {
         self.0.borrow()
     }
 
-    fn borrow_mut(&self) -> RefMut<SemanticTypeKind> {
+    fn borrow_mut<'a>(&'a self) -> RefMut<'a, SemanticTypeKind> {
         self.0.borrow_mut()
     }
 
@@ -90,40 +90,34 @@ impl SemanticType {
     }
 
     pub(super) fn is_concrete(&self) -> bool {
-        let borrowed = &*self.borrow();
-        match borrowed {
-            SemanticTypeKind::Any => false,
-            SemanticTypeKind::Array(elem_type) => elem_type.is_concrete(),
-            SemanticTypeKind::AnonymousStruct(_) => false,
-            _ => true
-        }
+        (*self.borrow()).is_concrete()
     }
 
     pub(super) fn try_downcast(&self, target: &SemanticType) -> bool {
-        let target_borrowed = target.borrow();
-        let mut sem_type_borrowed = self.borrow_mut();
-        match (&*target_borrowed, &mut *sem_type_borrowed) {
-            (other, any @ SemanticTypeKind::Any) => {
-                *any = other.clone();
+        let target_kind = target.kind();
+        let self_kind = self.kind();
+        match (target_kind, self_kind) {
+            (other, SemanticTypeKind::Any) => {
+                *(self.borrow_mut()) = other;
                 true
             },
             (SemanticTypeKind::Integer, SemanticTypeKind::Integer) => true,
             (SemanticTypeKind::Bool, SemanticTypeKind::Bool) => true,
             (SemanticTypeKind::String, SemanticTypeKind::String) => true,
-            (SemanticTypeKind::Array(elem_a), SemanticTypeKind::Array(elem_b)) => {
-                elem_b.try_downcast(elem_a)
-            }
-            (SemanticTypeKind::NamedStruct(struct_a), SemanticTypeKind::NamedStruct(struct_b)) => Rc::ptr_eq(struct_a, struct_b),
-            (SemanticTypeKind::NamedStruct(named_struct), SemanticTypeKind::AnonymousStruct(fields)) => {
+            (SemanticTypeKind::Array(elem_a), SemanticTypeKind::Array(elem_b)) => elem_b.try_downcast(&elem_a),
+            (SemanticTypeKind::NamedStruct(struct_a), SemanticTypeKind::NamedStruct(struct_b))
+                => Rc::ptr_eq(&struct_a, &struct_b),
+            (SemanticTypeKind::NamedStruct(named_struct), SemanticTypeKind::AnonymousStruct(ref mut fields)) => {
                 let target_fields = &named_struct.fields;
                 if Self::try_downcast_struct(target_fields, fields) {
-                    *sem_type_borrowed = SemanticTypeKind::NamedStruct(named_struct.clone());
+                    *(self.borrow_mut()) = SemanticTypeKind::NamedStruct(named_struct.clone());
                     true
                 } else {
                     false
                 }
             }
-            (SemanticTypeKind::AnonymousStruct(target_fields), SemanticTypeKind::AnonymousStruct(struct_fields)) => {
+            (SemanticTypeKind::AnonymousStruct(ref mut target_fields),
+            SemanticTypeKind::AnonymousStruct(ref mut struct_fields)) => {
                 Self::try_downcast_struct(target_fields, struct_fields)
             }
             _ => false

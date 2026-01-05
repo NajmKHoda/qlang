@@ -15,19 +15,15 @@ use types::*;
 use variables::*;
 use functions::*;
 use control_flow::*;
+use data::*;
 use ir::*;
 use queries::*;
 use errors::SemanticError;
 
 use crate::tokens::*;
 
-struct SemanticStruct {
-    name: String,
-    fields: HashMap<String, SemanticType>,
-    field_order: Vec<String>,
-}
-
-struct SemanticGen {
+pub struct SemanticGen {
+    datasources: HashMap<String, Rc<SemanticDatasource>>,
     tables: HashMap<String, Rc<SemanticTable>>,
     structs: HashMap<String, Rc<SemanticStruct>>,
     functions: HashMap<String, Rc<SemanticFunction>>,
@@ -38,9 +34,17 @@ struct SemanticGen {
     _next_loop_id: usize,
 }
 
+pub struct SemanticProgram {
+    pub datasources: Vec<Rc<SemanticDatasource>>,
+    pub tables: Vec<Rc<SemanticTable>>,
+    pub structs: Vec<Rc<SemanticStruct>>,
+    pub functions: Vec<Rc<SemanticFunction>>,
+}
+
 impl SemanticGen {
     fn new() -> Self {
         SemanticGen {
+            datasources: HashMap::new(),
             tables: HashMap::new(),
             structs: HashMap::new(),
             functions: HashMap::new(),
@@ -53,8 +57,8 @@ impl SemanticGen {
 
     fn eval_stmt(&mut self, stmt: &StatementNode) -> Result<SemanticStatement, SemanticError> {
         match stmt {
-            StatementNode::VariableDefinition(TypedQNameNode { name, type_node }, init_expr) => {
-                self.define_variable(name, type_node, init_expr)
+            StatementNode::VariableDefinition(var_type, name, init_expr) => {
+                self.define_variable(name, var_type, init_expr)
             },
             StatementNode::Assignment(var_name, expr) => {
                 self.assign_variable(var_name, expr)
@@ -144,5 +148,31 @@ impl SemanticGen {
                 }
             }
         }
+    }
+
+    pub fn eval_program(&mut self, program: &ProgramNode) -> Result<SemanticProgram, SemanticError> {
+        for datasource in &program.datasources {
+            self.declare_datasource(&datasource.name, datasource.is_readonly)?;
+        }
+
+        for table in &program.tables {
+            self.define_table(&table.name, &table.columns, &table.datasource_name)?;
+        }
+
+        for function in &program.functions {
+            self.define_function(&function.name, &function.params, &function.return_type, &function.body)?;
+        }
+
+        Ok(SemanticProgram {
+            datasources: self.datasources.values().cloned().collect(),
+            tables: self.tables.values().cloned().collect(),
+            structs: self.structs.values().cloned().collect(),
+            functions: self.functions.values().cloned().collect(),
+        })
+    }
+
+    pub fn gen_semantic(program: &ProgramNode) -> Result<SemanticProgram, SemanticError> {
+        let mut sem_gen = SemanticGen::new();
+        sem_gen.eval_program(program)
     }
 }

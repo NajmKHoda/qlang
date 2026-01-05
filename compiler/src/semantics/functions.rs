@@ -2,13 +2,106 @@ use std::rc::Rc;
 
 use super::*;
 
-pub(super) struct SemanticFunction {
-    pub(super) params: Vec<Rc<SemanticVariable>>,
-    pub(super) return_type: SemanticType,
-    pub(super) body: SemanticBlock,
+pub struct SemanticFunction {
+    pub name: String,
+    pub params: Vec<Rc<SemanticVariable>>,
+    pub return_type: SemanticType,
+    pub body: SemanticBlock,
 }
 
+const BUILTIN_FNS: &[&str] = &[
+    "prints",
+    "printi",
+    "printb",
+    "inputs",
+    "inputi",
+];
+
 impl SemanticGen {
+    fn check_args(
+        &self,
+        fn_name: &str,
+        arg_exprs: &[SemanticExpression],
+        param_types: &[SemanticType]
+    ) -> Result<(), SemanticError> {
+        if arg_exprs.len() != param_types.len() {
+            return Err(SemanticError::MismatchingCallArity {
+                function_name: fn_name.to_string(),
+                expected: param_types.len(),
+                found: arg_exprs.len(),
+            });
+        }
+
+        for (i, (arg, param_type)) in arg_exprs.iter().zip(param_types).enumerate() {
+            let compatible = arg.sem_type.try_downcast(param_type);
+            if !compatible {
+                return Err(SemanticError::IncompatibleArgumentType {
+                    function_name: fn_name.to_string(),
+                    position: i,
+                    expected: param_type.clone(),
+                    found: arg.sem_type.clone(),
+                });
+            }
+        }
+        Ok(())
+    }
+
+    fn call_builtin_function(&self, name: &str, arg_exprs: Vec<SemanticExpression>) -> Result<SemanticExpression, SemanticError> {
+        match name {
+            "prints" => {
+                self.check_args("prints", &arg_exprs, &[SemanticType::new(SemanticTypeKind::String)])?;
+                Ok(SemanticExpression {
+                    sem_type: SemanticType::new(SemanticTypeKind::Void),
+                    kind: SemanticExpressionKind::BuiltinFunctionCall {
+                        function: BuiltinFunction::PrintString,
+                        args: arg_exprs,
+                    },
+                })
+            }
+            "printi" => {
+                self.check_args("printi", &arg_exprs, &[SemanticType::new(SemanticTypeKind::Integer)])?;
+                Ok(SemanticExpression {
+                    sem_type: SemanticType::new(SemanticTypeKind::Void),
+                    kind: SemanticExpressionKind::BuiltinFunctionCall {
+                        function: BuiltinFunction::PrintInteger,
+                        args: arg_exprs,
+                    },
+                })
+            }
+            "printb" => {
+                self.check_args("printb", &arg_exprs, &[SemanticType::new(SemanticTypeKind::Bool)])?;
+                Ok(SemanticExpression {
+                    sem_type: SemanticType::new(SemanticTypeKind::Void),
+                    kind: SemanticExpressionKind::BuiltinFunctionCall {
+                        function: BuiltinFunction::PrintBool,
+                        args: arg_exprs,
+                    },
+                })
+            }
+            "inputs" => {
+                self.check_args("inputs", &arg_exprs, &[])?;
+                Ok(SemanticExpression {
+                    sem_type: SemanticType::new(SemanticTypeKind::String),
+                    kind: SemanticExpressionKind::BuiltinFunctionCall {
+                        function: BuiltinFunction::InputString,
+                        args: arg_exprs,
+                    },
+                })
+            }
+            "inputi" => {
+                self.check_args("inputi", &arg_exprs, &[])?;
+                Ok(SemanticExpression {
+                    sem_type: SemanticType::new(SemanticTypeKind::Integer),
+                    kind: SemanticExpressionKind::BuiltinFunctionCall {
+                        function: BuiltinFunction::InputInteger,
+                        args: arg_exprs,
+                    },
+                })
+            }
+            _ => Err(SemanticError::UndefinedFunction { name: name.to_string() }),
+        }
+    }
+
     pub(super) fn define_function(
         &mut self,
         name: &str,
@@ -60,6 +153,7 @@ impl SemanticGen {
         }
 
         self.functions.insert(name.to_string(), Rc::new(SemanticFunction {
+            name: name.to_string(),
             params,
             return_type: self.cur_return_type.clone(),
             body: body_block,
@@ -68,30 +162,17 @@ impl SemanticGen {
     }
 
     pub(super) fn call_function(&self, name: &str, arg_exprs: &[Box<ExpressionNode>]) -> Result<SemanticExpression, SemanticError> {
-        if let Some(func) = self.functions.get(name) {
-            if arg_exprs.len() != func.params.len() {
-                return Err(SemanticError::MismatchingCallArity {
-                    function_name: name.to_string(),
-                    expected: func.params.len(),
-                    found: arg_exprs.len(),
-                });
-            }
-
-            let sem_args = arg_exprs.iter()
+        let sem_args = arg_exprs.iter()
                 .map(|arg| self.eval_expr(arg))
                 .collect::<Result<Vec<SemanticExpression>, SemanticError>>()?;
-            for (i, (arg, param)) in sem_args.iter().zip(&func.params).enumerate() {
-                let compatible = arg.sem_type.try_downcast(&param.sem_type);
-                if !compatible {
-                    return Err(SemanticError::IncompatibleArgumentType {
-                        function_name: name.to_string(),
-                        position: i,
-                        expected: param.sem_type.clone(),
-                        found: arg.sem_type.clone(),
-                    });
-                }
-            }
-
+        if BUILTIN_FNS.contains(&name) {
+            return self.call_builtin_function(name, sem_args);
+        }
+        if let Some(func) = self.functions.get(name) {
+            let param_types: Vec<SemanticType> = func.params.iter()
+                .map(|param| param.sem_type.clone())
+                .collect();
+            self.check_args(name, &sem_args, &param_types)?;
             Ok(SemanticExpression {
                 sem_type: func.return_type.clone(),
                 kind: SemanticExpressionKind::FunctionCall {
@@ -118,13 +199,7 @@ impl SemanticGen {
         let receiver_type = &sem_receiver.sem_type;
         match (receiver_type.kind(), method_name) {
             (SemanticTypeKind::Array(_), "length") => {
-                if !sem_args.is_empty() {
-                    return Err(SemanticError::MismatchingCallArity {
-                        function_name: format!("{}.length", receiver_type),
-                        expected: 0,
-                        found: sem_args.len()
-                    });
-                }
+                self.check_args("Array.length", &sem_args, &[])?;
                 Ok(SemanticExpression {
                     sem_type: SemanticType::new(SemanticTypeKind::Integer),
                     kind: SemanticExpressionKind::BuiltinMethodCall {
@@ -135,21 +210,7 @@ impl SemanticGen {
                 })
             }
             (SemanticTypeKind::Array(elem_type), "append") => {
-                if sem_args.len() != 1 {
-                    return Err(SemanticError::MismatchingCallArity {
-                        function_name: format!("{}.append", receiver_type),
-                        expected: 1,
-                        found: sem_args.len()
-                    });
-                }
-                if !sem_args[0].sem_type.try_downcast(&elem_type) {
-                    return Err(SemanticError::IncompatibleArgumentType {
-                        function_name: format!("{}.append", receiver_type),
-                        position: 0,
-                        expected: elem_type,
-                        found: sem_args[0].sem_type.clone(),
-                    });
-                }
+                self.check_args("Array.append", &sem_args, &[elem_type])?;
                 Ok(SemanticExpression {
                     sem_type: SemanticType::new(SemanticTypeKind::Void),
                     kind: SemanticExpressionKind::BuiltinMethodCall {
@@ -160,13 +221,7 @@ impl SemanticGen {
                 })
             }
             (SemanticTypeKind::Array(elem_type), "pop") => {
-                if !sem_args.is_empty() {
-                    return Err(SemanticError::MismatchingCallArity {
-                        function_name: format!("{}.pop", receiver_type),
-                        expected: 0,
-                        found: sem_args.len()
-                    });
-                }
+                self.check_args("Array.pop", &sem_args, &[])?;
                 Ok(SemanticExpression {
                     sem_type: elem_type,
                     kind: SemanticExpressionKind::BuiltinMethodCall {

@@ -5,7 +5,8 @@ pub struct ProgramNode {
 }
 
 pub struct DatasourceNode {
-    pub name: String
+    pub name: String,
+    pub is_readonly: bool,
 }
 
 pub struct TableNode {
@@ -22,7 +23,7 @@ pub struct FunctionNode {
 }
 
 pub enum StatementNode {
-    VariableDefinition(TypedQNameNode, Box<ExpressionNode>),
+    VariableDefinition(Option<TypeNode>, String, Box<ExpressionNode>),
     Assignment(String, Box<ExpressionNode>),
     Conditional(Vec<ConditionalBranchNode>, Option<Vec<StatementNode>>),
     ConditionalLoop(Box<ExpressionNode>, Vec<StatementNode>, Option<String>),

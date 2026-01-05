@@ -1,6 +1,5 @@
 use std::str::FromStr;
 use crate::tokens::*;
-use crate::codegen::{ComparisonOp, QLType};
 
 grammar;
 
@@ -9,7 +8,13 @@ pub Program: ProgramNode =
     <tables:Table*>
     <functions:Function*> => ProgramNode { <> };
 
-Datasource: DatasourceNode = "datasource" <name:QName> ";" => DatasourceNode { <> };
+Datasource: DatasourceNode =
+    <readonly_key:"readonly"?>
+    "datasource" <name:QName> ";"
+    => DatasourceNode {
+        name,
+        is_readonly: readonly_key.is_some(),
+    };
 
 Table: TableNode =
     "table" <name:ProperQName> "from" <datasource_name:QName>
@@ -23,7 +28,7 @@ Function: FunctionNode =
     => FunctionNode { <> };
 
 Statement: StatementNode = {
-    <TypedQName> "<-" <Expression> ";" => StatementNode::VariableDefinition(<>),
+    <VariableType> <QName> "<-" <Expression> ";" => StatementNode::VariableDefinition(<>),
     <QName> "<-" <Expression> ";" => StatementNode::Assignment(<>),
     <ConditionalStatement>,
     "while" <Expression> "{" <Statement*> "}" <("as" <QName> ";")?> => StatementNode::ConditionalLoop(<>),
@@ -52,11 +57,11 @@ Expression: Box<ExpressionNode> = {
     Bool => Box::new(ExpressionNode::BoolLiteral(<>)),
     QLString => Box::new(ExpressionNode::StringLiteral(<>)),
     "(" <Expression> ")",
-    <name:ProperQName> "{" <cols:Comma<ColumnValue>> "}" => Box::new(ExpressionNode::TableRow(<>)),
-    <TypeName> "[" <Comma<Expression>> "]" => Box::new(ExpressionNode::Array(<>)),
+    <name:ProperQName?> "{" <fields:Comma<ColumnValue>> "}" => Box::new(ExpressionNode::Struct(<>)),
+    "[" <Comma<Expression>> "]" => Box::new(ExpressionNode::Array(<>)),
     <Expression> "[" <Expression> "]" => Box::new(ExpressionNode::ArrayIndex(<>)),
     <Expression> "." <QName> "(" <Comma<Expression>> ")" => Box::new(ExpressionNode::MethodCall(<>)),
-    <Expression> "." <QName> => Box::new(ExpressionNode::Column(<>)),
+    <Expression> "." <QName> => Box::new(ExpressionNode::StructField(<>)),
     QName => Box::new(ExpressionNode::QName(<>)),
     #[precedence(level="1")] #[assoc(side="left")]
     <Expression> "+" <Expression> => Box::new(ExpressionNode::Add(<>)),
@@ -64,13 +69,13 @@ Expression: Box<ExpressionNode> = {
     <QName> "(" <Comma<Expression>> ")" => Box::new(ExpressionNode::FunctionCall(<>)),
     "query" "{" <Query> "}" => Box::new(ExpressionNode::Query(<>)),
     #[precedence(level="2")] #[assoc(side="left")]
-    <Expression> ">" <Expression> => Box::new(ExpressionNode::Comparison(<>, ComparisonOp::GreaterThan)),
-    <Expression> "<" <Expression> => Box::new(ExpressionNode::Comparison(<>, ComparisonOp::LessThan)),
-    <Expression> ">=" <Expression> => Box::new(ExpressionNode::Comparison(<>, ComparisonOp::GreaterThanOrEqual)),
-    <Expression> "<=" <Expression> => Box::new(ExpressionNode::Comparison(<>, ComparisonOp::LessThanOrEqual)),
+    <Expression> ">" <Expression> => Box::new(ExpressionNode::Comparison(<>, ComparisonType::GreaterThan)),
+    <Expression> "<" <Expression> => Box::new(ExpressionNode::Comparison(<>, ComparisonType::LessThan)),
+    <Expression> ">=" <Expression> => Box::new(ExpressionNode::Comparison(<>, ComparisonType::GreaterThanOrEqual)),
+    <Expression> "<=" <Expression> => Box::new(ExpressionNode::Comparison(<>, ComparisonType::LessThanOrEqual)),
     #[precedence(level="3")] #[assoc(side="left")]
-    <Expression> "=" <Expression> => Box::new(ExpressionNode::Comparison(<>, ComparisonOp::Equal)),
-    <Expression> "!=" <Expression> => Box::new(ExpressionNode::Comparison(<>, ComparisonOp::NotEqual))
+    <Expression> "=" <Expression> => Box::new(ExpressionNode::Comparison(<>, ComparisonType::Equal)),
+    <Expression> "!=" <Expression> => Box::new(ExpressionNode::Comparison(<>, ComparisonType::NotEqual))
 }
 
 ColumnValue: ColumnValueNode = <name:QName> ":" <value:Expression> => ColumnValueNode { <> };
@@ -109,19 +114,24 @@ UpdateAssignment: UpdateAssignmentNode =
 
 // --- MISCELLANEOUS ---
 
-TypedQName: TypedQNameNode = <ql_type:TypeName> <name:QName> => TypedQNameNode { <> };
+TypedQName: TypedQNameNode = <type_node:TypeName> <name:QName> => TypedQNameNode { <> };
 
-TypeNameWithVoid: QLType = {
-    <TypeName>,
-    "void" => QLType::Void
+VariableType: Option<TypeNode> = {
+    "var" => None,
+    <TypeName> => Some(<>)
 }
 
-TypeName: QLType = {
-    "int" => QLType::Integer,
-    "bool" => QLType::Bool,
-    "str" => QLType::String,
-    ProperQName => QLType::Table(<>),
-    <TypeName> "[]" => QLType::Array(Box::new(<>))
+TypeNameWithVoid: TypeNode = {
+    <TypeName>,
+    "void" => TypeNode::Void
+}
+
+TypeName: TypeNode = {
+    "int" => TypeNode::Integer,
+    "bool" => TypeNode::Bool,
+    "str" => TypeNode::String,
+    ProperQName => TypeNode::Struct(<>),
+    <TypeName> "[" "]" => TypeNode::Array(Box::new(<>))
 }
 
 Int: i32 = r"-?[0-9]+" => i32::from_str(<>).unwrap();

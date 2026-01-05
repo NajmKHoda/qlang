@@ -61,7 +61,7 @@ impl SemanticGen {
 
         match (&sem_left.sem_type.kind(), &sem_right.sem_type.kind()) {
             (SemanticTypeKind::Integer, SemanticTypeKind::Integer) |
-            (SemanticTypeKind::String, SemanticTypeKind::String) |
+            (SemanticTypeKind::String, SemanticTypeKind::String) => {},
             (SemanticTypeKind::Bool, SemanticTypeKind::Bool)
                 if op == ComparisonType::Equal || op == ComparisonType::NotEqual => {},
             _ => {

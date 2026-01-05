@@ -2,6 +2,12 @@ use std::{collections::HashMap, fmt::{Display, Formatter}};
 use super::{SemanticType};
 
 pub enum SemanticError {
+    UndefinedDatasource {
+        name: String,
+    },
+    DuplicateDatasourceDeclaration {
+        name: String,
+    },
     UndefinedTable {
         name: String,
     },
@@ -122,6 +128,12 @@ pub enum SemanticError {
 impl Display for SemanticError {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
         match self {
+            SemanticError::UndefinedDatasource { name } => {
+                write!(f, "Datasource {} is undefined", name)
+            }
+            SemanticError::DuplicateDatasourceDeclaration { name } => {
+                write!(f, "Cannot redeclare existing datasource {}", name)
+            }
             SemanticError::UndefinedTable { name } => {
                 write!(f, "Table {} is undefined", name)
             }

@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use std::{collections::HashMap, rc::Rc};
 
 use crate::semantics::control_flow::SemanticBlock;
@@ -70,12 +72,24 @@ pub enum SemanticExpressionKind {
         function: Rc<SemanticFunction>,
         args: Vec<SemanticExpression>,
     },
+    BuiltinFunctionCall {
+        function: BuiltinFunction,
+        args: Vec<SemanticExpression>,
+    },
     BuiltinMethodCall {
         receiver: Box<SemanticExpression>,
         method: BuiltinMethod,
         args: Vec<SemanticExpression>,
     },
     ImmediateQuery(SemanticQuery),
+}
+
+pub enum BuiltinFunction {
+    PrintString,
+    PrintInteger,
+    PrintBool,
+    InputInteger,
+    InputString,
 }
 
 pub enum BuiltinMethod {

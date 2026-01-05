@@ -3,22 +3,30 @@ use std::rc::Rc;
 use super::*;
 
 #[derive(Clone)]
-pub(super) struct SemanticVariable {
-    pub(super) sem_type: SemanticType
+pub struct SemanticVariable {
+    pub sem_type: SemanticType
 }
 
 impl SemanticGen {
-    pub fn define_variable(&mut self, name: &str, type_node: &TypeNode, init_expr: &ExpressionNode) -> Result<SemanticStatement, SemanticError> {
-        let sem_type = self.try_get_semantic_type(type_node)?;
+    pub fn define_variable(&mut self, name: &str, type_node: &Option<TypeNode>, init_expr: &ExpressionNode) -> Result<SemanticStatement, SemanticError> {
         let sem_init_expr = self.eval_expr(init_expr)?;
-        let compatible = SemanticType::try_unify(&sem_type, &sem_init_expr.sem_type);
-        if !compatible {
-            return Err(SemanticError::IncompatibleAssignment {
-                var_name: name.to_string(),
-                var_type: sem_type,
-                expr_type: sem_init_expr.sem_type
-            });
-        }
+
+        let sem_type = match type_node {
+            Some(t) => {
+                let sem_type = self.try_get_semantic_type(t)?;
+                let compatible = SemanticType::try_unify(&sem_type, &sem_init_expr.sem_type);
+                if !compatible {
+                    return Err(SemanticError::IncompatibleAssignment {
+                        var_name: name.to_string(),
+                        var_type: sem_type,
+                        expr_type: sem_init_expr.sem_type
+                    });
+                }
+                sem_type
+            },
+            None => sem_init_expr.sem_type.clone(),
+        };
+
         if !sem_type.is_concrete() {
             return Err(SemanticError::AmbiguousVariableType {
                 var_name: name.to_string(),

@@ -2,8 +2,10 @@ use std::io::Read;
 use std::io::{Error as IOError, ErrorKind};
 use std::fs::File;
 use std::env::args;
-use std::process::Command;
+// use std::process::Command;
 use lalrpop_util::lalrpop_mod;
+
+use crate::semantics::SemanticGen;
 
 mod tokens;
 mod semantics;
@@ -19,7 +21,7 @@ fn main() -> Result<(), IOError> {
     }
 
     let source_filepath = &args[1];
-    let obj_filepath = &args[2];
+    // let obj_filepath = &args[2];
 
     let parser = grammar::ProgramParser::new();
     let mut source = String::new();
@@ -31,6 +33,12 @@ fn main() -> Result<(), IOError> {
         IOError::new(ErrorKind::InvalidData, "Parsing failed")
     })?;
 
+    SemanticGen::gen_semantic(&program).map_err(|e| {
+        eprintln!("{e}");
+        IOError::new(ErrorKind::InvalidData, "Semantic analysis failed")
+    })?;
+
+    /*
     codegen::gen_code(&program).map_err(|e| {
         eprintln!("Failed to build {source_filepath}: {e}");
         IOError::new(ErrorKind::InvalidData, "Building failed")
@@ -39,6 +47,7 @@ fn main() -> Result<(), IOError> {
     Command::new("cc")
         .args(&["out/main.o", "out/runtime.o", "-o", obj_filepath, "-lsqlite3"])
         .status()?;
+    */
 
     Ok(())
 }

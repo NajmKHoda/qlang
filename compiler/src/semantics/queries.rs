@@ -2,9 +2,14 @@ use std::{collections::HashMap, rc::Rc};
 
 use super::*;
 
-pub(super) struct SemanticTable {
-    pub(super) name: String,
-    pub(super) associated_struct: Rc<SemanticStruct>,
+pub struct SemanticDatasource {
+    pub is_readonly: bool,
+}
+
+pub struct SemanticTable {
+    pub name: String,
+    pub associated_struct: Rc<SemanticStruct>,
+    pub datasource: Rc<SemanticDatasource>,
 }
 
 impl SemanticGen {
@@ -36,10 +41,25 @@ impl SemanticGen {
         })
     }
 
-    pub(super) fn define_table(&mut self, name: &str, fields: &[TypedQNameNode]) -> Result<(), SemanticError> {
+    pub(super) fn declare_datasource(&mut self, name: &str, is_readonly: bool) -> Result<(), SemanticError> {
+        if self.datasources.contains_key(name) {
+            return Err(SemanticError::DuplicateDatasourceDeclaration { name: name.to_string() });
+        }
+        self.datasources.insert(name.to_string(), Rc::new(SemanticDatasource { is_readonly }));
+        Ok(())
+    }
+
+    pub(super) fn define_table(&mut self, name: &str, fields: &[TypedQNameNode], datasource_name: &str) -> Result<(), SemanticError> {
         if self.tables.contains_key(name) {
             return Err(SemanticError::DuplicateTableDefinition { name: name.to_string() });
         }
+
+        let datasource = match self.datasources.get(datasource_name) {
+            Some(ds) => ds.clone(),
+            None => {
+                return Err(SemanticError::UndefinedDatasource { name: datasource_name.to_string() });
+            }
+        };
 
         let mut struct_fields = HashMap::new();
         for field in fields {
@@ -68,6 +88,7 @@ impl SemanticGen {
         let table = Rc::new(SemanticTable {
             name: name.to_string(),
             associated_struct,
+            datasource,
         });
         self.tables.insert(name.to_string(), table);
 
