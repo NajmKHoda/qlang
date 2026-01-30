@@ -28,6 +28,7 @@ pub enum SemanticStatement {
     Return(Option<SemanticExpression>),
     Break(LoopId),
     Continue(LoopId),
+    DropVariable(Rc<SemanticVariable>),
 }
 
 pub struct SemanticConditionalBranch {
@@ -38,6 +39,7 @@ pub struct SemanticConditionalBranch {
 pub struct SemanticExpression {
     pub kind: SemanticExpressionKind,
     pub sem_type: SemanticType,
+    pub ownership: Ownership,
 }
 
 pub enum SemanticExpressionKind {

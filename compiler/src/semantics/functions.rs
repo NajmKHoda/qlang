@@ -56,6 +56,7 @@ impl SemanticGen {
                         function: BuiltinFunction::PrintString,
                         args: arg_exprs,
                     },
+                    ownership: Ownership::Trivial,
                 })
             }
             "printi" => {
@@ -66,6 +67,7 @@ impl SemanticGen {
                         function: BuiltinFunction::PrintInteger,
                         args: arg_exprs,
                     },
+                    ownership: Ownership::Trivial,
                 })
             }
             "printb" => {
@@ -76,6 +78,7 @@ impl SemanticGen {
                         function: BuiltinFunction::PrintBool,
                         args: arg_exprs,
                     },
+                    ownership: Ownership::Trivial,
                 })
             }
             "inputs" => {
@@ -86,6 +89,7 @@ impl SemanticGen {
                         function: BuiltinFunction::InputString,
                         args: arg_exprs,
                     },
+                    ownership: Ownership::Owned,
                 })
             }
             "inputi" => {
@@ -96,6 +100,7 @@ impl SemanticGen {
                         function: BuiltinFunction::InputInteger,
                         args: arg_exprs,
                     },
+                    ownership: Ownership::Trivial,
                 })
             }
             _ => Err(SemanticError::UndefinedFunction { name: name.to_string() }),
@@ -131,9 +136,7 @@ impl SemanticGen {
             return Err(SemanticError::InvalidMainSignature);
         }
 
-        self.variables.push(HashMap::new());
         let mut body_block = self.eval_block(body)?;
-        self.variables.pop();
         self.variables.pop();
 
         if !body_block.terminates {
@@ -143,6 +146,7 @@ impl SemanticGen {
                 let zero_expr = SemanticExpression {
                     kind: SemanticExpressionKind::IntegerLiteral(0),
                     sem_type: SemanticType::new(SemanticTypeKind::Integer),
+                    ownership: Ownership::Trivial,
                 };
                 body_block.statements.push(SemanticStatement::Return(Some(zero_expr)));
             } else {
@@ -179,6 +183,11 @@ impl SemanticGen {
                     function: func.clone(),
                     args: sem_args,
                 },
+                ownership: if func.return_type.can_be_owned() {
+                    Ownership::Owned
+                } else {
+                    Ownership::Trivial
+                },
             })
         } else {
             Err(SemanticError::UndefinedFunction { name: name.to_string() })
@@ -206,7 +215,8 @@ impl SemanticGen {
                         receiver: Box::new(sem_receiver),
                         method: BuiltinMethod::ArrayLength,
                         args: vec![]
-                    }
+                    },
+                    ownership: Ownership::Trivial,
                 })
             }
             (SemanticTypeKind::Array(elem_type), "append") => {
@@ -217,18 +227,24 @@ impl SemanticGen {
                         receiver: Box::new(sem_receiver),
                         method: BuiltinMethod::ArrayAppend,
                         args: sem_args
-                    }
+                    },
+                    ownership: Ownership::Trivial,
                 })
             }
             (SemanticTypeKind::Array(elem_type), "pop") => {
                 self.check_args("Array.pop", &sem_args, &[])?;
                 Ok(SemanticExpression {
+                    ownership: if elem_type.can_be_owned() {
+                        Ownership::Owned
+                    } else {
+                        Ownership::Trivial
+                    },
                     sem_type: elem_type,
                     kind: SemanticExpressionKind::BuiltinMethodCall {
                         receiver: Box::new(sem_receiver),
                         method: BuiltinMethod::ArrayPop,
                         args: vec![]
-                    }
+                    },
                 })
             }
             _ => {

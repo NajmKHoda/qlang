@@ -2,6 +2,12 @@ use std::collections::HashMap;
 
 use super::*;
 
+pub enum Ownership {
+    Owned,
+    Borrowed,
+    Trivial
+}
+
 pub struct SemanticStruct {
     pub name: String,
     pub fields: HashMap<String, SemanticType>,
@@ -47,6 +53,7 @@ impl SemanticGen {
 
         Ok(SemanticExpression {
             kind: SemanticExpressionKind::Struct(fields),
+            ownership: Ownership::Trivial,
             sem_type: struct_type,
         })
     }
@@ -56,12 +63,18 @@ impl SemanticGen {
         match &sem_struct.sem_type.kind() {
             SemanticTypeKind::NamedStruct(named_struct) => {
                 if let Some(position) = named_struct.field_order.iter().position(|f| f == field_name) {
+                    let field_type = named_struct.fields[field_name].clone();
                     Ok(SemanticExpression {
                         kind: SemanticExpressionKind::StructField {
                             struct_expr: Box::new(sem_struct),
                             index: position as i32,
                         },
-                        sem_type: named_struct.fields[field_name].clone(),
+                        ownership: if field_type.can_be_owned() {
+                            Ownership::Borrowed
+                        } else {
+                            Ownership::Trivial
+                        },
+                        sem_type: field_type,
                     })
                 } else {
                     Err(SemanticError::UndefinedStructFieldAccess {
@@ -104,6 +117,7 @@ impl SemanticGen {
         Ok(SemanticExpression {
             kind: SemanticExpressionKind::Array(sem_exprs),
             sem_type: array_type,
+            ownership: Ownership::Owned,
         })
     }
 
@@ -119,6 +133,11 @@ impl SemanticGen {
                         index_expr: Box::new(sem_index),
                     },
                     sem_type: elem_type.clone(),
+                    ownership: if elem_type.can_be_owned() {
+                        Ownership::Borrowed
+                    } else {
+                        Ownership::Trivial
+                    },
                 })
             } else {
                 Err(SemanticError::NonIntegralArrayIndex {

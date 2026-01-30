@@ -19,6 +19,11 @@ impl SemanticGen {
 
         Ok(SemanticExpression {
             sem_type: sem_left.sem_type.clone(),
+            ownership: if sem_left.sem_type.can_be_owned() {
+                Ownership::Owned
+            } else {
+                Ownership::Trivial
+            },
             kind: SemanticExpressionKind::Add {
                 left: Box::new(sem_left),
                 right: Box::new(sem_right),
@@ -43,6 +48,11 @@ impl SemanticGen {
 
         Ok(SemanticExpression {
             sem_type: sem_left.sem_type.clone(),
+            ownership: if sem_left.sem_type.can_be_owned() {
+                Ownership::Owned
+            } else {
+                Ownership::Trivial
+            },
             kind: SemanticExpressionKind::Subtract {
                 left: Box::new(sem_left),
                 right: Box::new(sem_right),
@@ -75,6 +85,7 @@ impl SemanticGen {
 
         Ok(SemanticExpression {
             sem_type: SemanticType::new(SemanticTypeKind::Bool),
+            ownership: Ownership::Trivial,
             kind: SemanticExpressionKind::Compare {
                 left: Box::new(sem_left),
                 right: Box::new(sem_right),

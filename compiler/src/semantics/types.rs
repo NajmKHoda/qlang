@@ -39,6 +39,14 @@ impl SemanticTypeKind {
             _ => true
         }
     }
+
+    fn can_be_owned(&self) -> bool {
+        match self {
+            SemanticTypeKind::String => true,
+            SemanticTypeKind::Array(_) => true,
+            _ => false
+        }
+    }
 }
 
 impl Display for SemanticTypeKind {
@@ -91,6 +99,10 @@ impl SemanticType {
 
     pub(super) fn is_concrete(&self) -> bool {
         (*self.borrow()).is_concrete()
+    }
+
+    pub(super) fn can_be_owned(&self) -> bool {
+        (*self.borrow()).can_be_owned()
     }
 
     pub(super) fn try_downcast(&self, target: &SemanticType) -> bool {

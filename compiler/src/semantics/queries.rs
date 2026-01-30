@@ -125,6 +125,7 @@ impl SemanticGen {
                 sem_type: SemanticType::new(SemanticTypeKind::Array(
                     SemanticType::new(SemanticTypeKind::NamedStruct(table.associated_struct.clone()))
                 )),
+                ownership: Ownership::Trivial,
             })
         } else {
             Err(SemanticError::UndefinedTable { name: query.table_name.clone() })
@@ -157,7 +158,8 @@ impl SemanticGen {
                         value: Box::new(sem_value),
                     }
                 ),
-                sem_type: SemanticType::new(SemanticTypeKind::Void)
+                sem_type: SemanticType::new(SemanticTypeKind::Void),
+                ownership: Ownership::Trivial,
             })
         } else {
             Err(SemanticError::UndefinedTable { name: query.table_name.clone() })
@@ -210,7 +212,8 @@ impl SemanticGen {
                         where_clause,
                     }
                 ),
-                sem_type: SemanticType::new(SemanticTypeKind::Void)
+                sem_type: SemanticType::new(SemanticTypeKind::Void),
+                ownership: Ownership::Trivial,
             })
         } else {
             Err(SemanticError::UndefinedTable { name: query.table_name.clone() })
@@ -236,7 +239,8 @@ impl SemanticGen {
                         where_clause,
                     }
                 ),
-                sem_type: SemanticType::new(SemanticTypeKind::Void)
+                sem_type: SemanticType::new(SemanticTypeKind::Void),
+                ownership: Ownership::Trivial,
             })
         } else {
             Err(SemanticError::UndefinedTable { name: query.table_name.clone() })

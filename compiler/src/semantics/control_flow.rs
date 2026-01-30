@@ -22,6 +22,8 @@ impl SemanticStatement {
                 all_branches_terminate && else_terminates
             }
             SemanticStatement::Return(_) => true,
+            SemanticStatement::Break(_) => true,
+            SemanticStatement::Continue(_) => true,
             _ => false,
         }
     }
@@ -46,6 +48,7 @@ impl SemanticGen {
     }
 
     pub(super) fn eval_block(&mut self, statements: &[StatementNode]) -> Result<SemanticBlock, SemanticError> {
+        self.variables.push(HashMap::new());
         let mut sem_statements = Vec::new();
         let mut terminates = false;
         for stmt in statements {
@@ -56,6 +59,7 @@ impl SemanticGen {
                 break;
             }
         }
+        self.variables.pop();
 
         Ok(SemanticBlock {
             statements: sem_statements,

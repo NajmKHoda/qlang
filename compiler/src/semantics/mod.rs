@@ -91,18 +91,21 @@ impl SemanticGen {
                 Ok(SemanticExpression {
                     kind: SemanticExpressionKind::IntegerLiteral(*val),
                     sem_type: SemanticType::new(SemanticTypeKind::Integer),
+                    ownership: Ownership::Trivial,
                 })
             },
             ExpressionNode::BoolLiteral(val) => {
                 Ok(SemanticExpression {
                     kind: SemanticExpressionKind::BoolLiteral(*val),
                     sem_type: SemanticType::new(SemanticTypeKind::Bool),
+                    ownership: Ownership::Trivial,
                 })
             },
             ExpressionNode::StringLiteral(val) => {
                 Ok(SemanticExpression {
                     kind: SemanticExpressionKind::StringLiteral(val.clone()),
                     sem_type: SemanticType::new(SemanticTypeKind::String),
+                    ownership: Ownership::Borrowed,
                 })
             },
             ExpressionNode::Struct(struct_name_opt, column_values) => {
@@ -116,6 +119,11 @@ impl SemanticGen {
                 Ok(SemanticExpression { 
                     kind: SemanticExpressionKind::Variable(variable.clone()), 
                     sem_type: variable.sem_type.clone(),
+                    ownership: if variable.sem_type.can_be_owned() {
+                        Ownership::Borrowed
+                    } else {
+                        Ownership::Trivial
+                    },
                 })
             },
             ExpressionNode::StructField(struct_expr, field_name) => {
