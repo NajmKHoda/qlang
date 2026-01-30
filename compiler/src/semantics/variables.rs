@@ -1,10 +1,9 @@
-use std::rc::Rc;
-
 use super::*;
 
 #[derive(Clone)]
 pub struct SemanticVariable {
-    pub sem_type: SemanticType
+    pub sem_type: SemanticType,
+    pub id: u32,
 }
 
 impl SemanticGen {
@@ -14,7 +13,7 @@ impl SemanticGen {
         let sem_type = match type_node {
             Some(t) => {
                 let sem_type = self.try_get_semantic_type(t)?;
-                let compatible = SemanticType::try_unify(&sem_type, &sem_init_expr.sem_type);
+                let compatible = self.try_unify(&sem_type, &sem_init_expr.sem_type);
                 if !compatible {
                     return Err(SemanticError::IncompatibleAssignment {
                         var_name: name.to_string(),
@@ -34,20 +33,31 @@ impl SemanticGen {
             });
         }
 
-        let current_scope = self.variables.last_mut().unwrap();
+        let current_scope = self.variable_scopes.last_mut().unwrap();
         if current_scope.contains_key(name) {
-            return Err(SemanticError::DuplicateVariableDefinition { name: name.to_string() })
+            return Err(SemanticError::DuplicateVariableDefinition {
+                name: name.to_string()
+            })
         }
 
-        let variable = Rc::new(SemanticVariable { sem_type: sem_type.clone() });
-        current_scope.insert(name.to_string(), variable.clone());
-        Ok(SemanticStatement::VariableDeclaration { variable, init_expr: sem_init_expr })
+        let variable_id = self.variable_id_gen.next_id();
+        current_scope.insert(name.to_string(), variable_id);
+        self.variables.insert(variable_id, SemanticVariable {
+            sem_type,
+            id: variable_id,
+        });
+        let declaration_node = SemanticStatement::VariableDeclaration {
+            variable_id,
+            init_expr: sem_init_expr,
+        };
+
+        Ok(declaration_node)
     }
 
     pub fn assign_variable(&self, name: &str, expr: &ExpressionNode) -> Result<SemanticStatement, SemanticError> {
         let variable = self.get_variable(name)?;
         let sem_expr = self.eval_expr(expr)?;
-        let compatible = sem_expr.sem_type.try_downcast(&variable.sem_type);
+        let compatible = self.try_downcast(&variable.sem_type, &sem_expr.sem_type);
         if !compatible {
             return Err(SemanticError::IncompatibleAssignment {
                 var_name: name.to_string(),
@@ -55,15 +65,19 @@ impl SemanticGen {
                 expr_type: sem_expr.sem_type
             });
         }
-        Ok(SemanticStatement::VariableAssignment { variable, expr: sem_expr })
+        Ok(SemanticStatement::VariableAssignment {
+            variable_id: variable.id,
+            expr: sem_expr
+        })
     }
 
-    pub fn get_variable(&self, name: &str) -> Result<Rc<SemanticVariable>, SemanticError> {
-        for scope in self.variables.iter().rev() {
-            if let Some(var) = scope.get(name) {
-                return Ok(var.clone());
+    pub fn get_variable(&self, name: &str) -> Result<&SemanticVariable, SemanticError> {
+        for scope in self.variable_scopes.iter().rev() {
+            if let Some(var_id) = scope.get(name) {
+                return Ok(&self.variables[var_id])
             }
         }
         Err(SemanticError::UndefinedVariable { name: name.to_string() })
     }
 }
+

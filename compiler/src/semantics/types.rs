@@ -9,7 +9,7 @@ pub enum SemanticTypeKind {
     Bool,
     String,
     Array(SemanticType),
-    NamedStruct(Rc<SemanticStruct>),
+    NamedStruct(u32, String),
     AnonymousStruct(HashMap<String, SemanticType>),
     Void
 }
@@ -22,7 +22,7 @@ impl PartialEq for SemanticTypeKind {
             (SemanticTypeKind::Bool, SemanticTypeKind::Bool) => true,
             (SemanticTypeKind::String, SemanticTypeKind::String) => true,
             (SemanticTypeKind::Array(elem_a), SemanticTypeKind::Array(elem_b)) => elem_a == elem_b,
-            (SemanticTypeKind::NamedStruct(struct_a), SemanticTypeKind::NamedStruct(struct_b)) => Rc::ptr_eq(struct_a, struct_b),
+            (SemanticTypeKind::NamedStruct(id_a, _), SemanticTypeKind::NamedStruct(id_b, _)) => id_a == id_b,
             (SemanticTypeKind::AnonymousStruct(fields_a), SemanticTypeKind::AnonymousStruct(fields_b)) => fields_a == fields_b,
             (SemanticTypeKind::Void, SemanticTypeKind::Void) => true,
             _ => false
@@ -57,7 +57,7 @@ impl Display for SemanticTypeKind {
             SemanticTypeKind::Bool => write!(f, "bool"),
             SemanticTypeKind::String => write!(f, "str"),
             SemanticTypeKind::Array(elem_type) => write!(f, "{}[]", elem_type),
-            SemanticTypeKind::NamedStruct(named_struct) => write!(f, "{}", &named_struct.name),
+            SemanticTypeKind::NamedStruct(_, name) => write!(f, "{}", name),
             SemanticTypeKind::AnonymousStruct(fields) => {
                 write!(f, "{{")?;
                 for (i, (field_name, field_type)) in fields.iter().enumerate() {
@@ -89,10 +89,6 @@ impl SemanticType {
         SemanticType(Rc::new(RefCell::new(kind)))
     }
 
-    pub(super) fn try_unify(a: &SemanticType, b: &SemanticType) -> bool {
-        return a.try_downcast(b) || b.try_downcast(a);
-    }
-
     pub(super) fn kind(&self) -> SemanticTypeKind {
         self.0.borrow().clone()
     }
@@ -103,57 +99,6 @@ impl SemanticType {
 
     pub(super) fn can_be_owned(&self) -> bool {
         (*self.borrow()).can_be_owned()
-    }
-
-    pub(super) fn try_downcast(&self, target: &SemanticType) -> bool {
-        let target_kind = target.kind();
-        let self_kind = self.kind();
-        match (target_kind, self_kind) {
-            (other, SemanticTypeKind::Any) => {
-                *(self.borrow_mut()) = other;
-                true
-            },
-            (SemanticTypeKind::Integer, SemanticTypeKind::Integer) => true,
-            (SemanticTypeKind::Bool, SemanticTypeKind::Bool) => true,
-            (SemanticTypeKind::String, SemanticTypeKind::String) => true,
-            (SemanticTypeKind::Array(elem_a), SemanticTypeKind::Array(elem_b)) => elem_b.try_downcast(&elem_a),
-            (SemanticTypeKind::NamedStruct(struct_a), SemanticTypeKind::NamedStruct(struct_b))
-                => Rc::ptr_eq(&struct_a, &struct_b),
-            (SemanticTypeKind::NamedStruct(named_struct), SemanticTypeKind::AnonymousStruct(ref mut fields)) => {
-                let target_fields = &named_struct.fields;
-                if Self::try_downcast_struct(target_fields, fields) {
-                    *(self.borrow_mut()) = SemanticTypeKind::NamedStruct(named_struct.clone());
-                    true
-                } else {
-                    false
-                }
-            }
-            (SemanticTypeKind::AnonymousStruct(ref mut target_fields),
-            SemanticTypeKind::AnonymousStruct(ref mut struct_fields)) => {
-                Self::try_downcast_struct(target_fields, struct_fields)
-            }
-            _ => false
-        }
-    }
-
-    pub(super) fn try_downcast_struct(
-        target_fields: &HashMap<String, SemanticType>,
-        struct_fields: &mut HashMap<String, SemanticType>
-    ) -> bool {
-        if target_fields.len() != struct_fields.len() {
-            return false;
-        }
-        for (field_name, field_type) in struct_fields {
-            match target_fields.get(field_name) {
-                Some(col_type) => {
-                    if !field_type.try_downcast(col_type) {
-                        return false;
-                    }
-                },
-                None => return false
-            }
-        }
-        true
     }
 }
 
@@ -190,13 +135,69 @@ impl SemanticGen {
                 Ok(SemanticType::new(SemanticTypeKind::Array(elem_type)))
             },
             TypeNode::Struct(struct_name) => {
-                if let Some(named_struct) = self.structs.get(struct_name) {
-                    Ok(SemanticType::new(SemanticTypeKind::NamedStruct(named_struct.clone())))
+                if let Some(named_struct) = self.structs.get_by_name(struct_name) {
+                    Ok(SemanticType::new(SemanticTypeKind::NamedStruct(named_struct.id, struct_name.clone())))
                 } else {
                     Err(SemanticError::UndefinedStruct { name: struct_name.to_string() })
                 }
             },
             TypeNode::Void => Ok(SemanticType::new(SemanticTypeKind::Void)),
         }
+    }
+
+    pub(super) fn try_unify(&self, a: &SemanticType, b: &SemanticType) -> bool {
+        return self.try_downcast(b, a) || self.try_downcast(a, b);
+    }
+
+    pub(super) fn try_downcast(&self, target: &SemanticType, sem_type: &SemanticType) -> bool {
+        let target_kind = target.kind();
+        let self_kind = sem_type.kind();
+        match (target_kind, self_kind) {
+            (other, SemanticTypeKind::Any) => {
+                *(sem_type.borrow_mut()) = other;
+                true
+            },
+            (SemanticTypeKind::Integer, SemanticTypeKind::Integer) => true,
+            (SemanticTypeKind::Bool, SemanticTypeKind::Bool) => true,
+            (SemanticTypeKind::String, SemanticTypeKind::String) => true,
+            (SemanticTypeKind::Array(elem_a), SemanticTypeKind::Array(elem_b)) => self.try_downcast(&elem_a, &elem_b),
+            (SemanticTypeKind::NamedStruct(struct_a, _), SemanticTypeKind::NamedStruct(struct_b, _))
+                => struct_a == struct_b,
+            (SemanticTypeKind::NamedStruct(struct_id, struct_name), SemanticTypeKind::AnonymousStruct(ref mut fields)) => {
+                let target_fields = &self.structs[struct_id].fields;
+                if self.try_downcast_struct(target_fields, fields) {
+                    *(sem_type.borrow_mut()) = SemanticTypeKind::NamedStruct(struct_id, struct_name);
+                    true
+                } else {
+                    false
+                }
+            }
+            (SemanticTypeKind::AnonymousStruct(ref mut target_fields),
+            SemanticTypeKind::AnonymousStruct(ref mut struct_fields)) => {
+                self.try_downcast_struct(target_fields, struct_fields)
+            }
+            _ => false
+        }
+    }
+
+    pub(super) fn try_downcast_struct(
+        &self,
+        target_fields: &HashMap<String, SemanticType>,
+        struct_fields: &mut HashMap<String, SemanticType>
+    ) -> bool {
+        if target_fields.len() != struct_fields.len() {
+            return false;
+        }
+        for (field_name, field_type) in struct_fields {
+            match target_fields.get(field_name) {
+                Some(target_type) => {
+                    if !self.try_downcast(target_type, field_type) {
+                        return false;
+                    }
+                },
+                None => return false
+            }
+        }
+        true
     }
 }

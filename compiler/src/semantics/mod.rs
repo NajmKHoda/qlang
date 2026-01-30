@@ -7,51 +7,65 @@ mod control_flow;
 mod data;
 mod binops;
 mod errors;
+mod util;
 
-use std::collections::HashMap;
-use std::rc::Rc;
+use std::{collections::HashMap};
+use util::*;
 
-use types::*;
-use variables::*;
-use functions::*;
-use control_flow::*;
-use data::*;
-use ir::*;
-use queries::*;
-use errors::SemanticError;
+pub use types::*;
+pub use variables::*;
+pub use functions::*;
+pub use control_flow::*;
+pub use data::*;
+pub use ir::*;
+pub use queries::*;
+pub use errors::SemanticError;
 
 use crate::tokens::*;
 
 pub struct SemanticGen {
-    datasources: HashMap<String, Rc<SemanticDatasource>>,
-    tables: HashMap<String, Rc<SemanticTable>>,
-    structs: HashMap<String, Rc<SemanticStruct>>,
-    functions: HashMap<String, Rc<SemanticFunction>>,
-    variables: Vec<HashMap<String, Rc<SemanticVariable>>>,
-    loops: Vec<(Option<String>, LoopId)>,
-
+    datasources: DualLookup<SemanticDatasource>,
+    tables: DualLookup<SemanticTable>,
+    structs: DualLookup<SemanticStruct>,
+    functions: DualLookup<SemanticFunction>,
+    variables: HashMap<u32, SemanticVariable>,
+    variable_scopes: Vec<HashMap<String, u32>>,
+    loops: Vec<(Option<String>, u32)>,
     cur_return_type: SemanticType,
-    _next_loop_id: usize,
-}
 
+    datasource_id_gen: IdGenerator,
+    table_id_gen: IdGenerator,
+    struct_id_gen: IdGenerator,
+    function_id_gen: IdGenerator,
+    variable_id_gen: IdGenerator,
+    loop_id_gen: IdGenerator,
+}
+    
 pub struct SemanticProgram {
-    pub datasources: Vec<Rc<SemanticDatasource>>,
-    pub tables: Vec<Rc<SemanticTable>>,
-    pub structs: Vec<Rc<SemanticStruct>>,
-    pub functions: Vec<Rc<SemanticFunction>>,
+    pub datasources: Vec<SemanticDatasource>,
+    pub tables: Vec<SemanticTable>,
+    pub structs: Vec<SemanticStruct>,
+    pub functions: Vec<SemanticFunction>,
 }
 
 impl SemanticGen {
     fn new() -> Self {
         SemanticGen {
-            datasources: HashMap::new(),
-            tables: HashMap::new(),
-            structs: HashMap::new(),
-            functions: HashMap::new(),
-            variables: vec![],
+            datasources: DualLookup::new(),
+            tables: DualLookup::new(),
+            structs: DualLookup::new(),
+            functions: DualLookup::new(),
+            variables: HashMap::new(),
+            variable_scopes: vec![],
             loops: vec![],
             cur_return_type: SemanticType::new(SemanticTypeKind::Void),
-            _next_loop_id: 0,
+
+            datasource_id_gen: IdGenerator::new(),
+            table_id_gen: IdGenerator::new(),
+            struct_id_gen: IdGenerator::new(),
+            function_id_gen: IdGenerator::new(),
+            variable_id_gen: IdGenerator::new(),
+            loop_id_gen: IdGenerator::new(),
         }
     }
 
@@ -117,7 +131,7 @@ impl SemanticGen {
             ExpressionNode::QName(qname) => {
                 let variable = self.get_variable(qname)?;
                 Ok(SemanticExpression { 
-                    kind: SemanticExpressionKind::Variable(variable.clone()), 
+                    kind: SemanticExpressionKind::Variable(variable.id), 
                     sem_type: variable.sem_type.clone(),
                     ownership: if variable.sem_type.can_be_owned() {
                         Ownership::Borrowed
@@ -158,7 +172,7 @@ impl SemanticGen {
         }
     }
 
-    pub fn eval_program(&mut self, program: &ProgramNode) -> Result<SemanticProgram, SemanticError> {
+    pub fn eval_program(mut self, program: &ProgramNode) -> Result<SemanticProgram, SemanticError> {
         for datasource in &program.datasources {
             self.declare_datasource(&datasource.name, datasource.is_readonly)?;
         }
@@ -172,15 +186,15 @@ impl SemanticGen {
         }
 
         Ok(SemanticProgram {
-            datasources: self.datasources.values().cloned().collect(),
-            tables: self.tables.values().cloned().collect(),
-            structs: self.structs.values().cloned().collect(),
-            functions: self.functions.values().cloned().collect(),
+            datasources: self.datasources.collect_values(),
+            tables: self.tables.collect_values(),
+            structs: self.structs.collect_values(),
+            functions: self.functions.collect_values(),
         })
     }
 
     pub fn gen_semantic(program: &ProgramNode) -> Result<SemanticProgram, SemanticError> {
-        let mut sem_gen = SemanticGen::new();
+        let sem_gen = SemanticGen::new();
         sem_gen.eval_program(program)
     }
 }

@@ -10,6 +10,7 @@ pub enum Ownership {
 
 pub struct SemanticStruct {
     pub name: String,
+    pub id: u32,
     pub fields: HashMap<String, SemanticType>,
     pub field_order: Vec<String>,
 }
@@ -32,9 +33,12 @@ impl SemanticGen {
 
         let struct_type = match name {
             Some(struct_name) => {
-                if let Some(named_struct) = self.structs.get(struct_name) {
-                    if SemanticType::try_downcast_struct(&named_struct.fields, &mut field_types) {
-                        SemanticType::new(SemanticTypeKind::NamedStruct(named_struct.clone()))
+                if let Some(named_struct) = self.structs.get_by_name(struct_name) {
+                    if self.try_downcast_struct(&named_struct.fields, &mut field_types) {
+                        SemanticType::new(SemanticTypeKind::NamedStruct(
+                            named_struct.id,
+                            named_struct.name.clone()
+                        ))
                     } else {
                         return Err(SemanticError::IncompatibleStructInitialization {
                             name: struct_name.to_string(),
@@ -61,7 +65,8 @@ impl SemanticGen {
     pub fn eval_struct_field(&self, struct_expr: &ExpressionNode, field_name: &str) -> Result<SemanticExpression, SemanticError> {
         let sem_struct = self.eval_expr(struct_expr)?;
         match &sem_struct.sem_type.kind() {
-            SemanticTypeKind::NamedStruct(named_struct) => {
+            SemanticTypeKind::NamedStruct(struct_id, _) => {
+                let named_struct = &self.structs[*struct_id];
                 if let Some(position) = named_struct.field_order.iter().position(|f| f == field_name) {
                     let field_type = named_struct.fields[field_name].clone();
                     Ok(SemanticExpression {
@@ -103,7 +108,7 @@ impl SemanticGen {
         let mut sem_exprs: Vec<SemanticExpression> = vec![];
         for elem in elements {
             let mut sem_expr = self.eval_expr(elem)?;
-            if !SemanticType::try_unify(&sem_expr.sem_type, &elem_type) {
+            if !self.try_unify(&sem_expr.sem_type, &elem_type) {
                 return Err(SemanticError::HeterogeneousArray {
                     type_a: elem_type,
                     type_b: sem_expr.sem_type,

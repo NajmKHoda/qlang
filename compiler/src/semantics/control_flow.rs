@@ -5,9 +5,6 @@ pub struct SemanticBlock {
     pub terminates: bool,
 }
 
-#[derive(Copy, Clone, PartialEq, Eq, Hash)]
-pub struct LoopId(pub(super) usize);
-
 impl SemanticStatement {
     fn is_terminating(&self) -> bool {
         match self {
@@ -30,7 +27,7 @@ impl SemanticStatement {
 }
 
 impl SemanticGen {
-    fn find_loop_id(&self, label: &Option<String>) -> Option<LoopId> {
+    fn find_loop_id(&self, label: &Option<String>) -> Option<u32> {
         match label {
             Some(label_name) => {
                 self.loops.iter().rev()
@@ -41,14 +38,8 @@ impl SemanticGen {
         }
     }
 
-    pub(super) fn next_loop_id(&mut self) -> LoopId {
-        let loop_id = LoopId(self._next_loop_id);
-        self._next_loop_id += 1;
-        loop_id
-    }
-
     pub(super) fn eval_block(&mut self, statements: &[StatementNode]) -> Result<SemanticBlock, SemanticError> {
-        self.variables.push(HashMap::new());
+        self.variable_scopes.push(HashMap::new());
         let mut sem_statements = Vec::new();
         let mut terminates = false;
         for stmt in statements {
@@ -59,7 +50,7 @@ impl SemanticGen {
                 break;
             }
         }
-        self.variables.pop();
+        self.variable_scopes.pop();
 
         Ok(SemanticBlock {
             statements: sem_statements,
@@ -114,7 +105,7 @@ impl SemanticGen {
             });
         }
 
-        let loop_id = self.next_loop_id();
+        let loop_id = self.loop_id_gen.next_id();
 
         self.loops.push((label.clone(), loop_id));
         let sem_body = self.eval_block(body)?;

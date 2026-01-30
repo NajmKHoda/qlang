@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use std::{collections::HashMap, rc::Rc};
+use std::{collections::HashMap};
 
 use crate::semantics::control_flow::SemanticBlock;
 
@@ -8,11 +8,11 @@ use super::*;
 
 pub enum SemanticStatement {
     VariableDeclaration {
-        variable: Rc<SemanticVariable>,
+        variable_id: u32,
         init_expr: SemanticExpression,
     },
     VariableAssignment {
-        variable: Rc<SemanticVariable>,
+        variable_id: u32,
         expr: SemanticExpression,
     },
     LoneExpression(SemanticExpression),
@@ -23,12 +23,12 @@ pub enum SemanticStatement {
     ConditionalLoop {
         condition: SemanticExpression,
         body: SemanticBlock,
-        id: LoopId,
+        id: u32,
     },
     Return(Option<SemanticExpression>),
-    Break(LoopId),
-    Continue(LoopId),
-    DropVariable(Rc<SemanticVariable>),
+    Break(u32),
+    Continue(u32),
+    DropVariable(u32),
 }
 
 pub struct SemanticConditionalBranch {
@@ -48,7 +48,7 @@ pub enum SemanticExpressionKind {
     StringLiteral(String),
     Struct(HashMap<String, SemanticExpression>),
     Array(Vec<SemanticExpression>),
-    Variable(Rc<SemanticVariable>),
+    Variable(u32),
     StructField {
         struct_expr: Box<SemanticExpression>,
         index: i32,
@@ -71,7 +71,7 @@ pub enum SemanticExpressionKind {
         op: ComparisonType
     },
     FunctionCall {
-        function: Rc<SemanticFunction>,
+        function_id: u32,
         args: Vec<SemanticExpression>,
     },
     BuiltinFunctionCall {
@@ -102,20 +102,20 @@ pub enum BuiltinMethod {
 
 pub enum SemanticQuery {
     Select {
-        from_table: Rc<SemanticTable>,
+        table_id: u32,
         where_clause: Option<WhereClause>,
     },
     Insert {
-        into_table: Rc<SemanticTable>,
+        table_id: u32,
         value: Box<SemanticExpression>,
     },
     Update {
-        table: Rc<SemanticTable>,
+        table_id: u32,
         assignments: HashMap<String, SemanticExpression>,
         where_clause: Option<WhereClause>,
     },
     Delete {
-        from_table: Rc<SemanticTable>,
+        table_id: u32,
         where_clause: Option<WhereClause>,
     }
 }

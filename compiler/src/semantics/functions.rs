@@ -1,10 +1,9 @@
-use std::rc::Rc;
-
 use super::*;
 
 pub struct SemanticFunction {
     pub name: String,
-    pub params: Vec<Rc<SemanticVariable>>,
+    pub id: u32,
+    pub param_ids: Vec<u32>,
     pub return_type: SemanticType,
     pub body: SemanticBlock,
 }
@@ -22,7 +21,7 @@ impl SemanticGen {
         &self,
         fn_name: &str,
         arg_exprs: &[SemanticExpression],
-        param_types: &[SemanticType]
+        param_types: &[&SemanticType]
     ) -> Result<(), SemanticError> {
         if arg_exprs.len() != param_types.len() {
             return Err(SemanticError::MismatchingCallArity {
@@ -33,12 +32,12 @@ impl SemanticGen {
         }
 
         for (i, (arg, param_type)) in arg_exprs.iter().zip(param_types).enumerate() {
-            let compatible = arg.sem_type.try_downcast(param_type);
+            let compatible = self.try_downcast(param_type, &arg.sem_type);
             if !compatible {
                 return Err(SemanticError::IncompatibleArgumentType {
                     function_name: fn_name.to_string(),
                     position: i,
-                    expected: param_type.clone(),
+                    expected: (*param_type).clone(),
                     found: arg.sem_type.clone(),
                 });
             }
@@ -49,7 +48,7 @@ impl SemanticGen {
     fn call_builtin_function(&self, name: &str, arg_exprs: Vec<SemanticExpression>) -> Result<SemanticExpression, SemanticError> {
         match name {
             "prints" => {
-                self.check_args("prints", &arg_exprs, &[SemanticType::new(SemanticTypeKind::String)])?;
+                self.check_args("prints", &arg_exprs, &[&SemanticType::new(SemanticTypeKind::String)])?;
                 Ok(SemanticExpression {
                     sem_type: SemanticType::new(SemanticTypeKind::Void),
                     kind: SemanticExpressionKind::BuiltinFunctionCall {
@@ -60,7 +59,7 @@ impl SemanticGen {
                 })
             }
             "printi" => {
-                self.check_args("printi", &arg_exprs, &[SemanticType::new(SemanticTypeKind::Integer)])?;
+                self.check_args("printi", &arg_exprs, &[&SemanticType::new(SemanticTypeKind::Integer)])?;
                 Ok(SemanticExpression {
                     sem_type: SemanticType::new(SemanticTypeKind::Void),
                     kind: SemanticExpressionKind::BuiltinFunctionCall {
@@ -71,7 +70,7 @@ impl SemanticGen {
                 })
             }
             "printb" => {
-                self.check_args("printb", &arg_exprs, &[SemanticType::new(SemanticTypeKind::Bool)])?;
+                self.check_args("printb", &arg_exprs, &[&SemanticType::new(SemanticTypeKind::Bool)])?;
                 Ok(SemanticExpression {
                     sem_type: SemanticType::new(SemanticTypeKind::Void),
                     kind: SemanticExpressionKind::BuiltinFunctionCall {
@@ -114,30 +113,34 @@ impl SemanticGen {
         return_type: &TypeNode,
         body: &[StatementNode],
     ) -> Result<(), SemanticError> {
-        if self.functions.contains_key(name) {
+        if self.functions.contains_name(name) {
             return Err(SemanticError::DuplicateFunctionDefinition {
                 name: name.to_string(),
             });
         }
 
         self.cur_return_type = self.try_get_semantic_type(return_type)?;
-        self.variables.push(HashMap::new());
-        let mut params = Vec::new();
+
+        self.variable_scopes.push(HashMap::new());
+        let mut param_ids = Vec::new();
         for param_node in param_nodes {
             let param_type = self.try_get_semantic_type(&param_node.type_node)?;
-            let variable = Rc::new(SemanticVariable { sem_type: param_type.clone() });
-
-            let current_scope = self.variables.last_mut().unwrap();
-            current_scope.insert(param_node.name.clone(), variable.clone());
-            params.push(variable);
+            let param_id = self.variable_id_gen.next_id();
+            let parameter_scope = self.variable_scopes.last_mut().unwrap();
+            param_ids.push(param_id);
+            parameter_scope.insert(param_node.name.clone(), param_id);
+            self.variables.insert(param_id, SemanticVariable {
+                sem_type: param_type,
+                id: param_id,
+            });
         }
 
-        if name == "main" && (!params.is_empty() || self.cur_return_type != SemanticTypeKind::Integer) {
+        if name == "main" && (!param_ids.is_empty() || self.cur_return_type != SemanticTypeKind::Integer) {
             return Err(SemanticError::InvalidMainSignature);
         }
 
         let mut body_block = self.eval_block(body)?;
-        self.variables.pop();
+        self.variable_scopes.pop();
 
         if !body_block.terminates {
             if self.cur_return_type == SemanticTypeKind::Void {
@@ -156,31 +159,33 @@ impl SemanticGen {
             }
         }
 
-        self.functions.insert(name.to_string(), Rc::new(SemanticFunction {
+        let function_id = self.function_id_gen.next_id();
+        self.functions.insert(name.to_string(), function_id, SemanticFunction {
             name: name.to_string(),
-            params,
+            id: function_id,
+            param_ids,
             return_type: self.cur_return_type.clone(),
             body: body_block,
-        }));
+        });
         Ok(())
     }
 
     pub(super) fn call_function(&self, name: &str, arg_exprs: &[Box<ExpressionNode>]) -> Result<SemanticExpression, SemanticError> {
         let sem_args = arg_exprs.iter()
-                .map(|arg| self.eval_expr(arg))
-                .collect::<Result<Vec<SemanticExpression>, SemanticError>>()?;
+            .map(|arg| self.eval_expr(arg))
+            .collect::<Result<Vec<SemanticExpression>, SemanticError>>()?;
         if BUILTIN_FNS.contains(&name) {
             return self.call_builtin_function(name, sem_args);
         }
-        if let Some(func) = self.functions.get(name) {
-            let param_types: Vec<SemanticType> = func.params.iter()
-                .map(|param| param.sem_type.clone())
+        if let Some(func) = self.functions.get_by_name(name) {
+            let param_types: Vec<&SemanticType> = func.param_ids.iter()
+                .map(|param_id| &self.variables[param_id].sem_type)
                 .collect();
             self.check_args(name, &sem_args, &param_types)?;
             Ok(SemanticExpression {
                 sem_type: func.return_type.clone(),
                 kind: SemanticExpressionKind::FunctionCall {
-                    function: func.clone(),
+                    function_id: func.id,
                     args: sem_args,
                 },
                 ownership: if func.return_type.can_be_owned() {
@@ -190,7 +195,9 @@ impl SemanticGen {
                 },
             })
         } else {
-            Err(SemanticError::UndefinedFunction { name: name.to_string() })
+            Err(SemanticError::UndefinedFunction {
+                name: name.to_string()
+            })
         }
     }
 
@@ -220,7 +227,7 @@ impl SemanticGen {
                 })
             }
             (SemanticTypeKind::Array(elem_type), "append") => {
-                self.check_args("Array.append", &sem_args, &[elem_type])?;
+                self.check_args("Array.append", &sem_args, &[&elem_type])?;
                 Ok(SemanticExpression {
                     sem_type: SemanticType::new(SemanticTypeKind::Void),
                     kind: SemanticExpressionKind::BuiltinMethodCall {
@@ -239,7 +246,7 @@ impl SemanticGen {
                     } else {
                         Ownership::Trivial
                     },
-                    sem_type: elem_type,
+                    sem_type: elem_type.clone(),
                     kind: SemanticExpressionKind::BuiltinMethodCall {
                         receiver: Box::new(sem_receiver),
                         method: BuiltinMethod::ArrayPop,
