@@ -1,6 +1,7 @@
 use inkwell::{AddressSpace, values::AnyValue};
 
-use super::{CodeGen, CodeGenError, QLValue};
+use crate::{codegen::data::GenValue, semantics::Ownership};
+use super::{CodeGen, CodeGenError};
 
 impl<'ctxt> CodeGen<'ctxt> {
     pub(super) fn gen_const_strs(&self) -> Result<(), CodeGenError> {
@@ -36,7 +37,7 @@ impl<'ctxt> CodeGen<'ctxt> {
         Ok(())
     }
 
-    pub fn const_str(&mut self, value: &str) -> Result<QLValue<'ctxt>, CodeGenError> {
+    pub fn const_str(&mut self, value: &str) -> Result<GenValue<'ctxt>, CodeGenError> {
         if !self.strings.contains_key(value) {
             let global_val = self.module.add_global(self.ptr_type(), Some(AddressSpace::default()), "const_str");
             global_val.set_initializer(&self.ptr_type().const_null());
@@ -45,7 +46,10 @@ impl<'ctxt> CodeGen<'ctxt> {
 
         let global_ptr = self.strings[value].as_pointer_value();
         let str_ptr = self.builder.build_load(self.ptr_type(), global_ptr, "const_str_load")?.into_pointer_value();
-        Ok(QLValue::String(str_ptr, true))
+        Ok(GenValue::String {
+            value: str_ptr,
+            ownership: Ownership::Borrowed
+        })
     }
 
     

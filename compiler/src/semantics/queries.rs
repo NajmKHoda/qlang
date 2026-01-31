@@ -3,8 +3,9 @@ use std::{collections::HashMap};
 use super::*;
 
 pub struct SemanticDatasource {
-    pub is_readonly: bool,
+    pub name: String,
     pub id: u32,
+    pub is_readonly: bool,
 }
 
 pub struct SemanticTable {
@@ -52,6 +53,7 @@ impl SemanticGen {
         }
         let datasource_id = self.datasource_id_gen.next_id();
         self.datasources.insert(name.to_string(), datasource_id, SemanticDatasource {
+            name: name.to_string(),
             is_readonly,
             id: datasource_id,
         });
@@ -213,7 +215,7 @@ impl SemanticGen {
                     }
                 }
                 Ok((column_name.clone(), sem_expr))
-            }).collect::<Result<HashMap<String, SemanticExpression>, SemanticError>>()?;
+            }).collect::<Result<Vec<(String, SemanticExpression)>, SemanticError>>()?;
 
             let where_clause = query.where_clause.as_ref().map(|where_node| {
                 self.eval_where_clause(where_node, table)

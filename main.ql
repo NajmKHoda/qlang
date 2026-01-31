@@ -1,14 +1,14 @@
-readonly datasource example;
+datasource example;
 
-readonly table Person from example {
+table Person from example {
   int age,
   str name
 }
 
 function main() -> int {
   Person entry <- {
-    age: 20,
-    name: "Wallace"
+    age: inputi(),
+    name: inputs()
   };
   query { insert entry into Person };
 }

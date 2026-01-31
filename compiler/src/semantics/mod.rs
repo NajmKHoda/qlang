@@ -42,10 +42,11 @@ pub struct SemanticGen {
 }
     
 pub struct SemanticProgram {
-    pub datasources: Vec<SemanticDatasource>,
-    pub tables: Vec<SemanticTable>,
-    pub structs: Vec<SemanticStruct>,
-    pub functions: Vec<SemanticFunction>,
+    pub datasources: HashMap<u32, SemanticDatasource>,
+    pub tables: HashMap<u32, SemanticTable>,
+    pub structs: HashMap<u32, SemanticStruct>,
+    pub functions: HashMap<u32, SemanticFunction>,
+    pub variables: HashMap<u32, SemanticVariable>,
 }
 
 impl SemanticGen {
@@ -186,10 +187,11 @@ impl SemanticGen {
         }
 
         Ok(SemanticProgram {
-            datasources: self.datasources.collect_values(),
-            tables: self.tables.collect_values(),
-            structs: self.structs.collect_values(),
-            functions: self.functions.collect_values(),
+            datasources: self.datasources.collect_id_value_map(),
+            tables: self.tables.collect_id_value_map(),
+            structs: self.structs.collect_id_value_map(),
+            functions: self.functions.collect_id_value_map(),
+            variables: self.variables,
         })
     }
 

@@ -2,8 +2,9 @@ use super::*;
 
 #[derive(Clone)]
 pub struct SemanticVariable {
-    pub sem_type: SemanticType,
+    pub name: String,
     pub id: u32,
+    pub sem_type: SemanticType,
 }
 
 impl SemanticGen {
@@ -43,8 +44,9 @@ impl SemanticGen {
         let variable_id = self.variable_id_gen.next_id();
         current_scope.insert(name.to_string(), variable_id);
         self.variables.insert(variable_id, SemanticVariable {
-            sem_type,
+            name: name.to_string(),
             id: variable_id,
+            sem_type,
         });
         let declaration_node = SemanticStatement::VariableDeclaration {
             variable_id,

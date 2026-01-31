@@ -1,156 +1,137 @@
-use inkwell::basic_block::BasicBlock;
+use inkwell::{basic_block::BasicBlock, values::{IntValue}};
 
-use super::{CodeGen, CodeGenError, QLValue};
-use crate::{codegen::QLScopeType, tokens::{ConditionalBranchNode, ExpressionNode, StatementNode}};
+use super::{CodeGen, CodeGenError};
+use crate::semantics::{SemanticBlock, SemanticConditionalBranch, SemanticExpression};
 
-pub(super) struct QLLoop<'a> {
-    label: Option<String>,
+pub(super) struct GenLoopInfo<'a> {
     cond_block: BasicBlock<'a>,
     after_block: BasicBlock<'a>
 }
 
 impl<'ctxt> CodeGen<'ctxt> {
-    fn branch_if(
-        &mut self,
-        predicate: bool,
-        source_block: BasicBlock<'ctxt>,
-        destination_block: BasicBlock<'ctxt>
-    ) -> Result<(), CodeGenError> {
-        self.builder.position_at_end(source_block);
-        if predicate {
-            self.builder.build_unconditional_branch(destination_block)?;
-        }
-        Ok(())
-    }
-
-    fn find_loop(&self, label_op: &Option<String>) -> Result<&QLLoop<'ctxt>, CodeGenError> {
-        match label_op {
-            Some(label) => self.loops.iter()
-                .find(|lp| lp.label.as_ref() == Some(&label))
-                .ok_or(CodeGenError::UndefinedLoopLabelError(label.clone())),
-            None => self.loops.last().ok_or(CodeGenError::BadLoopControlError)
-        }
-    }
-
-    fn release_to_loop_scope(&self, break_label_op: &Option<String>) -> Result<(), CodeGenError> {
-        for scope in self.scopes.iter().rev() {
-            self.release_scope(scope)?;
-            if let QLScopeType::LoopScope(loop_label_op) = &scope.scope_type {
-                match (loop_label_op, break_label_op.as_deref()) {
-                    (Some(loop_label), Some(break_label)) if loop_label == break_label => break,
-                    (_, None) => break,
-                    _ => {}
-                }
-            }
-        }
-        Ok(())
-    }
-
     pub fn gen_conditional(
         &mut self,
-        conditional_branches: &[ConditionalBranchNode],
-        else_branch: &Option<Vec<StatementNode>>
-    ) -> Result<bool, CodeGenError> {
+        conditional_branches: &[SemanticConditionalBranch],
+        else_branch: &Option<SemanticBlock>
+    ) -> Result<(), CodeGenError> {
+        let cur_fn = self.llvm_functions[&self.cur_fn_id];
         let initial_block = self.builder.get_insert_block().unwrap();
-        let merge_block = self.append_block("merge_branches");
 
-        let mut all_branches_terminate = true;
-        let mut next_block: BasicBlock = merge_block;
-        if let Some(else_body) = else_branch {
-            let body_block = self.context.prepend_basic_block(merge_block, "else_body");
-            next_block = body_block;
-
-            let terminates = self.gen_block_stmts(body_block, else_body, QLScopeType::ConditionalScope)?;
-            all_branches_terminate = all_branches_terminate && terminates;
-            self.branch_if(!terminates, body_block, merge_block)?;
-        } else {
-            all_branches_terminate = false;
+        struct BranchGenInfo<'a> {
+            cond_value: IntValue<'a>,
+            cond_block: BasicBlock<'a>,
+            body_block: BasicBlock<'a>,
         }
 
-        for (i, branch) in conditional_branches.into_iter().enumerate().rev() {
-            let body_block = self.context.prepend_basic_block(next_block, format!("branch{}_body", i).as_str());
-            let cond_block = self.context.prepend_basic_block(body_block, format!("branch{}_cond", i).as_str());
-
+        // First pass: generate blocks
+        let mut blocks: Vec<BranchGenInfo> = vec![];
+        for (i, branch) in conditional_branches.iter().enumerate() {
+            let cond_block = self.context.append_basic_block(cur_fn, &format!("branch{}_cond", i));
             self.builder.position_at_end(cond_block);
-            let cond_val = branch.condition.gen_eval(self)?;
-            if let QLValue::Bool(cond_llvm) = cond_val {
-                self.builder.build_conditional_branch(cond_llvm, body_block, next_block)?;
-            } else {
-                return Err(CodeGenError::UnexpectedTypeError);
+            let cond_value = self.gen_eval(&branch.condition)?.as_llvm_basic_value().into_int_value();
+
+            let body_block = self.context.append_basic_block(cur_fn, &format!("branch{}_body", i+1));
+            self.builder.position_at_end(body_block);
+            for stmt in &branch.body.statements {
+                self.gen_stmt(stmt)?;
             }
 
-            let terminates = self.gen_block_stmts(body_block, &branch.body, QLScopeType::ConditionalScope)?;
-            all_branches_terminate = all_branches_terminate && terminates;
-            self.branch_if(!terminates, body_block, merge_block)?;
-            
-            next_block = cond_block;
+            blocks.push(BranchGenInfo { cond_value, cond_block, body_block });
+        }
+        if let Some(else_block) = else_branch {
+            let else_jump_block = self.context.append_basic_block(cur_fn, "else_jump");
+            let else_body_block = self.context.append_basic_block(cur_fn, "else_body");
+            self.builder.position_at_end(else_body_block);
+            for stmt in &else_block.statements {
+                self.gen_stmt(stmt)?;
+            }
+
+            blocks.push(BranchGenInfo {
+                cond_value: self.context.bool_type().const_int(1, false),
+                cond_block: else_jump_block,
+                body_block: else_body_block,
+            });
         }
 
+        // Second pass: link blocks together
+        for window in blocks.windows(2) {
+            let BranchGenInfo { cond_value, cond_block, body_block } = window[0];
+            let BranchGenInfo { cond_block: next_cond_block, .. } = window[1];
+            self.builder.position_at_end(cond_block);
+            self.builder.build_conditional_branch(cond_value, body_block, next_cond_block)?;
+        }
+
+        // Link initial block to first condition block
+        let BranchGenInfo { cond_block: first_cond_block, .. } = blocks.first().unwrap();
         self.builder.position_at_end(initial_block);
-        self.builder.build_unconditional_branch(next_block)?;
+        self.builder.build_unconditional_branch(*first_cond_block)?;
 
-        if all_branches_terminate {
-            self.builder.position_at_end(merge_block.get_previous_basic_block().unwrap());
-            let _ = merge_block.remove_from_function();
-            Ok(true)
+        let all_branches_terminate = if let Some(else_block) = else_branch {
+            else_block.terminates
+            && conditional_branches.iter().all(|branch| branch.body.terminates)
         } else {
+            false
+        };
+        
+        // If not all branches terminate, create a merge block
+        if !all_branches_terminate {
+            let BranchGenInfo {
+                cond_value: last_cond_value,
+                cond_block: last_cond_block,
+                body_block: last_body_block,
+            } = &blocks.last().unwrap();
+            
+            let merge_block = self.context.append_basic_block(cur_fn, "merge_branches");
+            self.builder.position_at_end(*last_cond_block);
+            self.builder.build_conditional_branch(*last_cond_value, *last_body_block, merge_block)?;
+            self.builder.position_at_end(*last_body_block);
+            self.builder.build_unconditional_branch(merge_block)?;
             self.builder.position_at_end(merge_block);
-            Ok(false)
         }
+
+        Ok(())
     }
 
     pub fn gen_loop(
         &mut self,
-        condition_expr: &Box<ExpressionNode>,
-        body_stmts: &[StatementNode],
-        loop_label: &Option<String>
+        condition_expr: &SemanticExpression,
+        body: &SemanticBlock,
+        id: u32,
     ) -> Result<(), CodeGenError> {
-        let loop_cond_block = self.append_block("loop_cond");
-        let loop_body_entry_block = self.append_block("loop_body_entry");
-        let after_loop_block = self.append_block("after_loop");
+        let cur_fn = self.llvm_functions[&self.cur_fn_id];
+        let cond_block = self.context.append_basic_block(cur_fn, "loop_cond");
+        let entry_block = self.context.append_basic_block(cur_fn, "loop_body_entry");
+        let after_block = self.context.append_basic_block(cur_fn, "after_loop");
+        self.loop_info.insert(id, GenLoopInfo { cond_block, after_block });
 
-        self.builder.build_unconditional_branch(loop_cond_block)?;
+        // Build loop conditional branch
+        self.builder.build_unconditional_branch(cond_block)?;
+        self.builder.position_at_end(cond_block);
+        let condition = self.gen_eval(condition_expr)?.as_llvm_basic_value().into_int_value();
+        self.builder.build_conditional_branch(condition, entry_block, after_block)?;
 
-        self.builder.position_at_end(loop_cond_block);
-        let condition = condition_expr.gen_eval(self)?;
-        if let QLValue::Bool(cond_bool) = condition {
-            self.builder.build_conditional_branch(cond_bool, loop_body_entry_block, after_loop_block)?;
-        } else {
-            return Err(CodeGenError::UnexpectedTypeError);
+        // Build loop body
+        self.builder.position_at_end(entry_block);
+        for stmt in &body.statements {
+            self.gen_stmt(stmt)?;
+        }
+        if !body.terminates {
+            self.builder.build_unconditional_branch(cond_block)?;
         }
 
-        self.loops.push(QLLoop {
-            label: loop_label.clone(),
-            cond_block: loop_cond_block,
-            after_block: after_loop_block
-        });
-
-        let body_terminates = self.gen_block_stmts(
-            loop_body_entry_block,
-            &body_stmts,
-            QLScopeType::LoopScope(loop_label.clone())
-        )?;
-
-        let cur_block = self.builder.get_insert_block().unwrap();
-        self.branch_if(!body_terminates, cur_block, loop_cond_block)?;
-
-        self.loops.pop();
-        self.builder.position_at_end(after_loop_block);
-
+        self.builder.position_at_end(after_block);
         Ok(())
     }
 
-    pub fn gen_break(&mut self, break_label: &Option<String>) -> Result<(), CodeGenError> {
-        let loop_info = self.find_loop(break_label)?;
-        self.release_to_loop_scope(break_label)?;
-        self.builder.build_unconditional_branch(loop_info.after_block)?;
+    pub fn gen_break(&self, loop_id: u32) -> Result<(), CodeGenError> {
+        let GenLoopInfo { after_block, .. } = self.loop_info[&loop_id];
+        self.builder.build_unconditional_branch(after_block)?;
         Ok(())
     }
 
-    pub fn gen_continue(&mut self, continue_label: &Option<String>) -> Result<(), CodeGenError> {
-        let loop_info = self.find_loop(&continue_label)?;
-        self.release_to_loop_scope(&continue_label)?;
-        self.builder.build_unconditional_branch(loop_info.cond_block)?;
+    pub fn gen_continue(&self, loop_id: u32) -> Result<(), CodeGenError> {
+        let GenLoopInfo { cond_block, .. } = self.loop_info[&loop_id];
+        self.builder.build_unconditional_branch(cond_block)?;
         Ok(())
     }
 }

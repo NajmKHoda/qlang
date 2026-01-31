@@ -41,16 +41,12 @@ impl<V> DualLookup<V> {
         }
     }
 
-    pub fn get_by_id(&self, id: u32) -> Option<&V> {
-        self.id_to_value.get(&id)
-    }
-
     pub fn contains_name(&self, name: &str) -> bool {
         self.name_to_id.contains_key(name)
     }
 
-    pub fn collect_values(self) -> Vec<V> {
-        self.id_to_value.into_values().collect()
+    pub fn collect_id_value_map(self) -> HashMap<u32, V> {
+        self.id_to_value
     }
 }
 

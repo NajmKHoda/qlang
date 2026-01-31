@@ -4,12 +4,8 @@ use inkwell::{context::Context};
 use inkwell::module::{Linkage, Module};
 use inkwell::values::{FunctionValue, GlobalValue};
 
-use super::function::QLParameter;
-use super::{CodeGen, QLFunction, QLType};
-
 #[derive(Clone, Copy)]
 pub(super) struct RuntimeFunction<'ctxt> {
-    name: &'static str,
     llvm_function: FunctionValue<'ctxt>,
 }
 
@@ -50,11 +46,6 @@ pub(super) struct RuntimeFunctions<'ctxt> {
     pub(super) close_dbs: RuntimeFunction<'ctxt>,
     
     pub(super) prepared_query_execute: RuntimeFunction<'ctxt>,
-    /*
-    pub(super) prepared_query_bind_scalar_param: RuntimeFunction<'ctxt>,
-    pub(super) prepared_query_bind_row_param: RuntimeFunction<'ctxt>,
-    pub(super) prepared_query_add_ref: RuntimeFunction<'ctxt>,
-    */
     pub(super) prepared_query_remove_ref: RuntimeFunction<'ctxt>,
     
     pub(super) select_query_plan_new: RuntimeFunction<'ctxt>,
@@ -69,8 +60,6 @@ pub(super) struct RuntimeFunctions<'ctxt> {
     pub(super) update_query_plan_add_assignment: RuntimeFunction<'ctxt>,
     pub(super) update_query_plan_set_where: RuntimeFunction<'ctxt>,
     pub(super) update_query_plan_prepare: RuntimeFunction<'ctxt>,
-
-    pub(super) print_rc: RuntimeFunction<'ctxt>,
 }
 
 impl<'ctxt> RuntimeFunctions<'ctxt> {
@@ -80,7 +69,6 @@ impl<'ctxt> RuntimeFunctions<'ctxt> {
         function_type: FunctionType<'ctxt>,
     ) -> RuntimeFunction<'ctxt> {
         RuntimeFunction {
-            name,
             llvm_function: module.add_function(name, function_type, None)
         }
     }
@@ -152,12 +140,6 @@ impl<'ctxt> RuntimeFunctions<'ctxt> {
             int_type.fn_type(&[ptr_type.into(), ptr_type.into()], false),
         );
 
-        let print_rc = Self::add_runtime_function(
-            module,
-            "_print_rc",
-            void_type.fn_type(&[ptr_type.into()], false),
-        );
-
         let new_array = Self::add_runtime_function(
             module,
             "__ql__QLArray_new",
@@ -225,36 +207,6 @@ impl<'ctxt> RuntimeFunctions<'ctxt> {
             "__ql__PreparedQuery_execute",
             ptr_type.fn_type(&[ptr_type.into()], false),
         );
-
-        /*
-        let prepared_query_bind_scalar_param = Self::add_runtime_function(
-            module,
-            "__ql__PreparedQuery_bind_scalar_param",
-            void_type.fn_type(&[
-                ptr_type.into(),
-                int_type.into(),
-                int_type.into(),
-                ptr_type.into(),
-            ], false),
-        );
-
-        let prepared_query_bind_row_param = Self::add_runtime_function(
-            module,
-            "__ql__PreparedQuery_bind_row_param",
-            void_type.fn_type(&[
-                ptr_type.into(),
-                int_type.into(),
-                ptr_type.into(),
-                ptr_type.into(),
-            ], false),
-        );
-
-        let prepared_query_add_ref = Self::add_runtime_function(
-            module,
-            "__ql__PreparedQuery_add_ref",
-            void_type.fn_type(&[ptr_type.into()], false),
-        );
-        */
 
         let prepared_query_remove_ref = Self::add_runtime_function(
             module,
@@ -456,28 +408,6 @@ impl<'ctxt> RuntimeFunctions<'ctxt> {
             update_query_plan_add_assignment,
             update_query_plan_set_where,
             update_query_plan_prepare,
-
-            print_rc,
         }
-    }
-}
-
-
-impl<'ctxt> CodeGen<'ctxt> {
-    pub(super) fn expose_runtime_function(
-        &mut self,
-        runtime_function: RuntimeFunction<'ctxt>,
-        return_type: QLType,
-        param_types: &[QLType],
-    ) {
-        self.functions.insert(runtime_function.name.to_string(), QLFunction {
-            name: runtime_function.name.to_string(),
-            llvm_function: runtime_function.llvm_function,
-            return_type,
-            params: param_types.iter().enumerate().map(|(i, t)| QLParameter {
-                name: format!("arg{}", i),
-                ql_type: t.clone(),
-            }).collect(),
-        });
     }
 }

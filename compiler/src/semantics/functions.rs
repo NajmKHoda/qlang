@@ -1,9 +1,14 @@
 use super::*;
 
+pub struct SemanticParameter {
+    pub sem_type: SemanticType,
+    pub variable_id: u32,
+}
+
 pub struct SemanticFunction {
     pub name: String,
     pub id: u32,
-    pub param_ids: Vec<u32>,
+    pub params: Vec<SemanticParameter>,
     pub return_type: SemanticType,
     pub body: SemanticBlock,
 }
@@ -122,20 +127,28 @@ impl SemanticGen {
         self.cur_return_type = self.try_get_semantic_type(return_type)?;
 
         self.variable_scopes.push(HashMap::new());
-        let mut param_ids = Vec::new();
+        let mut params: Vec<SemanticParameter> = vec![];
         for param_node in param_nodes {
             let param_type = self.try_get_semantic_type(&param_node.type_node)?;
             let param_id = self.variable_id_gen.next_id();
             let parameter_scope = self.variable_scopes.last_mut().unwrap();
-            param_ids.push(param_id);
+
+            // Create associated variable
             parameter_scope.insert(param_node.name.clone(), param_id);
             self.variables.insert(param_id, SemanticVariable {
-                sem_type: param_type,
+                name: param_node.name.clone(),
+                sem_type: param_type.clone(),
                 id: param_id,
+            });
+
+            // Add to parameter list
+            params.push(SemanticParameter {
+                sem_type: param_type,
+                variable_id: param_id,
             });
         }
 
-        if name == "main" && (!param_ids.is_empty() || self.cur_return_type != SemanticTypeKind::Integer) {
+        if name == "main" && (!params.is_empty() || self.cur_return_type != SemanticTypeKind::Integer) {
             return Err(SemanticError::InvalidMainSignature);
         }
 
@@ -163,7 +176,7 @@ impl SemanticGen {
         self.functions.insert(name.to_string(), function_id, SemanticFunction {
             name: name.to_string(),
             id: function_id,
-            param_ids,
+            params,
             return_type: self.cur_return_type.clone(),
             body: body_block,
         });
@@ -178,8 +191,8 @@ impl SemanticGen {
             return self.call_builtin_function(name, sem_args);
         }
         if let Some(func) = self.functions.get_by_name(name) {
-            let param_types: Vec<&SemanticType> = func.param_ids.iter()
-                .map(|param_id| &self.variables[param_id].sem_type)
+            let param_types: Vec<&SemanticType> = func.params.iter()
+                .map(|param| &param.sem_type)
                 .collect();
             self.check_args(name, &sem_args, &param_types)?;
             Ok(SemanticExpression {

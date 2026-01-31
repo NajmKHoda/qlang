@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use super::*;
 
+#[derive(Copy, Clone, PartialEq)]
 pub enum Ownership {
     Owned,
     Borrowed,
@@ -72,7 +73,7 @@ impl SemanticGen {
                     Ok(SemanticExpression {
                         kind: SemanticExpressionKind::StructField {
                             struct_expr: Box::new(sem_struct),
-                            index: position as i32,
+                            index: position as u32,
                         },
                         ownership: if field_type.can_be_owned() {
                             Ownership::Borrowed

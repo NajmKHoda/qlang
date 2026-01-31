@@ -85,20 +85,20 @@ impl SemanticType {
         self.0.borrow_mut()
     }
 
-    pub(super) fn new(kind: SemanticTypeKind) -> Self {
+    pub fn new(kind: SemanticTypeKind) -> Self {
         SemanticType(Rc::new(RefCell::new(kind)))
-    }
-
-    pub(super) fn kind(&self) -> SemanticTypeKind {
-        self.0.borrow().clone()
     }
 
     pub(super) fn is_concrete(&self) -> bool {
         (*self.borrow()).is_concrete()
     }
 
-    pub(super) fn can_be_owned(&self) -> bool {
+    pub fn can_be_owned(&self) -> bool {
         (*self.borrow()).can_be_owned()
+    }
+
+    pub fn kind(&self) -> SemanticTypeKind {
+        self.0.borrow().clone()
     }
 }
 

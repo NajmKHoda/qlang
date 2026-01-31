@@ -1,65 +1,63 @@
 use inkwell::values::AnyValue;
 
-use super::{CodeGen, CodeGenError, QLValue};
+use super::{CodeGen, CodeGenError};
+use crate::{codegen::data::GenValue, semantics::Ownership, tokens::ComparisonType};
 
-#[derive(Clone, Copy, Debug)]
-pub enum ComparisonOp {
-    Equal,
-    NotEqual,
-    GreaterThan,
-    LessThan,
-    GreaterThanOrEqual,
-    LessThanOrEqual
-}
-
-impl From<ComparisonOp> for inkwell::IntPredicate {
-    fn from(op: ComparisonOp) -> Self {
+impl From<ComparisonType> for inkwell::IntPredicate {
+    fn from(op: ComparisonType) -> Self {
         match op {
-            ComparisonOp::Equal => inkwell::IntPredicate::EQ,
-            ComparisonOp::NotEqual => inkwell::IntPredicate::NE,
-            ComparisonOp::GreaterThan => inkwell::IntPredicate::SGT,
-            ComparisonOp::LessThan => inkwell::IntPredicate::SLT,
-            ComparisonOp::GreaterThanOrEqual => inkwell::IntPredicate::SGE,
-            ComparisonOp::LessThanOrEqual => inkwell::IntPredicate::SLE,
+            ComparisonType::Equal => inkwell::IntPredicate::EQ,
+            ComparisonType::NotEqual => inkwell::IntPredicate::NE,
+            ComparisonType::GreaterThan => inkwell::IntPredicate::SGT,
+            ComparisonType::LessThan => inkwell::IntPredicate::SLT,
+            ComparisonType::GreaterThanOrEqual => inkwell::IntPredicate::SGE,
+            ComparisonType::LessThanOrEqual => inkwell::IntPredicate::SLE,
         }
     }
 }
 
 impl<'ctxt> CodeGen<'ctxt> {
-    pub fn gen_add(&self, val1: QLValue<'ctxt>, val2: QLValue<'ctxt>) -> Result<QLValue<'ctxt>, CodeGenError> {
-        if let (QLValue::Integer(int1), QLValue::Integer(int2)) = (&val1, &val2) {
+    pub fn gen_add(&self, val1: GenValue<'ctxt>, val2: GenValue<'ctxt>) -> Result<GenValue<'ctxt>, CodeGenError> {
+        if let (GenValue::Integer(int1), GenValue::Integer(int2)) = (&val1, &val2) {
             let res = self.builder.build_int_add(*int1, *int2, "sum")?;
-            Ok(QLValue::Integer(res))
-        } else if let (QLValue::String(str1, _), QLValue::String(str2, _)) = (&val1, &val2) {
+            Ok(GenValue::Integer(res))
+        } else if let (GenValue::String { value: str1, .. }, GenValue::String { value: str2, .. })
+            = (&val1, &val2) 
+        {
             let res = self.builder.build_call(
                 self.runtime_functions.concat_string.into(),
                 &[(*str1).into(), (*str2).into()],
                 "str_concat"
             )?.as_any_value_enum().into_pointer_value();
 
-            self.remove_if_temp(val1)?;
-            self.remove_if_temp(val2)?;
+            self.remove_if_owned(val1)?;
+            self.remove_if_owned(val2)?;
 
-            Ok(QLValue::String(res, false))
+            Ok(GenValue::String {
+                value: res, ownership:
+                Ownership::Owned
+            })
         } else {
-            Err(CodeGenError::UnexpectedTypeError)
+            panic!("Unexpected types for addition");
         }
     }
 
-    pub fn gen_subtract(&self, val1: QLValue<'ctxt>, val2: QLValue<'ctxt>) -> Result<QLValue<'ctxt>, CodeGenError> {
-        if let (QLValue::Integer(int1), QLValue::Integer(int2)) = (&val1, &val2) {
+    pub fn gen_subtract(&self, val1: GenValue<'ctxt>, val2: GenValue<'ctxt>) -> Result<GenValue<'ctxt>, CodeGenError> {
+        if let (GenValue::Integer(int1), GenValue::Integer(int2)) = (&val1, &val2) {
             let res = self.builder.build_int_sub(*int1, *int2, "sub")?;
-            Ok(QLValue::Integer(res))
+            Ok(GenValue::Integer(res))
         } else {
-            Err(CodeGenError::UnexpectedTypeError)
+            panic!("Unexpected types for subtraction");
         }
     }
 
-    pub fn gen_compare(&self, val1: QLValue<'ctxt>, val2: QLValue<'ctxt>, op: ComparisonOp) -> Result<QLValue<'ctxt>, CodeGenError> {
-        if let (QLValue::Integer(int1), QLValue::Integer(int2)) = (&val1, &val2) {
+    pub fn gen_compare(&self, val1: GenValue<'ctxt>, val2: GenValue<'ctxt>, op: ComparisonType) -> Result<GenValue<'ctxt>, CodeGenError> {
+        if let (GenValue::Integer(int1), GenValue::Integer(int2)) = (&val1, &val2) {
             let res = self.builder.build_int_compare(op.into(), *int1, *int2, "cmp")?;
-            Ok(QLValue::Bool(res))
-        } else if let (QLValue::String(str1, _), QLValue::String(str2, _)) = (&val1, &val2) {
+            Ok(GenValue::Bool(res))
+        } else if let (GenValue::String { value: str1, .. }, GenValue::String { value: str2, .. })
+            = (&val1, &val2) 
+        {
             let res = self.builder.build_call(
                 self.runtime_functions.compare_string.into(),
                 &[(*str1).into(), (*str2).into()],
@@ -67,12 +65,12 @@ impl<'ctxt> CodeGen<'ctxt> {
             )?.as_any_value_enum().into_int_value();
             let cmp = self.builder.build_int_compare(op.into(), res, self.int_type().const_zero(), "str_cmp")?;
 
-            self.remove_if_temp(val1)?;
-            self.remove_if_temp(val2)?;
+            self.remove_if_owned(val1)?;
+            self.remove_if_owned(val2)?;
 
-            Ok(QLValue::Bool(cmp))
+            Ok(GenValue::Bool(cmp))
         } else {
-            Err(CodeGenError::UnexpectedTypeError)
+            panic!("Unexpected types for comparison");
         }
     }
 }

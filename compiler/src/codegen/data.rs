@@ -1,95 +1,96 @@
-use inkwell::values::{BasicValueEnum, IntValue, PointerValue, StructValue};
+use inkwell::{types::BasicTypeEnum, values::{BasicValueEnum, IntValue, PointerValue, StructValue}};
 
-use crate::{codegen::QLScope, tokens::ExpressionNode};
+use crate::semantics::{Ownership, SemanticType, SemanticTypeKind};
 
 use super::{CodeGen, CodeGenError};
 
-
-impl QLType {
-    pub(super) fn to_value<'a>(&self, value: BasicValueEnum<'a>, is_owned: bool) -> QLValue<'a> {
-        match self {
-            QLType::Integer => QLValue::Integer(value.into_int_value()),
-            QLType::Bool => QLValue::Bool(value.into_int_value()),
-            QLType::String => QLValue::String(value.into_pointer_value(), is_owned),
-            QLType::Array(array_type) => QLValue::Array(value.into_pointer_value(), *array_type.clone(), is_owned),
-            QLType::Table(table_name) => QLValue::TableRow(value.into_struct_value(), table_name.clone(), is_owned),
-            QLType::Void => panic!("Mismatch between void type and basic value"),
-        }
-    }
-}
-
-#[derive(Clone, PartialEq, Debug)]
-pub enum QLValue<'a> {
+#[derive(Clone, PartialEq)]
+pub enum GenValue<'a> {
     Integer(IntValue<'a>),
     Bool(IntValue<'a>),
-    String(PointerValue<'a>, bool),
-    Array(PointerValue<'a>, QLType, bool),
-    TableRow(StructValue<'a>, String, bool),
+    String {
+        value: PointerValue<'a>,
+        ownership: Ownership
+    },
+    Array {
+        value: PointerValue<'a>,
+        elem_type: SemanticType,
+        ownership: Ownership
+    },
+    Struct {
+        value: StructValue<'a>,
+        struct_id: u32,
+        ownership: Ownership
+    },
     Void
 }
 
-impl<'a> QLValue<'a> {
-    pub fn get_type(&self) -> QLType {
-        match self {
-            QLValue::Integer(_) => QLType::Integer,
-            QLValue::Bool(_) => QLType::Bool,
-            QLValue::String(_, _) => QLType::String,
-            QLValue::Array(_, elem_type, _) => QLType::Array(Box::new(elem_type.clone())),
-            QLValue::TableRow(_, table_name, _) => QLType::Table(table_name.clone()),
-            QLValue::Void => QLType::Void
+impl<'a> GenValue<'a> {
+    pub fn new(sem_type: &SemanticType, llvm_value: BasicValueEnum<'a>, ownership: Ownership) -> Self {
+        match sem_type.kind() {
+            SemanticTypeKind::Integer => GenValue::Integer(llvm_value.into_int_value()),
+            SemanticTypeKind::Bool => GenValue::Bool(llvm_value.into_int_value()),
+            SemanticTypeKind::String => GenValue::String {
+                value: llvm_value.into_pointer_value(),
+                ownership: ownership
+            },
+            SemanticTypeKind::Array(elem_type) => GenValue::Array {
+                value: llvm_value.into_pointer_value(),
+                elem_type: elem_type,
+                ownership: ownership
+            },
+            SemanticTypeKind::NamedStruct(struct_id, _) => GenValue::Struct {
+                value: llvm_value.into_struct_value(),
+                struct_id,
+                ownership: ownership
+            },
+            SemanticTypeKind::Void => GenValue::Void,
+            _ => panic!("Incomplete type found in semantic IR"),
         }
     }
 
-    pub fn is_primitive(&self) -> bool {
-        return self.get_type().is_primitive();
-    }
-
-    pub fn is_owned(&self) -> bool {
+    pub fn ownership(&self) -> Ownership {
         match self {
-            QLValue::String(_, is_owned) => *is_owned,
-            QLValue::Array(_, _, is_owned) => *is_owned,
-            QLValue::TableRow(_, _, is_owned) => *is_owned,
-            _ => true
+            GenValue::String { ownership, .. }
+            | GenValue::Array { ownership, .. }
+            | GenValue::Struct { ownership, .. } => *ownership,
+            _ => Ownership::Trivial,
         }
     }
-}
 
-impl<'a> TryFrom<QLValue<'a>> for BasicValueEnum<'a> {
-    type Error = CodeGenError;
-
-    fn try_from(value: QLValue<'a>) -> Result<Self, Self::Error> {
-        match value {
-            QLValue::Integer(int_val) => Ok(BasicValueEnum::IntValue(int_val)),
-            QLValue::Bool(int_val) => Ok(BasicValueEnum::IntValue(int_val)),
-            QLValue::String(str_val, _) => Ok(BasicValueEnum::PointerValue(str_val)),
-            QLValue::Array(arr_val, _, _) => Ok(BasicValueEnum::PointerValue(arr_val)),
-            QLValue::TableRow(struct_val, _, _) => Ok(BasicValueEnum::StructValue(struct_val)),
-            QLValue::Void => Err(CodeGenError::UnexpectedTypeError),
+    pub fn as_llvm_basic_value(&self) -> BasicValueEnum<'a> {
+        match self {
+            GenValue::Integer(int_val) => BasicValueEnum::IntValue(*int_val),
+            GenValue::Bool(int_val) => BasicValueEnum::IntValue(*int_val),
+            GenValue::String { value: str_val, .. } => BasicValueEnum::PointerValue(*str_val),
+            GenValue::Array { value: arr_val, .. } => BasicValueEnum::PointerValue(*arr_val),
+            GenValue::Struct { value: struct_val, .. } => BasicValueEnum::StructValue(*struct_val),
+            GenValue::Void => panic!("Unexpected void value"),
         }
     }
 }
 
 impl<'ctxt> CodeGen<'ctxt> {
-    pub(super) fn add_ref(&self, val: &QLValue<'ctxt>) -> Result<(), CodeGenError> {
+    pub(super) fn add_ref(&self, val: &GenValue<'ctxt>) -> Result<(), CodeGenError> {
         match val {
-            QLValue::String(str_ptr, true) => {
+            GenValue::String { value: str_ptr, ownership: Ownership::Borrowed } => {
                 self.builder.build_call(
                     self.runtime_functions.add_string_ref.into(),
                     &[(*str_ptr).into()],
                     "add_string_ref"
                 )?;
             }
-            QLValue::Array(array_ptr, _, true) => {
+            GenValue::Array { value: array_ptr, ownership: Ownership::Borrowed, .. } => {
                 self.builder.build_call(
                     self.runtime_functions.add_array_ref.into(),
                     &[(*array_ptr).into()],
                     "add_array_ref"
                 )?;
             }
-            QLValue::TableRow(struct_value, table_name, true) => {
-                if let Some(ref copy_fn) = self.get_table(table_name)?.copy_fn {
+            GenValue::Struct { value: struct_value, struct_id, ownership: Ownership::Borrowed } => {
+                if let Some(copy_fn) = self.struct_info[&struct_id].copy_fn {
                     self.builder.build_call(
-                        copy_fn.llvm_function,
+                        copy_fn,
                         &[(*struct_value).into()],
                         "table_copy"
                     )?;
@@ -100,26 +101,26 @@ impl<'ctxt> CodeGen<'ctxt> {
         Ok(())
     }
 
-    pub(super) fn remove_ref(&self, val: QLValue<'ctxt>) -> Result<(), CodeGenError> {
+    pub(super) fn remove_ref(&self, val: GenValue<'ctxt>) -> Result<(), CodeGenError> {
         match val {
-            QLValue::String(str_ptr, _) => {
+            GenValue::String { value: str_ptr, .. } => {
                 self.builder.build_call(
                     self.runtime_functions.remove_string_ref.into(),
                     &[str_ptr.into()],
                     "remove_string_ref"
                 )?;
             }
-            QLValue::Array(array_ptr, _, _) => {
+            GenValue::Array { value: array_ptr, .. } => {
                 self.builder.build_call(
                     self.runtime_functions.remove_array_ref.into(),
                     &[array_ptr.into()],
                     "remove_array_ref"
                 )?;
             }
-            QLValue::TableRow(struct_value, table_name, _) => {
-                if let Some(ref drop_fn) = self.get_table(&table_name)?.drop_fn {
+            GenValue::Struct { value: struct_value, struct_id, .. } => {
+                if let Some(drop_fn) = self.struct_info[&struct_id].drop_fn {
                     self.builder.build_call(
-                        drop_fn.llvm_function,
+                        drop_fn,
                         &[struct_value.into()],
                         "table_row_drop"
                     )?;
@@ -130,34 +131,21 @@ impl<'ctxt> CodeGen<'ctxt> {
         Ok(())
     }
 
-    pub(super) fn remove_if_temp(&self, val: QLValue<'ctxt>) -> Result<(), CodeGenError> {
-        if !val.is_primitive() && !val.is_owned() {
+    pub(super) fn remove_if_owned(&self, val: GenValue<'ctxt>) -> Result<(), CodeGenError> {
+        if val.ownership() == Ownership::Owned {
             self.remove_ref(val)?;
         }
         Ok(())
     }
 
-    pub(super) fn release_scope(&self, scope: &QLScope<'ctxt>) -> Result<(), CodeGenError> {
-        for (name, var) in &scope.vars {
-            if !var.ql_type.is_primitive() {
-                let loaded_val = self.load_var(&name)?;
-                self.remove_ref(loaded_val)?;
-            }
+    pub fn llvm_basic_type(&self, sem_type: &SemanticType) -> BasicTypeEnum<'ctxt> {
+        match sem_type.kind() {
+            SemanticTypeKind::Integer => self.int_type().into(),
+            SemanticTypeKind::Bool => self.bool_type().into(),
+            SemanticTypeKind::String => self.ptr_type().into(),
+            SemanticTypeKind::Array(_) => self.ptr_type().into(),
+            SemanticTypeKind::NamedStruct(id, _) => self.struct_info[&id].struct_type.into(),
+            _ => panic!("Incomplete type found in semantic IR"),
         }
-        Ok(())
-    }
-
-    pub fn const_int(&self, value: i32) -> QLValue<'ctxt> {
-        QLValue::Integer(self.int_type().const_int(value as u64, false))
-    }
-
-    pub fn const_bool(&self, value: bool) -> QLValue<'ctxt> {
-        QLValue::Bool(self.bool_type().const_int(value as u64, false))
-    }
-
-    pub fn gen_lone_expression(&mut self, expr: &Box<ExpressionNode>) -> Result<(), CodeGenError> {
-        let val = expr.gen_eval(self)?;
-        self.remove_ref(val)?;
-        Ok(())
     }
 }

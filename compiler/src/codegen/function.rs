@@ -1,167 +1,160 @@
-use inkwell::types::{BasicMetadataTypeEnum, BasicType, FunctionType};
-use inkwell::values::{BasicMetadataValueEnum, BasicValue, BasicValueEnum, FunctionValue, ValueKind};
+use inkwell::types::{BasicMetadataTypeEnum, BasicType};
+use inkwell::values::{AnyValue, BasicMetadataValueEnum, BasicValue, ValueKind};
 
-use super::{CodeGen, CodeGenError, QLValue, QLType};
-use crate::tokens::TypedQNameNode;
+use super::{CodeGen, CodeGenError};
+use crate::codegen::data::GenValue;
+use crate::semantics::{BuiltinFunction, BuiltinMethod, Ownership, SemanticExpression, SemanticFunction, SemanticTypeKind};
 
-pub(super) struct QLParameter {
-	pub(super) name: String,
-	pub(super) ql_type: QLType,
-}
-
-impl From<&TypedQNameNode> for QLParameter {
-	fn from(node: &TypedQNameNode) -> Self {
-		QLParameter {
-			name: node.name.clone(),
-			ql_type: node.ql_type.clone(),
-		}
-	}
-}
-
-pub(super) struct QLFunction<'ctxt> {
-	pub(super) llvm_function: FunctionValue<'ctxt>,
-	pub(super) return_type: QLType,
-	pub(super) name: String,
-	pub(super) params: Vec<QLParameter>
-}
-
-impl<'ctxt> QLFunction<'ctxt> {
-	pub fn check_args(&self, args: &[QLValue<'ctxt>]) -> Result<(), CodeGenError> {
-		if self.params.len() != args.len() {
-			return Err(CodeGenError::BadFunctionCallError(self.name.clone()));
-		}
-		for (param, arg) in self.params.iter().zip(args.iter()) {
-			if param.ql_type != arg.get_type() {
-				return Err(CodeGenError::BadFunctionCallError(self.name.clone()));
+impl<'ctxt> CodeGen<'ctxt> {
+	pub(super) fn define_function(&mut self, function: &SemanticFunction) -> Result<(), CodeGenError> {
+		let llvm_param_types = function.params.iter()
+			.map(|p| self.llvm_basic_type(&p.sem_type).into())
+			.collect::<Vec<BasicMetadataTypeEnum>>(); 
+		let llvm_type = match function.return_type.kind() {
+			SemanticTypeKind::Void => {
+				self.void_type().fn_type(&llvm_param_types, false)
 			}
+			_ => {
+				let llvm_return_type = self.llvm_basic_type(&function.return_type);
+				llvm_return_type.fn_type(&llvm_param_types, false)
+			},
+		};
+
+		let llvm_name = if function.name == "main" { "__ql__user_main" } else { &function.name };
+		let llvm_fn = self.module.add_function(llvm_name, llvm_type, None);
+		self.llvm_functions.insert(function.id, llvm_fn);
+		for (i, param) in function.params.iter().enumerate() {
+			let llvm_param = llvm_fn.get_nth_param(i as u32).unwrap();
+			self.llvm_variables.insert(param.variable_id, llvm_param.into_pointer_value());
 		}
+
+		let entry_block = self.context.append_basic_block(llvm_fn, "entry");
+		self.builder.position_at_end(entry_block);
+		for stmt in &function.body.statements {
+			self.gen_stmt(stmt)?;
+		}
+
 		Ok(())
 	}
 
-	pub fn try_get_arg_value(&self, name: &str) -> Option<QLValue<'ctxt>> {
-		let (index, param) = self.params.iter().enumerate().find(|(_, p)| p.name == name)?;
-		let llvm_value = self.llvm_function.get_nth_param(index as u32)?;
-		Some(param.ql_type.to_value(llvm_value, true))
-	}
-}
-
-impl<'ctxt> CodeGen<'ctxt> {
-	pub (super) fn get_fn_type(&self, return_type: &QLType, param_types: &[QLType]) -> Result<FunctionType<'ctxt>, CodeGenError> {
-		let llvm_param_types = param_types
+    pub fn gen_call(&mut self, function_id: u32, args: &[SemanticExpression]) -> Result<GenValue<'ctxt>, CodeGenError> {
+		let sem_function = &self.program.functions[&function_id];
+		let llvm_function = self.llvm_functions[&function_id];
+		let arg_values = args
 			.iter()
-			.map(|t| self.try_get_nonvoid_type(t)
-			.map(BasicMetadataTypeEnum::from))
-			.collect::<Result<Vec<BasicMetadataTypeEnum>, CodeGenError>>()?;
+			.map(|arg| self.gen_eval(arg))
+			.collect::<Result<Vec<GenValue<'ctxt>>, CodeGenError>>()?;
+		let llvm_arg_values = arg_values
+			.iter()
+			.map(|val| val.as_llvm_basic_value().into())
+			.collect::<Vec<BasicMetadataValueEnum>>();
 
-		let fn_type = match return_type {
-			QLType::Void => self.void_type().fn_type(&llvm_param_types, false),
-			_ => self.try_get_nonvoid_type(return_type)?.fn_type(&llvm_param_types, false)
-		};
-		Ok(fn_type)
-	}
+		let call_site = self.builder.build_call(llvm_function, &llvm_arg_values, "call")?;
+		for arg in arg_values {
+			self.remove_if_owned(arg)?;
+		}
 
-	pub(super) fn declare_user_function(
-		&mut self,
-		name: &str,
-		return_type: &QLType,
-		param_nodes: &[TypedQNameNode],
-	) -> Result<&QLFunction<'ctxt>, CodeGenError> { 
-		let params: Vec<QLParameter> = param_nodes.iter().map(|n| n.into()).collect();
-		let param_types: Vec<QLType> = params.iter().map(|p| p.ql_type.clone()).collect();
-		let fn_type = self.get_fn_type(return_type, &param_types)?;
-
-		let llvm_name = if name == "main" { "__ql__user_main" } else { name };
-		self.functions.insert(name.to_string(), QLFunction {
-			name: name.to_string(),
-			llvm_function: self.module.add_function(llvm_name, fn_type, None),
-			return_type: return_type.clone(),
-			params
-		});
-
-		Ok(self.functions.get(name).unwrap())
-	}
-
-    pub fn gen_call(&self, fn_name: &str, args: Vec<QLValue<'ctxt>>) -> Result<QLValue<'ctxt>, CodeGenError> {
-        if let Some(function) = self.functions.get(fn_name) {
-            function.check_args(&args)?;
-            let arg_values: Vec<BasicMetadataValueEnum> = args
-                .iter()
-                .map(|v| BasicValueEnum::try_from(v.clone()).map(BasicMetadataValueEnum::from))
-                .collect::<Result<Vec<BasicMetadataValueEnum>, CodeGenError>>()?;
-
-            let call_site = self.builder.build_call(function.llvm_function, &arg_values, "call")?;
-			for arg in args {
-				self.remove_if_temp(arg)?;
-			}
-
-            match call_site.try_as_basic_value() {
-                ValueKind::Basic(value) => Ok(function.return_type.to_value(value, false)),
-                ValueKind::Instruction(_) => Ok(QLValue::Void),
-            }
-        } else {
-            Err(CodeGenError::UndefinedVariableError(fn_name.to_string()))
-        }
+		match call_site.try_as_basic_value() {
+			ValueKind::Basic(value) => Ok(GenValue::new(
+				&sem_function.return_type,
+				value,
+				Ownership::Owned
+			)),
+			ValueKind::Instruction(_) => Ok(GenValue::Void),
+		}
     }
 
-	pub fn gen_return(&mut self, value: Option<QLValue<'ctxt>>) -> Result<(), CodeGenError> {
-		let return_type = self.cur_fn().return_type.clone();
-		let enum_value = match value {
+	pub fn gen_builtin_call(&mut self, function: BuiltinFunction, args: &[SemanticExpression]) -> Result<GenValue<'ctxt>, CodeGenError> {
+		let arg_values = args
+			.iter()
+			.map(|arg| self.gen_eval(arg))
+			.collect::<Result<Vec<GenValue<'ctxt>>, CodeGenError>>()?;
+		
+		match function {
+			BuiltinFunction::PrintString => {
+				let str_val = &arg_values[0];
+				self.builder.build_call(
+					self.runtime_functions.print_string.into(),
+					&[str_val.as_llvm_basic_value().into()],
+					"print_string"
+				)?;
+				Ok(GenValue::Void)
+			}
+			BuiltinFunction::PrintInteger => {
+				let int_val = &arg_values[0];
+				self.builder.build_call(
+					self.runtime_functions.print_integer.into(),
+					&[int_val.as_llvm_basic_value().into()],
+					"print_integer"
+				)?;
+				Ok(GenValue::Void)
+			}
+			BuiltinFunction::PrintBool => {
+				let bool_val = &arg_values[0];
+				self.builder.build_call(
+					self.runtime_functions.print_boolean.into(),
+					&[bool_val.as_llvm_basic_value().into()],
+					"print_boolean"
+				)?;
+				Ok(GenValue::Void)
+			}
+			BuiltinFunction::InputString => {
+				let input = self.builder.build_call(
+					self.runtime_functions.input_string.into(),
+					&[],
+					"input_string"
+				)?.as_any_value_enum().into_pointer_value();
+				Ok(GenValue::String {
+					value: input,
+					ownership: Ownership::Owned
+				})
+			}
+			BuiltinFunction::InputInteger => {
+				let input = self.builder.build_call(
+					self.runtime_functions.input_integer.into(),
+					&[],
+					"input_integer"
+				)?.as_any_value_enum().into_int_value();
+				Ok(GenValue::Integer(input))
+			}
+		}
+	}
+
+	pub fn gen_return(&mut self, value: &Option<SemanticExpression>) -> Result<(), CodeGenError> {
+		let return_value: Option<&dyn BasicValue> = match value {
 			Some(val) => {
-				if val.get_type() != return_type {
-					return Err(CodeGenError::UnexpectedTypeError);
-				}
-				self.add_ref(&val)?;
-				let basic_value = BasicValueEnum::try_from(val)?;
-				Some(basic_value)
+				let return_val = self.gen_eval(val)?;
+				self.add_ref(&return_val)?;
+				Some(&return_val.as_llvm_basic_value())
 			}
 			None => {
-				if return_type != QLType::Void {
-					return Err(CodeGenError::UnexpectedTypeError);
-				}
 				None
 			}
 		};
-
-		
-		for scope in self.scopes.iter().rev() {
-			self.release_scope(scope)?;
-		}
-
-		let basic_value = enum_value.as_ref().map(|v| v as &dyn BasicValue);
-		self.builder.build_return(basic_value)?;
+		self.builder.build_return(return_value)?;
 		Ok(())
 	}
 
-	pub fn gen_method_call(&self, object: QLValue<'ctxt>, method_name: &str, mut args: Vec<QLValue<'ctxt>>) -> Result<QLValue<'ctxt>, CodeGenError> {
-		match object {
-			QLValue::Array(_, _, _) => {
-				match method_name {
-					"append" => {
-						if args.len() != 1 {
-							return Err(CodeGenError::BadFunctionCallError("Array.append".to_string()));
-						}
-						let elem = args.remove(0);
-						self.gen_array_append(object, elem)
-					}
-					"length" => {
-						if !args.is_empty() {
-							return Err(CodeGenError::BadFunctionCallError("Array.length".to_string()));
-						}
-						self.gen_array_length(object)
-					}
-					"pop" => {
-						if !args.is_empty() {
-							return Err(CodeGenError::BadFunctionCallError("Array.pop".to_string()));
-						}
-						self.gen_array_pop(object)
-					}
-					_ => Err(CodeGenError::UndefinedMethodError(method_name.to_string(), "Array".to_string())),
-				}
+	pub fn gen_method_call(
+		&mut self,
+		object: GenValue<'ctxt>,
+		method: BuiltinMethod,
+		args: &[SemanticExpression]
+	) -> Result<GenValue<'ctxt>, CodeGenError> {
+		let mut arg_vals = args.iter()
+			.map(|arg| self.gen_eval(arg))
+			.collect::<Result<Vec<GenValue<'ctxt>>, CodeGenError>>()?;
+		match method {
+			BuiltinMethod::ArrayAppend => {
+				let elem = arg_vals.remove(0);
+				self.gen_array_append(object, elem)
 			}
-			_ => Err(CodeGenError::UndefinedMethodError(
-				method_name.to_string(),
-				format!("{:?}", object.get_type())
-			)),
+			BuiltinMethod::ArrayLength => {
+				self.gen_array_length(object)
+			}
+			BuiltinMethod::ArrayPop => {
+				self.gen_array_pop(object)
+			}
 		}
 	}
 }

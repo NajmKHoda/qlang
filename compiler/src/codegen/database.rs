@@ -1,22 +1,22 @@
-use inkwell::{AddressSpace, values::{AnyValue, BasicValueEnum, FunctionValue, PointerValue}};
+use inkwell::{AddressSpace, values::{AnyValue, BasicValue, BasicValueEnum, FunctionValue, PointerValue}};
 
-use crate::tokens::{DatasourceNode, DeleteQueryNode, InsertQueryNode, SelectQueryNode, UpdateAssignmentNode, UpdateQueryNode};
+use crate::{codegen::{data::GenValue}, semantics::{Ownership, SemanticDatasource, SemanticExpression, SemanticType, SemanticTypeKind, WhereClause}};
 
-use super::{CodeGen, CodeGenError, QLValue, QLType};
+use super::{CodeGen, CodeGenError};
 
 impl<'ctxt> CodeGen<'ctxt> {
-    pub(super) fn gen_database_ptrs(&mut self, datasources: &[DatasourceNode]) {
-        for datasource in datasources {
-            let db_ptr_global = self.module
-                .add_global(self.ptr_type(), Some(AddressSpace::default()), &datasource.name);
-            db_ptr_global.set_initializer(&self.ptr_type().const_null());
-            self.datasources.insert(datasource.name.clone(), db_ptr_global.as_pointer_value());
-        }
+    pub(super) fn gen_database_ptr(&mut self, datasource: &SemanticDatasource) {
+        let db_ptr_global = self.module.add_global(
+            self.ptr_type(),
+            Some(AddressSpace::default()),
+            format!("{}_ptr", datasource.name).as_str()
+        );
+        db_ptr_global.set_initializer(&self.ptr_type().const_null());
+        self.datasource_ptrs.insert(datasource.id, db_ptr_global.as_pointer_value());
     }
 
     pub(super) fn init_databases(
         &mut self,
-        datasources: &[DatasourceNode],
         main_fn: FunctionValue<'ctxt>
     ) -> Result<PointerValue<'ctxt>, CodeGenError> {
         // Grab command line arguments
@@ -24,11 +24,11 @@ impl<'ctxt> CodeGen<'ctxt> {
         let argv = main_fn.get_nth_param(1).unwrap().into_pointer_value();
 
         // Create an array of global database pointers to feed to the runtime function
-        let num_dbs = datasources.len() as u32;
+        let num_dbs = self.program.datasources.len() as u32;
         let db_ptr_arr_type = self.ptr_type().array_type(num_dbs);
         let db_ptr_arr = self.builder.build_alloca(db_ptr_arr_type, "db_ptr_arr")?;
-        for (i, datasource) in datasources.iter().enumerate() {
-            let db_ptr = *self.datasources.get(&datasource.name).unwrap();
+        for (i, datasource) in self.program.datasources.values().enumerate() {
+            let db_ptr = self.datasource_ptrs[&datasource.id];
             let index = self.context.i32_type().const_int(i as u64, false);
             let elem_ptr = unsafe {
                 self.builder.build_gep(
@@ -57,7 +57,7 @@ impl<'ctxt> CodeGen<'ctxt> {
     }
 
     pub(super) fn close_databases(&self, db_ptr_arr: PointerValue<'ctxt>) -> Result<(), CodeGenError> {
-        let num_dbs = self.datasources.len() as u32;
+        let num_dbs = self.datasource_ptrs.len() as u32;
         self.builder.build_call(
             self.runtime_functions.close_dbs.into(),
             &[
@@ -69,19 +69,20 @@ impl<'ctxt> CodeGen<'ctxt> {
         Ok(())
     }
 
-    pub fn gen_select_query(&mut self, query: &SelectQueryNode) -> Result<QLValue<'ctxt>, CodeGenError> {
-        let where_value = match query.where_clause {
-            Some(ref where_clause) => where_clause.value.gen_eval(self)?,
-            None => QLValue::Void,
+    pub fn gen_select_query(&mut self, table_id: u32, where_clause_opt: &Option<WhereClause>) -> Result<GenValue<'ctxt>, CodeGenError> {
+        let where_value = match where_clause_opt {
+            Some(where_clause) => self.gen_eval(&where_clause.value)?,
+            None => GenValue::Void,
         };
 
-        let table = self.get_table(&query.table_name)?;
-
-        let db_global_ptr = *self.datasources.get(&table.datasource_name).unwrap();
+        let table = &self.program.tables[&table_id];
+        let assoc_struct = &self.program.structs[&table.struct_id];
+        let table_info = &self.table_info[&table_id];
+        let db_global_ptr = self.datasource_ptrs[&table.datasource_id];
         let db_ptr = self.builder.build_load(self.ptr_type(), db_global_ptr, "db_ptr")?.into_pointer_value();
         
-        let table_name_str = table.name_str.as_pointer_value();
-        let type_info_ptr = table.type_info.as_pointer_value();
+        let table_name_str = table_info.name_str.as_pointer_value();
+        let type_info_ptr = self.struct_info[&table.struct_id].type_info.as_pointer_value();
         
         let query_plan = self.builder.build_call(
             self.runtime_functions.select_query_plan_new.into(),
@@ -93,37 +94,32 @@ impl<'ctxt> CodeGen<'ctxt> {
             "query_plan"
         )?.as_any_value_enum().into_pointer_value();
         
-        if let Some(where_clause) = &query.where_clause {
-            let column_index = table.get_column_index(&where_clause.column_name)?;
-            let column_type = &table.fields[column_index as usize].ql_type;
-            let column_name_str = table.column_name_strs[column_index as usize].as_pointer_value();
+        if let Some(WhereClause { column_name, .. }) = where_clause_opt {
+            let column_index = assoc_struct.field_order.iter()
+                .position(|name| name == column_name).unwrap();
+            let column_type = &assoc_struct.fields[column_name];
+            let column_name_str = table_info.column_name_strs[column_index].as_pointer_value();
             
-            // Evaluate the where clause value
-            if where_value.get_type() != *column_type {
-                return Err(CodeGenError::UnexpectedTypeError);
-            }
-            
-            // Determine the QueryDataType enum value
-            let query_data_type = match column_type {
-                QLType::Integer => 0, // QUERY_DATA_INTEGER
-                QLType::String => 1,  // QUERY_DATA_STRING
-                _ => return Err(CodeGenError::UnexpectedTypeError),
+            let query_data_type = match column_type.kind() {
+                SemanticTypeKind::Integer => 0, // QUERY_DATA_INTEGER
+                SemanticTypeKind::String => 1,  // QUERY_DATA_STRING
+                _ => panic!("Unexpected type in WHERE clause"),
             };
             let query_data_type_val = self.context.i32_type().const_int(query_data_type, false);
             
             // Allocate space for the value and store it
             let value_ptr = match where_value {
-                QLValue::Integer(int_val) => {
+                GenValue::Integer(int_val) => {
                     let ptr = self.builder.build_alloca(self.int_type(), "where_value")?;
                     self.builder.build_store(ptr, int_val)?;
                     ptr
                 },
-                QLValue::String(str_ptr, _) => {
+                GenValue::String { value: str_ptr, .. } => {
                     let ptr = self.builder.build_alloca(self.ptr_type(), "where_value")?;
                     self.builder.build_store(ptr, str_ptr)?;
                     ptr
                 },
-                _ => return Err(CodeGenError::UnexpectedTypeError),
+                _ => panic!("Unexpected query value"),
             };
             
             // Call __ql__SelectQueryPlan_set_where
@@ -160,32 +156,31 @@ impl<'ctxt> CodeGen<'ctxt> {
             "free_prepared_query"
         )?;
         
-        // Return the result as a QLValue::Array
-        Ok(QLValue::Array(
-            result_array,
-            QLType::Table(query.table_name.clone()),
-            false
-        ))
+        // Return the result as a GenValue::Array
+        Ok(GenValue::Array {
+            value: result_array,
+            elem_type: SemanticType::new(SemanticTypeKind::NamedStruct(
+                assoc_struct.id,
+                assoc_struct.name.clone()
+            )),
+            ownership: Ownership::Owned,
+        })
     }
 
-    pub fn gen_insert_query(&mut self, query: &InsertQueryNode) -> Result<QLValue<'ctxt>, CodeGenError> {
-        let insert_data = query.data_expr.gen_eval(self)?;
-
-        let table = self.get_table(&query.table_name)?;
-
-        let db_global_ptr = *self.datasources.get(&table.datasource_name).unwrap();
+    pub fn gen_insert_query(&mut self, table_id: u32, value: &SemanticExpression) -> Result<GenValue<'ctxt>, CodeGenError> {
+        let insert_data = self.gen_eval(value)?;
+        let table = &self.program.tables[&table_id];
+        let table_info = &self.table_info[&table_id];
+        let db_global_ptr = self.datasource_ptrs[&table.datasource_id];
         let db_ptr = self.builder.build_load(self.ptr_type(), db_global_ptr, "db_ptr")?.into_pointer_value();
         
-        let table_name_str = table.name_str.as_pointer_value();
-        let type_info_ptr = table.type_info.as_pointer_value();
+        let table_name_str = table_info.name_str.as_pointer_value();
+        let type_info_ptr = self.struct_info[&table_id].type_info.as_pointer_value();
         
-        // Only support single row inserts now
         let llvm_insert_data: BasicValueEnum = match &insert_data {
-            QLValue::TableRow(struct_val, data_table_name, _)
-                if data_table_name == &query.table_name => (*struct_val).into(),
-            _ => return Err(CodeGenError::UnexpectedTypeError),
+            GenValue::Struct { value: struct_val, .. } => struct_val.as_basic_value_enum(),
+            _ => panic!()
         };
-
         let insert_data_ptr = self.builder.build_alloca(llvm_insert_data.get_type(), "insert_data")?;
         self.builder.build_store(insert_data_ptr, llvm_insert_data)?;
         
@@ -223,23 +218,24 @@ impl<'ctxt> CodeGen<'ctxt> {
             "free_prepared_query"
         )?;
         
-        self.remove_if_temp(insert_data)?;
+        self.remove_if_owned(insert_data)?;
 
-        Ok(QLValue::Void)
+        Ok(GenValue::Void)
     }
 
-    pub fn gen_delete_query(&mut self, query: &DeleteQueryNode) -> Result<QLValue<'ctxt>, CodeGenError> {
-        let where_value = match query.where_clause {
-            Some(ref where_clause) => where_clause.value.gen_eval(self)?,
-            None => QLValue::Void,
+    pub fn gen_delete_query(&mut self, table_id: u32, where_clause_opt: &Option<WhereClause>) -> Result<GenValue<'ctxt>, CodeGenError> {
+        let where_value = match where_clause_opt {
+            Some(where_clause) => self.gen_eval(&where_clause.value)?,
+            None => GenValue::Void,
         };
 
-        let table = self.get_table(&query.table_name)?;
-
-        let db_global_ptr = *self.datasources.get(&table.datasource_name).unwrap();
+        let table = &self.program.tables[&table_id];
+        let assoc_struct = &self.program.structs[&table.struct_id];
+        let table_info = &self.table_info[&table_id];
+        let db_global_ptr = self.datasource_ptrs[&table.datasource_id];
         let db_ptr = self.builder.build_load(self.ptr_type(), db_global_ptr, "db_ptr")?.into_pointer_value();
         
-        let table_name_str = table.name_str.as_pointer_value();
+        let table_name_str = table_info.name_str.as_pointer_value();
         
         let query_plan = self.builder.build_call(
             self.runtime_functions.delete_query_plan_new.into(),
@@ -250,37 +246,32 @@ impl<'ctxt> CodeGen<'ctxt> {
             "delete_query_plan"
         )?.as_any_value_enum().into_pointer_value();
         
-        if let Some(where_clause) = &query.where_clause {
-            let column_index = table.get_column_index(&where_clause.column_name)?;
-            let column_type = &table.fields[column_index as usize].ql_type;
-            let column_name_str = table.column_name_strs[column_index as usize].as_pointer_value();
+        if let Some(WhereClause { column_name, .. }) = where_clause_opt {
+            let column_index = assoc_struct.field_order.iter()
+                .position(|name| name == column_name).unwrap();
+            let column_type = &assoc_struct.fields[column_name];
+            let column_name_str = table_info.column_name_strs[column_index].as_pointer_value();
             
-            // Evaluate the where clause value
-            if where_value.get_type() != *column_type {
-                return Err(CodeGenError::UnexpectedTypeError);
-            }
-            
-            // Determine the QueryDataType enum value
-            let query_data_type = match column_type {
-                QLType::Integer => 0, // QUERY_DATA_INTEGER
-                QLType::String => 1,  // QUERY_DATA_STRING
-                _ => return Err(CodeGenError::UnexpectedTypeError),
+            let query_data_type = match column_type.kind() {
+                SemanticTypeKind::Integer => 0, // QUERY_DATA_INTEGER
+                SemanticTypeKind::String => 1,  // QUERY_DATA_STRING
+                _ => panic!("Unexpected query value"),
             };
             let query_data_type_val = self.context.i32_type().const_int(query_data_type, false);
             
             // Allocate space for the value and store it
             let value_ptr = match where_value {
-                QLValue::Integer(int_val) => {
+                GenValue::Integer(int_val) => {
                     let ptr = self.builder.build_alloca(self.int_type(), "where_value")?;
                     self.builder.build_store(ptr, int_val)?;
                     ptr
                 },
-                QLValue::String(str_ptr, _) => {
+                GenValue::String { value: str_ptr, .. } => {
                     let ptr = self.builder.build_alloca(self.ptr_type(), "where_value")?;
                     self.builder.build_store(ptr, str_ptr)?;
                     ptr
                 },
-                _ => return Err(CodeGenError::UnexpectedTypeError),
+                _ => panic!("Unexpected query value"),
             };
             
             // Call __ql__DeleteQueryPlan_set_where
@@ -317,26 +308,32 @@ impl<'ctxt> CodeGen<'ctxt> {
             "free_prepared_query"
         )?;
 
-        Ok(QLValue::Void)
+        Ok(GenValue::Void)
     }
 
-    pub fn gen_update_query(&mut self, query: &UpdateQueryNode) -> Result<QLValue<'ctxt>, CodeGenError> {
-        let assignments = query.assignments.iter()
-            .map(|assignment| assignment.value_expr.gen_eval(self)
-                .map(|val| (assignment, val)))
-            .collect::<Result<Vec<(&UpdateAssignmentNode, QLValue<'ctxt>)>, CodeGenError>>()?;
-        let where_value = match query.where_clause {
-            Some(ref where_clause) => where_clause.value.gen_eval(self)?,
-            None => QLValue::Void,
+    pub fn gen_update_query(&mut self, table_id: u32, assignments: &[(String, SemanticExpression)], where_clause_opt: &Option<WhereClause>) -> Result<GenValue<'ctxt>, CodeGenError> {
+        let assignment_values = assignments.iter()
+            .map(|(col_name, expr)| {
+                match self.gen_eval(expr) {
+                    Ok(val) => Ok((col_name.as_str(), val)),
+                    Err(e) => Err(e),
+                }
+            })
+            .collect::<Result<Vec<(&str, GenValue)>, _>>()?;
+
+        let where_value = match where_clause_opt {
+            Some(where_clause) => self.gen_eval(&where_clause.value)?,
+            None => GenValue::Void,
         };
 
-        let table = self.get_table(&query.table_name)?;
-
-        let db_global_ptr = *self.datasources.get(&table.datasource_name).unwrap();
+        let table = &self.program.tables[&table_id];
+        let assoc_struct = &self.program.structs[&table.struct_id];
+        let table_info = &self.table_info[&table_id];
+        let db_global_ptr = self.datasource_ptrs[&table.datasource_id];
         let db_ptr = self.builder.build_load(self.ptr_type(), db_global_ptr, "db_ptr")?.into_pointer_value();
         
-        let table_name_str = table.name_str.as_pointer_value();
-        let type_info_ptr = table.type_info.as_pointer_value();
+        let table_name_str = table_info.name_str.as_pointer_value();
+        let type_info_ptr = self.struct_info[&table.struct_id].type_info.as_pointer_value();
         
         let query_plan = self.builder.build_call(
             self.runtime_functions.update_query_plan_new.into(),
@@ -347,39 +344,34 @@ impl<'ctxt> CodeGen<'ctxt> {
             ],
             "update_query_plan"
         )?.as_any_value_enum().into_pointer_value();
-        
+
         // Add all assignments
-        for (assignment, assignment_value) in assignments {
-            let column_index = table.get_column_index(&assignment.column_name)?;
-            let column_type = &table.fields[column_index as usize].ql_type;
-            let column_name_str = table.column_name_strs[column_index as usize].as_pointer_value();
+        for (column_name, assignment_value) in assignment_values {
+            let column_index = assoc_struct.field_order.iter()
+                .position(|name| name == column_name).unwrap();
+            let column_type = &assoc_struct.fields[column_name];
+            let column_name_str = table_info.column_name_strs[column_index].as_pointer_value();
             
-            // Evaluate the assignment value
-            if assignment_value.get_type() != *column_type {
-                return Err(CodeGenError::UnexpectedTypeError);
-            }
-            
-            // Determine the QueryDataType enum value
-            let query_data_type = match column_type {
-                QLType::Integer => 0, // QUERY_DATA_INTEGER
-                QLType::String => 1,  // QUERY_DATA_STRING
-                _ => return Err(CodeGenError::UnexpectedTypeError),
+            let query_data_type = match column_type.kind() {
+                SemanticTypeKind::Integer => 0, // QUERY_DATA_INTEGER
+                SemanticTypeKind::String => 1,  // QUERY_DATA_STRING
+                _ => panic!("Unexpected query value"),
             };
             let query_data_type_val = self.context.i32_type().const_int(query_data_type, false);
             
             // Allocate space for the value and store it
             let value_ptr = match assignment_value {
-                QLValue::Integer(int_val) => {
+                GenValue::Integer(int_val) => {
                     let ptr = self.builder.build_alloca(self.int_type(), "assignment_value")?;
                     self.builder.build_store(ptr, int_val)?;
                     ptr
                 },
-                QLValue::String(str_ptr, _) => {
+                GenValue::String { value: str_ptr, .. } => {
                     let ptr = self.builder.build_alloca(self.ptr_type(), "assignment_value")?;
                     self.builder.build_store(ptr, str_ptr)?;
                     ptr
                 },
-                _ => return Err(CodeGenError::UnexpectedTypeError),
+                _ => panic!("Unexpected query value"),
             };
             
             // Call __ql__UpdateQueryPlan_add_assignment
@@ -396,37 +388,32 @@ impl<'ctxt> CodeGen<'ctxt> {
         }
         
         // Handle WHERE clause if present
-        if let Some(where_clause) = &query.where_clause {
-            let column_index = table.get_column_index(&where_clause.column_name)?;
-            let column_type = &table.fields[column_index as usize].ql_type;
-            let column_name_str = table.column_name_strs[column_index as usize].as_pointer_value();
+        if let Some(WhereClause { column_name, .. }) = where_clause_opt {
+            let column_index = assoc_struct.field_order.iter()
+                .position(|name| name == column_name).unwrap();
+            let column_type = &assoc_struct.fields[column_name];
+            let column_name_str = table_info.column_name_strs[column_index].as_pointer_value();
             
-            // Evaluate the where clause value
-            if where_value.get_type() != *column_type {
-                return Err(CodeGenError::UnexpectedTypeError);
-            }
-            
-            // Determine the QueryDataType enum value
-            let query_data_type = match column_type {
-                QLType::Integer => 0, // QUERY_DATA_INTEGER
-                QLType::String => 1,  // QUERY_DATA_STRING
-                _ => return Err(CodeGenError::UnexpectedTypeError),
+            let query_data_type = match column_type.kind() {
+                SemanticTypeKind::Integer => 0, // QUERY_DATA_INTEGER
+                SemanticTypeKind::String => 1,  // QUERY_DATA_STRING
+                _ => panic!("Unexpected query value"),
             };
             let query_data_type_val = self.context.i32_type().const_int(query_data_type, false);
             
             // Allocate space for the value and store it
             let value_ptr = match where_value {
-                QLValue::Integer(int_val) => {
+                GenValue::Integer(int_val) => {
                     let ptr = self.builder.build_alloca(self.int_type(), "where_value")?;
                     self.builder.build_store(ptr, int_val)?;
                     ptr
                 },
-                QLValue::String(str_ptr, _) => {
+                GenValue::String { value: str_ptr, .. } => {
                     let ptr = self.builder.build_alloca(self.ptr_type(), "where_value")?;
                     self.builder.build_store(ptr, str_ptr)?;
                     ptr
                 },
-                _ => return Err(CodeGenError::UnexpectedTypeError),
+                _ => panic!("Unexpected query value"),
             };
             
             // Call __ql__UpdateQueryPlan_set_where
@@ -463,6 +450,6 @@ impl<'ctxt> CodeGen<'ctxt> {
             "free_prepared_query"
         )?;
 
-        Ok(QLValue::Void)
+        Ok(GenValue::Void)
     }
 }

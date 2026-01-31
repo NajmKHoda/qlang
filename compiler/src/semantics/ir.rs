@@ -51,7 +51,7 @@ pub enum SemanticExpressionKind {
     Variable(u32),
     StructField {
         struct_expr: Box<SemanticExpression>,
-        index: i32,
+        index: u32,
     },
     ArrayIndex {
         array_expr: Box<SemanticExpression>,
@@ -86,6 +86,7 @@ pub enum SemanticExpressionKind {
     ImmediateQuery(SemanticQuery),
 }
 
+#[derive(Clone, Copy)]
 pub enum BuiltinFunction {
     PrintString,
     PrintInteger,
@@ -94,6 +95,7 @@ pub enum BuiltinFunction {
     InputString,
 }
 
+#[derive(Clone, Copy)]
 pub enum BuiltinMethod {
     ArrayLength,
     ArrayAppend,
@@ -111,7 +113,7 @@ pub enum SemanticQuery {
     },
     Update {
         table_id: u32,
-        assignments: HashMap<String, SemanticExpression>,
+        assignments: Vec<(String, SemanticExpression)>,
         where_clause: Option<WhereClause>,
     },
     Delete {
@@ -121,6 +123,6 @@ pub enum SemanticQuery {
 }
 
 pub struct WhereClause {
-    pub(super) column_name: String,
-    pub(super) value: Box<SemanticExpression>,
+    pub column_name: String,
+    pub value: Box<SemanticExpression>,
 }
