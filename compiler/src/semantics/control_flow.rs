@@ -38,22 +38,35 @@ impl SemanticGen {
         }
     }
 
-    pub(super) fn eval_block(&mut self, statements: &[StatementNode]) -> Result<SemanticBlock, SemanticError> {
-        self.variable_scopes.push(HashMap::new());
-        let mut sem_statements = Vec::new();
+    pub(super) fn eval_block(
+        &mut self,
+        statements: &[StatementNode],
+        scope_type: SemanticScopeType
+    ) -> Result<SemanticBlock, SemanticError> {
+        self.enter_scope(scope_type);
+
+        // Evaluate statements in this block
+        let mut sem_stmts: Vec<SemanticStatement> = vec![];
         let mut terminates = false;
         for stmt in statements {
-            let sem_stmt = self.eval_stmt(stmt)?;
-            terminates = sem_stmt.is_terminating();
-            sem_statements.push(sem_stmt);
+            let mut cur_stmts = self.eval_stmt(stmt)?;
+            terminates = match cur_stmts.last() {
+                Some(last_stmt) => last_stmt.is_terminating(),
+                None => false,
+            };
+            sem_stmts.append(&mut cur_stmts);
             if terminates {
                 break;
             }
         }
-        self.variable_scopes.pop();
+
+        // Drop variables in this scope
+        self.exit_scope(!terminates)
+            .into_iter()
+            .for_each(|drop_stmt| sem_stmts.push(drop_stmt));
 
         Ok(SemanticBlock {
-            statements: sem_statements,
+            statements: sem_stmts,
             terminates,
         })
     }
@@ -71,7 +84,7 @@ impl SemanticGen {
                     found_type: sem_condition.sem_type.clone(),
                 });
             }
-            let sem_block = self.eval_block(&branch.body)?;
+            let sem_block = self.eval_block(&branch.body, SemanticScopeType::Block)?;
             sem_branches.push(SemanticConditionalBranch {
                 condition: sem_condition,
                 body: sem_block,
@@ -80,7 +93,7 @@ impl SemanticGen {
 
         let else_body = match else_branch {
             Some(else_statements) => {
-                let sem_else_block = self.eval_block(else_statements)?;
+                let sem_else_block = self.eval_block(else_statements, SemanticScopeType::Block)?;
                 Some(sem_else_block)
             },
             None => None,
@@ -108,7 +121,7 @@ impl SemanticGen {
         let loop_id = self.loop_id_gen.next_id();
 
         self.loops.push((label.clone(), loop_id));
-        let sem_body = self.eval_block(body)?;
+        let sem_body = self.eval_block(body, SemanticScopeType::Loop(loop_id))?;
         self.loops.pop();
 
         Ok(SemanticStatement::ConditionalLoop {
@@ -120,8 +133,8 @@ impl SemanticGen {
 
     pub(super) fn eval_return(
         &self,
-        expr: &Option<Box<ExpressionNode>>,
-    ) -> Result<SemanticStatement, SemanticError> {
+        expr: Option<&ExpressionNode>,
+    ) -> Result<Vec<SemanticStatement>, SemanticError> {
         let sem_expr = match expr {
             Some(expr_node) => {
                 let sem_expr = self.eval_expr(expr_node)?;
@@ -144,26 +157,42 @@ impl SemanticGen {
             }
         };
 
-        Ok(SemanticStatement::Return( sem_expr ))
+        let mut stmts = self.drop_to_scope(SemanticScopeType::Function)?;
+        let return_stmt = SemanticStatement::Return(sem_expr);
+        stmts.push(return_stmt);
+
+        Ok(stmts)
     }
 
-    pub(super) fn eval_break(&self, label: &Option<String>) -> Result<SemanticStatement, SemanticError> {
+    pub(super) fn eval_break(&self, label: &Option<String>) -> Result<Vec<SemanticStatement>, SemanticError> {
         let loop_id = self.find_loop_id(label).ok_or_else(|| {
             match label {
                 Some(lbl) => SemanticError::InvalidLoopLabel { label: lbl.clone() },
                 None => SemanticError::BreakOutsideLoop,
             }
         })?;
-        Ok(SemanticStatement::Break(loop_id))
+
+        let loop_scope = SemanticScopeType::Loop(loop_id);
+        let mut stmts = self.drop_to_scope(loop_scope)?;
+        let break_stmt = SemanticStatement::Break(loop_id);
+        stmts.push(break_stmt);
+
+        Ok(stmts)
     }
 
-    pub(super) fn eval_continue(&self, label: &Option<String>) -> Result<SemanticStatement, SemanticError> {
+    pub(super) fn eval_continue(&self, label: &Option<String>) -> Result<Vec<SemanticStatement>, SemanticError> {
         let loop_id = self.find_loop_id(label).ok_or_else(|| {
             match label {
                 Some(lbl) => SemanticError::InvalidLoopLabel { label: lbl.clone() },
                 None => SemanticError::ContinueOutsideLoop,
             }
         })?;
-        Ok(SemanticStatement::Continue(loop_id))
+
+        let loop_scope = SemanticScopeType::Loop(loop_id);
+        let mut stmts = self.drop_to_scope(loop_scope)?;
+        let continue_stmt = SemanticStatement::Continue(loop_id);
+        stmts.push(continue_stmt);
+
+        Ok(stmts)
     }
 }

@@ -92,7 +92,7 @@ impl<'ctxt> CodeGen<'ctxt> {
                     self.builder.build_call(
                         copy_fn,
                         &[(*struct_value).into()],
-                        "table_copy"
+                        "struct_copy"
                     )?;
                 }
             }
@@ -122,7 +122,7 @@ impl<'ctxt> CodeGen<'ctxt> {
                     self.builder.build_call(
                         drop_fn,
                         &[struct_value.into()],
-                        "table_row_drop"
+                        "struct_drop"
                     )?;
                 }
             }

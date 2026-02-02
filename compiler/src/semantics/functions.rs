@@ -126,12 +126,12 @@ impl SemanticGen {
 
         self.cur_return_type = self.try_get_semantic_type(return_type)?;
 
-        self.variable_scopes.push(HashMap::new());
+        self.enter_scope(SemanticScopeType::Function);
         let mut params: Vec<SemanticParameter> = vec![];
         for param_node in param_nodes {
             let param_type = self.try_get_semantic_type(&param_node.type_node)?;
             let param_id = self.variable_id_gen.next_id();
-            let parameter_scope = self.variable_scopes.last_mut().unwrap();
+            let parameter_scope = &mut self.scopes.last_mut().unwrap().variables;
 
             // Create associated variable
             parameter_scope.insert(param_node.name.clone(), param_id);
@@ -152,19 +152,19 @@ impl SemanticGen {
             return Err(SemanticError::InvalidMainSignature);
         }
 
-        let mut body_block = self.eval_block(body)?;
-        self.variable_scopes.pop();
-
+        let mut body_block = self.eval_block(body, SemanticScopeType::Block)?;
         if !body_block.terminates {
             if self.cur_return_type == SemanticTypeKind::Void {
-                body_block.statements.push(SemanticStatement::Return(None));
+                let ret_stmt = SemanticStatement::Return(None);
+                body_block.statements.push(ret_stmt);
             } else if name == "main" {
-                let zero_expr = SemanticExpression {
+                let literal_zero = SemanticExpression {
                     kind: SemanticExpressionKind::IntegerLiteral(0),
                     sem_type: SemanticType::new(SemanticTypeKind::Integer),
                     ownership: Ownership::Trivial,
                 };
-                body_block.statements.push(SemanticStatement::Return(Some(zero_expr)));
+                let ret_stmt = SemanticStatement::Return(Some(literal_zero));
+                body_block.statements.push(ret_stmt);
             } else {
                 return Err(SemanticError::InexhaustiveReturnPaths {
                     function_name: name.to_string(),

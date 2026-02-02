@@ -156,4 +156,19 @@ impl SemanticGen {
             })
         }
     }
+
+    pub(super) fn drop_to_scope(&self, scope_type: SemanticScopeType) -> Result<Vec<SemanticStatement>, SemanticError> {
+        let mut stmts: Vec<SemanticStatement> = vec![];
+        for scope in self.scopes.iter().rev() {
+            for var_id in scope.variables.values() {
+                let drop_stmt = SemanticStatement::DropVariable(*var_id);
+                eprintln!("Dropping variable ID {}", var_id);
+                stmts.push(drop_stmt);
+            }
+            if scope.scope_type == scope_type {
+                break;
+            }
+        }
+        Ok(stmts)
+    }
 }

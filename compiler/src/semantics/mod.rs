@@ -29,7 +29,7 @@ pub struct SemanticGen {
     structs: DualLookup<SemanticStruct>,
     functions: DualLookup<SemanticFunction>,
     variables: HashMap<u32, SemanticVariable>,
-    variable_scopes: Vec<HashMap<String, u32>>,
+    scopes: Vec<SemanticScope>,
     loops: Vec<(Option<String>, u32)>,
     cur_return_type: SemanticType,
 
@@ -57,7 +57,7 @@ impl SemanticGen {
             structs: DualLookup::new(),
             functions: DualLookup::new(),
             variables: HashMap::new(),
-            variable_scopes: vec![],
+            scopes: vec![],
             loops: vec![],
             cur_return_type: SemanticType::new(SemanticTypeKind::Void),
 
@@ -70,26 +70,26 @@ impl SemanticGen {
         }
     }
 
-    fn eval_stmt(&mut self, stmt: &StatementNode) -> Result<SemanticStatement, SemanticError> {
+    fn eval_stmt(&mut self, stmt: &StatementNode) -> Result<Vec<SemanticStatement>, SemanticError> {
         match stmt {
             StatementNode::VariableDefinition(var_type, name, init_expr) => {
-                self.define_variable(name, var_type, init_expr)
+                self.define_variable(name, var_type, init_expr).map(|s| vec![s])
             },
             StatementNode::Assignment(var_name, expr) => {
-                self.assign_variable(var_name, expr)
+                self.assign_variable(var_name, expr).map(|s| vec![s])
             },
             StatementNode::LoneExpression(expr) => {
                 let sem_expr = self.eval_expr(expr)?;
-                Ok(SemanticStatement::LoneExpression(sem_expr))
+                Ok(vec![SemanticStatement::LoneExpression(sem_expr)])
             },
             StatementNode::Conditional(branches, else_branch) => {
-                self.eval_conditional(branches, else_branch)
+                self.eval_conditional(branches, else_branch).map(|s| vec![s])
             },
             StatementNode::ConditionalLoop(condition, body, label) => {
-                self.eval_conditional_loop(condition, body, label)
+                self.eval_conditional_loop(condition, body, label).map(|s| vec![s])
             },
             StatementNode::Return(expr) => {
-                self.eval_return(expr)
+                self.eval_return(expr.as_deref())
             },
             StatementNode::Break(label) => {
                 self.eval_break(label)
