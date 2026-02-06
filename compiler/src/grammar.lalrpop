@@ -54,24 +54,30 @@ Expression: Box<ExpressionNode> = {
     Int => Box::new(ExpressionNode::IntegerLiteral(<>)),
     Bool => Box::new(ExpressionNode::BoolLiteral(<>)),
     QLString => Box::new(ExpressionNode::StringLiteral(<>)),
+    QName => Box::new(ExpressionNode::QName(<>)),
     "(" <Expression> ")",
+
+    #[precedence(level="1")]
     <name:ProperQName?> "{" <fields:Comma<ColumnValue>> "}" => Box::new(ExpressionNode::Struct(<>)),
     "[" <Comma<Expression>> "]" => Box::new(ExpressionNode::Array(<>)),
+    
+    #[precedence(level="2")]
+    "lambda" "(" <Comma<TypedQName>> ")" "->" <TypeName> "{" <Statement*> "}" => Box::new(ExpressionNode::Closure(<>)),
     <Expression> "[" <Expression> "]" => Box::new(ExpressionNode::ArrayIndex(<>)),
     <Expression> "." <QName> "(" <Comma<Expression>> ")" => Box::new(ExpressionNode::MethodCall(<>)),
     <Expression> "." <QName> => Box::new(ExpressionNode::StructField(<>)),
-    QName => Box::new(ExpressionNode::QName(<>)),
-    #[precedence(level="1")] #[assoc(side="left")]
+    
+    #[precedence(level="3")] #[assoc(side="left")]
     <Expression> "+" <Expression> => Box::new(ExpressionNode::Add(<>)),
     <Expression> "-" <Expression> => Box::new(ExpressionNode::Subtract(<>)),
     <QName> "(" <Comma<Expression>> ")" => Box::new(ExpressionNode::FunctionCall(<>)),
     "query" "{" <Query> "}" => Box::new(ExpressionNode::Query(<>)),
-    #[precedence(level="2")] #[assoc(side="left")]
+    #[precedence(level="4")] #[assoc(side="left")]
     <Expression> ">" <Expression> => Box::new(ExpressionNode::Comparison(<>, ComparisonType::GreaterThan)),
     <Expression> "<" <Expression> => Box::new(ExpressionNode::Comparison(<>, ComparisonType::LessThan)),
     <Expression> ">=" <Expression> => Box::new(ExpressionNode::Comparison(<>, ComparisonType::GreaterThanOrEqual)),
     <Expression> "<=" <Expression> => Box::new(ExpressionNode::Comparison(<>, ComparisonType::LessThanOrEqual)),
-    #[precedence(level="3")] #[assoc(side="left")]
+    #[precedence(level="5")] #[assoc(side="left")]
     <Expression> "=" <Expression> => Box::new(ExpressionNode::Comparison(<>, ComparisonType::Equal)),
     <Expression> "!=" <Expression> => Box::new(ExpressionNode::Comparison(<>, ComparisonType::NotEqual))
 }
@@ -125,11 +131,15 @@ TypeNameWithVoid: TypeNode = {
 }
 
 TypeName: TypeNode = {
+    #[precedence(level="0")]
     "int" => TypeNode::Integer,
     "bool" => TypeNode::Bool,
     "str" => TypeNode::String,
     ProperQName => TypeNode::Struct(<>),
-    <TypeName> "[" "]" => TypeNode::Array(Box::new(<>))
+    #[precedence(level="1")]
+    <TypeName> "[" "]" => TypeNode::Array(Box::new(<>)),
+    #[precedence(level="2")]
+    "(" <params:Comma<TypeName>> ")" "->" <ret:TypeName> => TypeNode::Callable(params, Box::new(ret)),
 }
 
 Int: i32 = r"-?[0-9]+" => i32::from_str(<>).unwrap();

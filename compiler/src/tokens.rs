@@ -45,6 +45,7 @@ pub enum TypeNode {
     String,
     Array(Box<TypeNode>),
     Struct(String),
+    Callable(Vec<TypeNode>, Box<TypeNode>),
     Void
 }
 

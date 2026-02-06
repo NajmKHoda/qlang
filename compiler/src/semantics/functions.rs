@@ -26,7 +26,7 @@ impl SemanticGen {
         &self,
         fn_name: &str,
         arg_exprs: &[SemanticExpression],
-        param_types: &[&SemanticType]
+        param_types: &[SemanticType]
     ) -> Result<(), SemanticError> {
         if arg_exprs.len() != param_types.len() {
             return Err(SemanticError::MismatchingCallArity {
@@ -53,7 +53,7 @@ impl SemanticGen {
     fn call_builtin_function(&self, name: &str, arg_exprs: Vec<SemanticExpression>) -> Result<SemanticExpression, SemanticError> {
         match name {
             "prints" => {
-                self.check_args("prints", &arg_exprs, &[&SemanticType::new(SemanticTypeKind::String)])?;
+                self.check_args("prints", &arg_exprs, &[SemanticType::new(SemanticTypeKind::String)])?;
                 Ok(SemanticExpression {
                     sem_type: SemanticType::new(SemanticTypeKind::Void),
                     kind: SemanticExpressionKind::BuiltinFunctionCall {
@@ -64,7 +64,7 @@ impl SemanticGen {
                 })
             }
             "printi" => {
-                self.check_args("printi", &arg_exprs, &[&SemanticType::new(SemanticTypeKind::Integer)])?;
+                self.check_args("printi", &arg_exprs, &[SemanticType::new(SemanticTypeKind::Integer)])?;
                 Ok(SemanticExpression {
                     sem_type: SemanticType::new(SemanticTypeKind::Void),
                     kind: SemanticExpressionKind::BuiltinFunctionCall {
@@ -75,7 +75,7 @@ impl SemanticGen {
                 })
             }
             "printb" => {
-                self.check_args("printb", &arg_exprs, &[&SemanticType::new(SemanticTypeKind::Bool)])?;
+                self.check_args("printb", &arg_exprs, &[SemanticType::new(SemanticTypeKind::Bool)])?;
                 Ok(SemanticExpression {
                     sem_type: SemanticType::new(SemanticTypeKind::Void),
                     kind: SemanticExpressionKind::BuiltinFunctionCall {
@@ -190,14 +190,42 @@ impl SemanticGen {
         if BUILTIN_FNS.contains(&name) {
             return self.call_builtin_function(name, sem_args);
         }
-        if let Some(func) = self.functions.get_by_name(name) {
-            let param_types: Vec<&SemanticType> = func.params.iter()
-                .map(|param| &param.sem_type)
+
+        if let Some(var) = self.get_variable_opt(name) {
+            let var_id = var.id;
+            let var_type = &var.sem_type.clone();
+            if let SemanticTypeKind::Callable(param_types, ret_type) = var_type.kind() {
+                self.check_args(name, &sem_args, &param_types)?;
+                let expr_kind = SemanticExpressionKind::IndirectFunctionCall {
+                    function_expr: Box::new(SemanticExpression {
+                        kind: SemanticExpressionKind::Variable(var_id),
+                        sem_type: var_type.clone(),
+                        ownership: Ownership::Borrowed,
+                    }),
+                    args: sem_args,
+                };
+                return Ok(SemanticExpression {
+                    sem_type: ret_type.clone(),
+                    kind: expr_kind,
+                    ownership: if ret_type.can_be_owned() {
+                        Ownership::Owned
+                    } else {
+                        Ownership::Trivial
+                    },
+                });
+            } else {
+                Err(SemanticError::NotCallableType {
+                    found_type: var_type.clone(),
+                })
+            }
+        } else if let Some(func) = self.functions.get_by_name(name) {
+            let param_types: Vec<SemanticType> = func.params.iter()
+                .map(|param| param.sem_type.clone())
                 .collect();
             self.check_args(name, &sem_args, &param_types)?;
             Ok(SemanticExpression {
                 sem_type: func.return_type.clone(),
-                kind: SemanticExpressionKind::FunctionCall {
+                kind: SemanticExpressionKind::DirectFunctionCall {
                     function_id: func.id,
                     args: sem_args,
                 },
@@ -240,7 +268,7 @@ impl SemanticGen {
                 })
             }
             (SemanticTypeKind::Array(elem_type), "append") => {
-                self.check_args("Array.append", &sem_args, &[&elem_type])?;
+                self.check_args("Array.append", &sem_args, &[elem_type])?;
                 Ok(SemanticExpression {
                     sem_type: SemanticType::new(SemanticTypeKind::Void),
                     kind: SemanticExpressionKind::BuiltinMethodCall {

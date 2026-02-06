@@ -50,6 +50,7 @@ pub struct SemanticProgram {
     pub tables: HashMap<u32, SemanticTable>,
     pub structs: HashMap<u32, SemanticStruct>,
     pub functions: HashMap<u32, SemanticFunction>,
+    pub closures: HashMap<u32, SemanticClosure>,
     pub variables: HashMap<u32, SemanticVariable>,
 }
 
@@ -200,6 +201,7 @@ impl SemanticGen {
             tables: self.tables.collect_id_value_map(),
             structs: self.structs.collect_id_value_map(),
             functions: self.functions.collect_id_value_map(),
+            closures: self.closures,
             variables: self.variables,
         })
     }

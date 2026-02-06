@@ -71,8 +71,12 @@ pub enum SemanticExpressionKind {
         right: Box<SemanticExpression>,
         op: ComparisonType
     },
-    FunctionCall {
+    DirectFunctionCall {
         function_id: u32,
+        args: Vec<SemanticExpression>,
+    },
+    IndirectFunctionCall {
+        function_expr: Box<SemanticExpression>,
         args: Vec<SemanticExpression>,
     },
     BuiltinFunctionCall {

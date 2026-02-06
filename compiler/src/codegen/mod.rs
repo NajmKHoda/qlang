@@ -4,7 +4,7 @@ use inkwell::context::Context;
 use inkwell::module::Module;
 use inkwell::builder::Builder;
 use inkwell::targets::{FileType, Target, TargetMachine};
-use inkwell::types::{IntType, PointerType, VoidType};
+use inkwell::types::{IntType, PointerType, StructType, VoidType};
 use inkwell::values::{AnyValue, FunctionValue, GlobalValue, PointerValue};
 
 use crate::semantics::{SemanticExpression, SemanticExpressionKind, SemanticProgram, SemanticQuery, SemanticStatement, SemanticTypeKind};
@@ -26,6 +26,7 @@ use data::GenValue;
 use table::GenTableInfo;
 use structs::GenStructInfo;
 use control_flow::GenLoopInfo;
+use function::GenClosureInfo;
 use runtime::RuntimeFunctions;
 pub use error::CodeGenError;
 
@@ -38,10 +39,13 @@ pub struct CodeGen<'ctxt> {
     table_info: HashMap<u32, GenTableInfo<'ctxt>>,
     struct_info: HashMap<u32, GenStructInfo<'ctxt>>,
     loop_info: HashMap<u32, GenLoopInfo<'ctxt>>,
+    closure_info: HashMap<u32, GenClosureInfo<'ctxt>>,
     runtime_functions: RuntimeFunctions<'ctxt>,
     strings: HashMap<String, GlobalValue<'ctxt>>,
 
     cur_fn_id: u32,
+    callable_struct_type: StructType<'ctxt>,
+
     context: &'ctxt Context,
     builder: Builder<'ctxt>,
     module: Module<'ctxt>
@@ -55,6 +59,10 @@ impl<'ctxt> CodeGen<'ctxt> {
 
         for table in self.program.tables.values() {
             self.gen_table(&table)?;
+        }
+
+        for closure in self.program.closures.values() {
+            self.gen_closure(closure)?;
         }
 
         for function in self.program.functions.values() {
@@ -156,8 +164,8 @@ impl<'ctxt> CodeGen<'ctxt> {
                 };
                 self.gen_array(elements, &elem_type)
             }
-            SemanticExpressionKind::Closure(_) => {
-                unimplemented!()
+            SemanticExpressionKind::Closure(closure_id) => {
+                self.gen_closure_instance(*closure_id)
             }
             SemanticExpressionKind::Variable(var_id) => {
                 self.load_var(*var_id)
@@ -186,8 +194,11 @@ impl<'ctxt> CodeGen<'ctxt> {
                 let val2 = self.gen_eval(&right)?;
                 self.gen_compare(val1, val2, *op)
             }
-            SemanticExpressionKind::FunctionCall { function_id, args } => {
-                self.gen_call(*function_id, args)
+            SemanticExpressionKind::DirectFunctionCall { function_id, args } => {
+                self.gen_direct_call(*function_id, args)
+            }
+            SemanticExpressionKind::IndirectFunctionCall { function_expr, args } => {
+                self.gen_indirect_call(function_expr, args)
             }
             SemanticExpressionKind::BuiltinFunctionCall { function, args } => {
                 self.gen_builtin_call(*function, args)
@@ -220,6 +231,12 @@ impl<'ctxt> CodeGen<'ctxt> {
         let builder = context.create_builder();
         let module = context.create_module("main");
 
+        let callable_struct_type = context.opaque_struct_type("__ql__callable");
+        callable_struct_type.set_body(&[
+            context.ptr_type(Default::default()).into(), // Function pointer
+            context.ptr_type(Default::default()).into() // Context pointer for closures
+        ], false);
+
         let codegen = CodeGen {
             program,
             datasource_ptrs: HashMap::new(),
@@ -228,9 +245,11 @@ impl<'ctxt> CodeGen<'ctxt> {
             table_info: HashMap::new(),
             struct_info: HashMap::new(),
             loop_info: HashMap::new(),
+            closure_info: HashMap::new(),
             runtime_functions: RuntimeFunctions::new(&context, &module),
             strings: HashMap::new(),
             cur_fn_id: 0,
+            callable_struct_type,
             context: &context,
             builder,
             module

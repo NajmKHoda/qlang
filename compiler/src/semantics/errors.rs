@@ -106,7 +106,9 @@ pub enum SemanticError {
         expected: SemanticType,
         found: SemanticType
     },
-
+    NotCallableType {
+        found_type: SemanticType,
+    },
     ReadonlyTableMutation {
         table_name: String,
         operation: &'static str,
@@ -220,6 +222,9 @@ impl Display for SemanticError {
             }
             SemanticError::IncompatibleArgumentType { function_name, position, expected, found } => {
                 write!(f, "Cannot pass {} argument to {} argument {} of function {}", found, expected, position, function_name)
+            }
+            SemanticError::NotCallableType { found_type } => {
+                write!(f, "Type {} cannot be called as a function", found_type)
             }
             SemanticError::ReadonlyTableMutation { table_name, operation } => {
                 write!(f, "Cannot perform {} on read-only table {}", operation, table_name)

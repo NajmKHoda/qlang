@@ -90,7 +90,7 @@ impl SemanticGen {
         })
     }
 
-    pub(super) fn get_variable(&mut self, name: &str) -> Result<&SemanticVariable, SemanticError> {
+    pub(super) fn get_variable_opt(&mut self, name: &str) -> Option<&SemanticVariable> {
         let mut found_var_id_op: Option<u32> = None;
         let mut closure_scopes: Vec<(u32, &mut SemanticScope)> = vec![];
 
@@ -127,10 +127,15 @@ impl SemanticGen {
                 var_id = capturer_id;
             }
 
-            Ok(&self.variables[&var_id])
+            Some(&self.variables[&var_id])
         } else {
-            Err(SemanticError::UndefinedVariable { name: name.to_string() })
+            None
         }
+    }
+
+    pub(super) fn get_variable(&mut self, name: &str) -> Result<&SemanticVariable, SemanticError> {
+        self.get_variable_opt(name)
+            .ok_or_else(|| SemanticError::UndefinedVariable { name: name.to_string() })
     }
 
     pub(super) fn enter_scope(&mut self, scope_type: SemanticScopeType) {

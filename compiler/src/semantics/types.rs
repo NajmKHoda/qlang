@@ -25,6 +25,8 @@ impl PartialEq for SemanticTypeKind {
             (SemanticTypeKind::Array(elem_a), SemanticTypeKind::Array(elem_b)) => elem_a == elem_b,
             (SemanticTypeKind::NamedStruct(id_a, _), SemanticTypeKind::NamedStruct(id_b, _)) => id_a == id_b,
             (SemanticTypeKind::AnonymousStruct(fields_a), SemanticTypeKind::AnonymousStruct(fields_b)) => fields_a == fields_b,
+            (SemanticTypeKind::Callable(params_a, ret_a), SemanticTypeKind::Callable(params_b, ret_b)) =>
+                params_a == params_b && ret_a == ret_b,
             (SemanticTypeKind::Void, SemanticTypeKind::Void) => true,
             _ => false
         }
@@ -153,6 +155,13 @@ impl SemanticGen {
                     Err(SemanticError::UndefinedStruct { name: struct_name.to_string() })
                 }
             },
+            TypeNode::Callable(param_type_nodes, ret_type_node) => {
+                let param_types = param_type_nodes.iter()
+                    .map(|param_node| self.try_get_semantic_type(param_node))
+                    .collect::<Result<Vec<_>, SemanticError>>()?;
+                let ret_type = self.try_get_semantic_type(ret_type_node)?;
+                Ok(SemanticType::new(SemanticTypeKind::Callable(param_types, ret_type)))
+            },
             TypeNode::Void => Ok(SemanticType::new(SemanticTypeKind::Void)),
         }
     }
@@ -169,9 +178,6 @@ impl SemanticGen {
                 *(sem_type.borrow_mut()) = other;
                 true
             },
-            (SemanticTypeKind::Integer, SemanticTypeKind::Integer) => true,
-            (SemanticTypeKind::Bool, SemanticTypeKind::Bool) => true,
-            (SemanticTypeKind::String, SemanticTypeKind::String) => true,
             (SemanticTypeKind::Array(elem_a), SemanticTypeKind::Array(elem_b)) => self.try_downcast(&elem_a, &elem_b),
             (SemanticTypeKind::NamedStruct(struct_a, _), SemanticTypeKind::NamedStruct(struct_b, _))
                 => struct_a == struct_b,
@@ -188,6 +194,7 @@ impl SemanticGen {
             SemanticTypeKind::AnonymousStruct(ref mut struct_fields)) => {
                 self.try_downcast_struct(target_fields, struct_fields)
             }
+            (a, b) if a == b => true,
             _ => false
         }
     }

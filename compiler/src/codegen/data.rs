@@ -22,6 +22,7 @@ pub enum GenValue<'a> {
         struct_id: u32,
         ownership: Ownership
     },
+    Callable(StructValue<'a>),
     Void
 }
 
@@ -44,6 +45,7 @@ impl<'a> GenValue<'a> {
                 struct_id,
                 ownership: ownership
             },
+            SemanticTypeKind::Callable(_,_) => GenValue::Callable(llvm_value.into_struct_value()),
             SemanticTypeKind::Void => GenValue::Void,
             _ => panic!("Incomplete type found in semantic IR"),
         }
@@ -65,6 +67,7 @@ impl<'a> GenValue<'a> {
             GenValue::String { value: str_val, .. } => BasicValueEnum::PointerValue(*str_val),
             GenValue::Array { value: arr_val, .. } => BasicValueEnum::PointerValue(*arr_val),
             GenValue::Struct { value: struct_val, .. } => BasicValueEnum::StructValue(*struct_val),
+            GenValue::Callable(callable_val) => BasicValueEnum::StructValue(*callable_val),
             GenValue::Void => panic!("Unexpected void value"),
         }
     }
@@ -145,6 +148,7 @@ impl<'ctxt> CodeGen<'ctxt> {
             SemanticTypeKind::String => self.ptr_type().into(),
             SemanticTypeKind::Array(_) => self.ptr_type().into(),
             SemanticTypeKind::NamedStruct(id, _) => self.struct_info[&id].struct_type.into(),
+            SemanticTypeKind::Callable(_, _) => self.callable_struct_type.into(),
             _ => panic!("Incomplete type found in semantic IR"),
         }
     }

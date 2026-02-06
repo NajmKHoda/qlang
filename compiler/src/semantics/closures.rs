@@ -3,6 +3,7 @@ use crate::tokens::{StatementNode, TypeNode, TypedQNameNode};
 use super::{SemanticGen, SemanticType, SemanticBlock, SemanticParameter, SemanticScopeType, SemanticError, SemanticVariable, Ownership, SemanticExpression, SemanticExpressionKind, SemanticStatement, SemanticTypeKind};
 
 pub struct SemanticClosure {
+    pub id: u32,
     pub parameters: Vec<SemanticParameter>,
     pub captured_variables: Vec<(u32, u32)>,
     pub return_type: SemanticType,
@@ -16,7 +17,7 @@ impl SemanticGen {
         return_type: &TypeNode,
         stmts: &[StatementNode]
     ) -> Result<SemanticExpression, SemanticError> {
-        let id = self.variable_id_gen.next_id();
+        let id = self.closure_id_gen.next_id();
         let mut params: Vec<SemanticParameter> = vec![];
 
         let sem_ret_type = self.try_get_semantic_type(&return_type)?;
@@ -46,14 +47,20 @@ impl SemanticGen {
             terminates: false
         };
         self.closures.insert(id, SemanticClosure {
+            id,
             parameters: params,
             captured_variables: vec![],
             return_type: sem_ret_type.clone(),
             body: dummy_body
         });
 
+        let prev_return_type = self.cur_return_type.clone();
+        self.cur_return_type = sem_ret_type.clone();
+
         let mut body_block = self.eval_block(stmts, SemanticScopeType::Block)?;
         self.exit_scope(false);
+
+        self.cur_return_type = prev_return_type;
 
         if !body_block.terminates {
             if sem_ret_type.kind() == SemanticTypeKind::Void {
