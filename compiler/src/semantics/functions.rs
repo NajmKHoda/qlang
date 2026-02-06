@@ -183,7 +183,7 @@ impl SemanticGen {
         Ok(())
     }
 
-    pub(super) fn call_function(&self, name: &str, arg_exprs: &[Box<ExpressionNode>]) -> Result<SemanticExpression, SemanticError> {
+    pub(super) fn call_function(&mut self, name: &str, arg_exprs: &[Box<ExpressionNode>]) -> Result<SemanticExpression, SemanticError> {
         let sem_args = arg_exprs.iter()
             .map(|arg| self.eval_expr(arg))
             .collect::<Result<Vec<SemanticExpression>, SemanticError>>()?;
@@ -215,7 +215,7 @@ impl SemanticGen {
     }
 
     pub(super) fn call_method(
-        &self,
+        &mut self,
         receiver: &ExpressionNode,
         method_name: &str,
         arg_exprs: &[Box<ExpressionNode>]

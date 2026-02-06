@@ -17,16 +17,15 @@ pub struct SemanticTable {
 }
 
 impl SemanticGen {
-    fn eval_where_clause(&self, where_node: &WhereNode, table: &SemanticTable) -> Result<WhereClause, SemanticError> {
-        let sem_expr = self.eval_expr(&where_node.value)?;
-        let column_type = self.structs[table.struct_id].fields.get(&where_node.column_name);
+    fn eval_where_clause(&self, table: &SemanticTable, column_name: &str, sem_expr: SemanticExpression) -> Result<WhereClause, SemanticError> {
+        let column_type = self.structs[table.struct_id].fields.get(column_name);
         match column_type {
             Some(col_type) => {
                 let compatible = self.try_downcast(col_type, &sem_expr.sem_type);
                 if !compatible {
                     return Err(SemanticError::IncompatibleColumnValue {
                         table_name: table.name.clone(),
-                        column_name: where_node.column_name.clone(),
+                        column_name: column_name.to_string(),
                         expected: col_type.clone(),
                         found: sem_expr.sem_type.clone(),
                     });
@@ -35,12 +34,12 @@ impl SemanticGen {
             None => {
                 return Err(SemanticError::UndefinedColumn {
                     table_name: table.name.clone(),
-                    column_name: where_node.column_name.clone(),
+                    column_name: column_name.to_string(),
                 });
             }
         }
         Ok(WhereClause {
-            column_name: where_node.column_name.clone(),
+            column_name: column_name.to_string(),
             value: Box::new(sem_expr),
         })
     }
@@ -120,147 +119,168 @@ impl SemanticGen {
         Ok(())
     }
 
-    pub(super) fn eval_select_query(&self, query: &SelectQueryNode) -> Result<SemanticExpression, SemanticError> {
-        if let Some(table) = self.tables.get_by_name(&query.table_name) {
-            let where_clause = query.where_clause.as_ref().map(|where_node| {
-                self.eval_where_clause(where_node, table)
-            }).transpose()?;
-            Ok(SemanticExpression {
-                kind: SemanticExpressionKind::ImmediateQuery(
-                    SemanticQuery::Select {
-                        table_id: table.id,
-                        where_clause,
-                    }
-                ),
-                sem_type: SemanticType::new(SemanticTypeKind::Array(
-                    SemanticType::new(SemanticTypeKind::NamedStruct(
-                        table.struct_id,
-                        self.structs[table.struct_id].name.clone()
-                    ))
-                )),
-                ownership: Ownership::Trivial,
-            })
-        } else {
-            Err(SemanticError::UndefinedTable { name: query.table_name.clone() })
-        }
+    pub(super) fn eval_select_query(&mut self, query: &SelectQueryNode) -> Result<SemanticExpression, SemanticError> {
+        let where_expr = query.where_clause.as_ref().map(|where_node| {
+            let sem_expr = self.eval_expr(&where_node.value)?;
+            Ok((where_node.column_name.clone(), sem_expr))
+         }).transpose()?;
+
+        let table = self.tables.get_by_name(&query.table_name)
+            .ok_or_else(|| SemanticError::UndefinedTable { name: query.table_name.clone() })?;
+
+        let where_clause = match where_expr {
+            Some((column_name, sem_expr)) => Some(self.eval_where_clause(table, &column_name, sem_expr)?),
+            None => None,
+        };
+
+        Ok(SemanticExpression {
+            kind: SemanticExpressionKind::ImmediateQuery(
+                SemanticQuery::Select {
+                    table_id: table.id,
+                    where_clause,
+                }
+            ),
+            sem_type: SemanticType::new(SemanticTypeKind::Array(
+                SemanticType::new(SemanticTypeKind::NamedStruct(
+                    table.struct_id,
+                    self.structs[table.struct_id].name.clone()
+                ))
+            )),
+            ownership: Ownership::Trivial,
+        })
     }
 
-    pub(super) fn eval_insert_query(&self, query: &InsertQueryNode) -> Result<SemanticExpression, SemanticError> {
-        if let Some(table) = self.tables.get_by_name(&query.table_name) {
-            if table.is_readonly {
-                return Err(SemanticError::ReadonlyTableMutation {
-                    table_name: table.name.clone(),
-                    operation: "INSERT",
-                });
-            }
+    pub(super) fn eval_insert_query(&mut self, query: &InsertQueryNode) -> Result<SemanticExpression, SemanticError> {
+        let sem_value = self.eval_expr(&query.data_expr)?;
 
-            let sem_value = self.eval_expr(&query.data_expr)?;
-            let expected_type = SemanticType::new(SemanticTypeKind::NamedStruct(
-                table.struct_id,
-                self.structs[table.struct_id].name.clone()
-            ));
-            let compatible = self.try_downcast(&expected_type, &sem_value.sem_type);
-            if !compatible {
-                return Err(SemanticError::IncompatibleInsertData {
-                    table_name: table.name.clone(),
-                    found_type: sem_value.sem_type.clone()
-                });
-            }
-
-            Ok(SemanticExpression {
-                kind: SemanticExpressionKind::ImmediateQuery(
-                    SemanticQuery::Insert {
-                        table_id: table.id,
-                        value: Box::new(sem_value),
-                    }
-                ),
-                sem_type: SemanticType::new(SemanticTypeKind::Void),
-                ownership: Ownership::Trivial,
-            })
-        } else {
-            Err(SemanticError::UndefinedTable { name: query.table_name.clone() })
+        let table = self.tables.get_by_name(&query.table_name)
+            .ok_or_else(|| SemanticError::UndefinedTable { name: query.table_name.clone() })?;
+        if table.is_readonly {
+            return Err(SemanticError::ReadonlyTableMutation {
+                table_name: table.name.clone(),
+                operation: "INSERT",
+            });
         }
+
+        let expected_type = SemanticType::new(SemanticTypeKind::NamedStruct(
+            table.struct_id,
+            self.structs[table.struct_id].name.clone()
+        ));
+        let compatible = self.try_downcast(&expected_type, &sem_value.sem_type);
+        if !compatible {
+            return Err(SemanticError::IncompatibleInsertData {
+                table_name: table.name.clone(),
+                found_type: sem_value.sem_type.clone()
+            });
+        }
+
+        Ok(SemanticExpression {
+            kind: SemanticExpressionKind::ImmediateQuery(
+                SemanticQuery::Insert {
+                    table_id: table.id,
+                    value: Box::new(sem_value),
+                }
+            ),
+            sem_type: SemanticType::new(SemanticTypeKind::Void),
+            ownership: Ownership::Trivial,
+        })
     }
 
-    pub(super) fn eval_update_query(&self, query: &UpdateQueryNode) -> Result<SemanticExpression, SemanticError> {
-        if let Some(table) = self.tables.get_by_name(&query.table_name) {
-            if table.is_readonly {
-                return Err(SemanticError::ReadonlyTableMutation {
-                    table_name: table.name.clone(),
-                    operation: "UPDATE",
-                });
-            }
+    pub(super) fn eval_update_query(&mut self, query: &UpdateQueryNode) -> Result<SemanticExpression, SemanticError> {
+        let assignments: Vec<(String, SemanticExpression)> = query.assignments
+            .iter()
+            .map(|assignment| {
+                let sem_expr = self.eval_expr(&assignment.value_expr)?;
+                Ok((assignment.column_name.clone(), sem_expr))
+            })
+            .collect::<Result<Vec<(String, SemanticExpression)>, SemanticError>>()?;
 
-            let assignments = query.assignments.iter().map(|UpdateAssignmentNode { column_name, value_expr }| {
-                let sem_expr = self.eval_expr(value_expr)?;
-                let table_struct = &self.structs[table.struct_id];
-                let column_type = table_struct.fields.get(column_name);
-                match column_type {
-                    Some(col_type) => {
-                        let compatible = self.try_downcast(col_type, &sem_expr.sem_type);
-                        if !compatible {
-                            return Err(SemanticError::IncompatibleColumnValue {
-                                table_name: table.name.clone(),
-                                column_name: column_name.clone(),
-                                expected: col_type.clone(),
-                                found: sem_expr.sem_type.clone(),
-                            });
-                        }
-                    },
-                    None => {
-                        return Err(SemanticError::UndefinedColumn {
+        let where_expr = query.where_clause.as_ref().map(|where_node| {
+            let sem_expr = self.eval_expr(&where_node.value)?;
+            Ok((where_node.column_name.clone(), sem_expr))
+        }).transpose()?;
+
+        let Some(table) = self.tables.get_by_name(&query.table_name) else {
+            return Err(SemanticError::UndefinedTable { name: query.table_name.clone() });
+        };
+        if table.is_readonly {
+            return Err(SemanticError::ReadonlyTableMutation {
+                table_name: table.name.clone(),
+                operation: "UPDATE",
+            });
+        }
+
+        let where_clause = match where_expr {
+            Some((column_name, sem_expr)) => Some(self.eval_where_clause(table, &column_name, sem_expr)?),
+            None => None,
+        };
+
+        let table_struct = &self.structs[table.struct_id];
+        for (column_name, sem_expr) in &assignments {
+            let column_type = table_struct.fields.get(column_name);
+            match column_type {
+                Some(col_type) => {
+                    let compatible = self.try_downcast(col_type, &sem_expr.sem_type);
+                    if !compatible {
+                        return Err(SemanticError::IncompatibleColumnValue {
                             table_name: table.name.clone(),
                             column_name: column_name.clone(),
+                            expected: col_type.clone(),
+                            found: sem_expr.sem_type.clone(),
                         });
                     }
+                },
+                None => {
+                    return Err(SemanticError::UndefinedColumn {
+                        table_name: table.name.clone(),
+                        column_name: column_name.clone(),
+                    });
                 }
-                Ok((column_name.clone(), sem_expr))
-            }).collect::<Result<Vec<(String, SemanticExpression)>, SemanticError>>()?;
-
-            let where_clause = query.where_clause.as_ref().map(|where_node| {
-                self.eval_where_clause(where_node, table)
-            }).transpose()?;
-
-            Ok(SemanticExpression {
-                kind: SemanticExpressionKind::ImmediateQuery(
-                    SemanticQuery::Update {
-                        table_id: table.id,
-                        assignments,
-                        where_clause,
-                    }
-                ),
-                sem_type: SemanticType::new(SemanticTypeKind::Void),
-                ownership: Ownership::Trivial,
-            })
-        } else {
-            Err(SemanticError::UndefinedTable { name: query.table_name.clone() })
+            }
         }
+
+        Ok(SemanticExpression {
+            kind: SemanticExpressionKind::ImmediateQuery(
+                SemanticQuery::Update {
+                    table_id: table.id,
+                    assignments,
+                    where_clause,
+                }
+            ),
+            sem_type: SemanticType::new(SemanticTypeKind::Void),
+            ownership: Ownership::Trivial,
+        })
     }
 
-    pub(super) fn eval_delete_query(&self, query: &DeleteQueryNode) -> Result<SemanticExpression, SemanticError> {
-        if let Some(table) = self.tables.get_by_name(&query.table_name) {
-            if table.is_readonly {
-                return Err(SemanticError::ReadonlyTableMutation {
-                    table_name: table.name.clone(),
-                    operation: "DELETE",
-                });
-            }
+    pub(super) fn eval_delete_query(&mut self, query: &DeleteQueryNode) -> Result<SemanticExpression, SemanticError> {
+        let where_expr = query.where_clause.as_ref().map(|where_node| {
+            let sem_expr = self.eval_expr(&where_node.value)?;
+            Ok((where_node.column_name.clone(), sem_expr))
+         }).transpose()?;
 
-            let where_clause = query.where_clause.as_ref().map(|where_node| {
-                self.eval_where_clause(where_node, table)
-            }).transpose()?;
-            Ok(SemanticExpression {
-                kind: SemanticExpressionKind::ImmediateQuery(
-                    SemanticQuery::Delete {
-                        table_id: table.id,
-                        where_clause,
-                    }
-                ),
-                sem_type: SemanticType::new(SemanticTypeKind::Void),
-                ownership: Ownership::Trivial,
-            })
-        } else {
-            Err(SemanticError::UndefinedTable { name: query.table_name.clone() })
+        let table = self.tables.get_by_name(&query.table_name)
+            .ok_or_else(|| SemanticError::UndefinedTable { name: query.table_name.clone() })?;
+        if table.is_readonly {
+            return Err(SemanticError::ReadonlyTableMutation {
+                table_name: table.name.clone(),
+                operation: "DELETE",
+            });
         }
+
+        let where_clause = match where_expr {
+            Some((column_name, sem_expr)) => Some(self.eval_where_clause(table, &column_name, sem_expr)?),
+            None => None,
+        };
+
+        Ok(SemanticExpression {
+            kind: SemanticExpressionKind::ImmediateQuery(
+                SemanticQuery::Delete {
+                    table_id: table.id,
+                    where_clause,
+                }
+            ),
+            sem_type: SemanticType::new(SemanticTypeKind::Void),
+            ownership: Ownership::Trivial,
+        })
     }
 }

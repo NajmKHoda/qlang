@@ -1,7 +1,7 @@
 use super::*;
 
 impl SemanticGen {
-    pub(super) fn eval_add(&self, left: &ExpressionNode, right: &ExpressionNode) -> Result<SemanticExpression, SemanticError> {
+    pub(super) fn eval_add(&mut self, left: &ExpressionNode, right: &ExpressionNode) -> Result<SemanticExpression, SemanticError> {
         let sem_left = self.eval_expr(left)?;
         let sem_right = self.eval_expr(right)?;
         
@@ -31,7 +31,7 @@ impl SemanticGen {
         })
     }
 
-    pub(super) fn eval_subtract(&self, left: &ExpressionNode, right: &ExpressionNode) -> Result<SemanticExpression, SemanticError> {
+    pub(super) fn eval_subtract(&mut self, left: &ExpressionNode, right: &ExpressionNode) -> Result<SemanticExpression, SemanticError> {
         let sem_left = self.eval_expr(left)?;
         let sem_right = self.eval_expr(right)?;
 
@@ -61,7 +61,7 @@ impl SemanticGen {
     }
 
     pub(super) fn eval_compare(
-        &self,
+        &mut self,
         left: &ExpressionNode,
         right: &ExpressionNode,
         op: ComparisonType

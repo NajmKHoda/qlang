@@ -11,6 +11,7 @@ pub enum SemanticTypeKind {
     Array(SemanticType),
     NamedStruct(u32, String),
     AnonymousStruct(HashMap<String, SemanticType>),
+    Callable(Vec<SemanticType>, SemanticType),
     Void
 }
 
@@ -68,6 +69,16 @@ impl Display for SemanticTypeKind {
                     }
                 }
                 write!(f, "}}")
+            }
+            SemanticTypeKind::Callable(param_types, ret_type) => {
+                write!(f, "(")?;
+                for (i, param_type) in param_types.iter().enumerate() {
+                    write!(f, "{}", param_type)?;
+                    if i < param_types.len() - 1 {
+                        write!(f, ", ")?;
+                    }
+                }
+                write!(f, ") -> {}", ret_type)
             }
             SemanticTypeKind::Void => write!(f, "void"),
         }

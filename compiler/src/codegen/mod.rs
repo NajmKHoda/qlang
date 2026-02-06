@@ -156,6 +156,9 @@ impl<'ctxt> CodeGen<'ctxt> {
                 };
                 self.gen_array(elements, &elem_type)
             }
+            SemanticExpressionKind::Closure(_) => {
+                unimplemented!()
+            }
             SemanticExpressionKind::Variable(var_id) => {
                 self.load_var(*var_id)
             }

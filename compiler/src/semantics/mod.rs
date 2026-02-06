@@ -3,6 +3,7 @@ mod ir;
 mod variables;
 mod queries;
 mod functions;
+mod closures;
 mod control_flow;
 mod data;
 mod binops;
@@ -15,6 +16,7 @@ use util::*;
 pub use types::*;
 pub use variables::*;
 pub use functions::*;
+pub use closures::*;
 pub use control_flow::*;
 pub use data::*;
 pub use ir::*;
@@ -28,6 +30,7 @@ pub struct SemanticGen {
     tables: DualLookup<SemanticTable>,
     structs: DualLookup<SemanticStruct>,
     functions: DualLookup<SemanticFunction>,
+    closures: HashMap<u32, SemanticClosure>,
     variables: HashMap<u32, SemanticVariable>,
     scopes: Vec<SemanticScope>,
     loops: Vec<(Option<String>, u32)>,
@@ -37,6 +40,7 @@ pub struct SemanticGen {
     table_id_gen: IdGenerator,
     struct_id_gen: IdGenerator,
     function_id_gen: IdGenerator,
+    closure_id_gen: IdGenerator,
     variable_id_gen: IdGenerator,
     loop_id_gen: IdGenerator,
 }
@@ -56,6 +60,7 @@ impl SemanticGen {
             tables: DualLookup::new(),
             structs: DualLookup::new(),
             functions: DualLookup::new(),
+            closures: HashMap::new(),
             variables: HashMap::new(),
             scopes: vec![],
             loops: vec![],
@@ -65,6 +70,7 @@ impl SemanticGen {
             table_id_gen: IdGenerator::new(),
             struct_id_gen: IdGenerator::new(),
             function_id_gen: IdGenerator::new(),
+            closure_id_gen: IdGenerator::new(),
             variable_id_gen: IdGenerator::new(),
             loop_id_gen: IdGenerator::new(),
         }
@@ -100,7 +106,7 @@ impl SemanticGen {
         }
     }
 
-    fn eval_expr(&self, expr: &ExpressionNode) -> Result<SemanticExpression, SemanticError> {
+    fn eval_expr(&mut self, expr: &ExpressionNode) -> Result<SemanticExpression, SemanticError> {
         match expr {
             ExpressionNode::IntegerLiteral(val) => {
                 Ok(SemanticExpression {
@@ -161,6 +167,9 @@ impl SemanticGen {
             }
             ExpressionNode::MethodCall(receiver, method_name, args) => {
                 self.call_method(receiver, method_name, args)
+            }
+            ExpressionNode::Closure(params, return_type, body) => {
+                self.eval_closure(params, return_type, body)
             }
             ExpressionNode::Query(query_node) => {
                 match query_node {

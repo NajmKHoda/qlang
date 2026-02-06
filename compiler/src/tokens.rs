@@ -59,6 +59,7 @@ pub enum ExpressionNode {
     IntegerLiteral(i32),
     BoolLiteral(bool),
     StringLiteral(String),
+    Closure(Vec<TypedQNameNode>, TypeNode, Vec<StatementNode>),
     Add(Box<ExpressionNode>, Box<ExpressionNode>),
     Subtract(Box<ExpressionNode>, Box<ExpressionNode>),
     Comparison(Box<ExpressionNode>, Box<ExpressionNode>, ComparisonType),

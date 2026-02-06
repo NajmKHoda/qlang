@@ -48,6 +48,7 @@ pub enum SemanticExpressionKind {
     StringLiteral(String),
     Struct(HashMap<String, SemanticExpression>),
     Array(Vec<SemanticExpression>),
+    Closure(u32),
     Variable(u32),
     StructField {
         struct_expr: Box<SemanticExpression>,

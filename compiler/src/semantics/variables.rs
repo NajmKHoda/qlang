@@ -10,6 +10,7 @@ pub struct SemanticVariable {
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum SemanticScopeType {
     Function,
+    Closure(u32),
     Loop(u32),
     Block,
 }
@@ -68,30 +69,68 @@ impl SemanticGen {
         Ok(declaration_node)
     }
 
-    pub(super) fn assign_variable(&self, name: &str, expr: &ExpressionNode) -> Result<SemanticStatement, SemanticError> {
-        let variable = self.get_variable(name)?;
+    pub(super) fn assign_variable(&mut self, name: &str, expr: &ExpressionNode) -> Result<SemanticStatement, SemanticError> {
         let sem_expr = self.eval_expr(expr)?;
-        let compatible = self.try_downcast(&variable.sem_type, &sem_expr.sem_type);
+        let variable = self.get_variable(name)?;
+        let var_id = variable.id;
+        let var_type = variable.sem_type.clone();
+
+        let compatible = self.try_downcast(&var_type, &sem_expr.sem_type);
         if !compatible {
             return Err(SemanticError::IncompatibleAssignment {
                 var_name: name.to_string(),
-                var_type: variable.sem_type.clone(),
+                var_type: var_type.clone(),
                 expr_type: sem_expr.sem_type
             });
         }
+
         Ok(SemanticStatement::VariableAssignment {
-            variable_id: variable.id,
+            variable_id: var_id,
             expr: sem_expr
         })
     }
 
-    pub(super) fn get_variable(&self, name: &str) -> Result<&SemanticVariable, SemanticError> {
-        for scope in self.scopes.iter().rev() {
+    pub(super) fn get_variable(&mut self, name: &str) -> Result<&SemanticVariable, SemanticError> {
+        let mut found_var_id_op: Option<u32> = None;
+        let mut closure_scopes: Vec<(u32, &mut SemanticScope)> = vec![];
+
+        for scope in self.scopes.iter_mut().rev() {
             if let Some(var_id) = scope.variables.get(name) {
-                return Ok(&self.variables[var_id])
+                found_var_id_op = Some(*var_id);
+                break;
+            }
+            if let SemanticScopeType::Closure(closure_id) = scope.scope_type {
+                closure_scopes.push((closure_id, scope));
             }
         }
-        Err(SemanticError::UndefinedVariable { name: name.to_string() })
+
+        if let Some(found_var_id) = found_var_id_op {
+            let mut var_id = found_var_id;
+
+            // Handle variable capture for closures
+            for (closure_id, closure_scope) in closure_scopes.iter_mut().rev() {
+                // Create/get an indirection from the capturer to original variable
+                let closure = self.closures.get_mut(&closure_id).unwrap();
+                let capturer_id = self.variable_id_gen.next_id();
+
+                let captured_var = &self.variables[&var_id];
+                let var_name = captured_var.name.clone();
+                let var_type = captured_var.sem_type.clone();
+
+                self.variables.insert(capturer_id, SemanticVariable {
+                    name: var_name.clone(),
+                    id: capturer_id,
+                    sem_type: var_type
+                });
+                closure_scope.variables.insert(var_name, capturer_id);
+                closure.captured_variables.push((capturer_id, var_id));
+                var_id = capturer_id;
+            }
+
+            Ok(&self.variables[&var_id])
+        } else {
+            Err(SemanticError::UndefinedVariable { name: name.to_string() })
+        }
     }
 
     pub(super) fn enter_scope(&mut self, scope_type: SemanticScopeType) {

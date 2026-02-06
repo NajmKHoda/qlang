@@ -132,7 +132,7 @@ impl SemanticGen {
     }
 
     pub(super) fn eval_return(
-        &self,
+        &mut self,
         expr: Option<&ExpressionNode>,
     ) -> Result<Vec<SemanticStatement>, SemanticError> {
         let sem_expr = match expr {
@@ -157,7 +157,20 @@ impl SemanticGen {
             }
         };
 
-        let mut stmts = self.drop_to_scope(SemanticScopeType::Function)?;
+
+        // Drop variables up to (but not including) functional scope
+        let mut stmts: Vec<SemanticStatement> = vec![];
+        for scope in self.scopes.iter().rev() {
+            match scope.scope_type {
+                SemanticScopeType::Function
+                | SemanticScopeType::Closure(_) => break,
+                _ => {},
+            }
+            for var_id in scope.variables.values() {
+                let drop_stmt = SemanticStatement::DropVariable(*var_id);
+                stmts.push(drop_stmt);
+            }
+        }
         let return_stmt = SemanticStatement::Return(sem_expr);
         stmts.push(return_stmt);
 
@@ -172,8 +185,19 @@ impl SemanticGen {
             }
         })?;
 
-        let loop_scope = SemanticScopeType::Loop(loop_id);
-        let mut stmts = self.drop_to_scope(loop_scope)?;
+        // Drop variables in the current loop scope
+        let mut stmts: Vec<SemanticStatement> = vec![];
+        for scope in self.scopes.iter().rev() {
+            for var_id in scope.variables.values() {
+                let drop_stmt = SemanticStatement::DropVariable(*var_id);
+                stmts.push(drop_stmt);
+            }
+            if scope.scope_type == SemanticScopeType::Loop(loop_id) {
+                break;
+            }
+        }
+
+        // Emit the break statement
         let break_stmt = SemanticStatement::Break(loop_id);
         stmts.push(break_stmt);
 
@@ -188,8 +212,19 @@ impl SemanticGen {
             }
         })?;
 
-        let loop_scope = SemanticScopeType::Loop(loop_id);
-        let mut stmts = self.drop_to_scope(loop_scope)?;
+        // Drop variables in the current loop scope
+        let mut stmts: Vec<SemanticStatement> = vec![];
+        for scope in self.scopes.iter().rev() {
+            for var_id in scope.variables.values() {
+                let drop_stmt = SemanticStatement::DropVariable(*var_id);
+                stmts.push(drop_stmt);
+            } 
+            if scope.scope_type == SemanticScopeType::Loop(loop_id) {
+                break;
+            }
+        }
+
+        // Emit the continue statement
         let continue_stmt = SemanticStatement::Continue(loop_id);
         stmts.push(continue_stmt);
 

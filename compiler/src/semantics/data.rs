@@ -17,7 +17,7 @@ pub struct SemanticStruct {
 }
 
 impl SemanticGen {
-    pub fn eval_struct(&self, name: Option<&str>, column_values: &[ColumnValueNode]) -> Result<SemanticExpression, SemanticError> {
+    pub fn eval_struct(&mut self, name: Option<&str>, column_values: &[ColumnValueNode]) -> Result<SemanticExpression, SemanticError> {
         let mut fields = HashMap::new();
         for col_val in column_values {
             let sem_expr = self.eval_expr(&col_val.value)?;
@@ -63,7 +63,7 @@ impl SemanticGen {
         })
     }
 
-    pub fn eval_struct_field(&self, struct_expr: &ExpressionNode, field_name: &str) -> Result<SemanticExpression, SemanticError> {
+    pub fn eval_struct_field(&mut self, struct_expr: &ExpressionNode, field_name: &str) -> Result<SemanticExpression, SemanticError> {
         let sem_struct = self.eval_expr(struct_expr)?;
         match &sem_struct.sem_type.kind() {
             SemanticTypeKind::NamedStruct(struct_id, _) => {
@@ -104,7 +104,7 @@ impl SemanticGen {
         }
     }
 
-    pub fn eval_array(&self, elements: &[Box<ExpressionNode>]) -> Result<SemanticExpression, SemanticError> {
+    pub fn eval_array(&mut self, elements: &[Box<ExpressionNode>]) -> Result<SemanticExpression, SemanticError> {
         let elem_type = SemanticType::new(SemanticTypeKind::Any);
         let mut sem_exprs: Vec<SemanticExpression> = vec![];
         for elem in elements {
@@ -127,7 +127,7 @@ impl SemanticGen {
         })
     }
 
-    pub fn eval_array_index(&self, array_expr: &ExpressionNode, index_expr: &ExpressionNode) -> Result<SemanticExpression, SemanticError> {
+    pub fn eval_array_index(&mut self, array_expr: &ExpressionNode, index_expr: &ExpressionNode) -> Result<SemanticExpression, SemanticError> {
         let sem_array = self.eval_expr(array_expr)?;
         let sem_index = self.eval_expr(index_expr)?;
 
@@ -155,20 +155,5 @@ impl SemanticGen {
                 sem_type: sem_array.sem_type,
             })
         }
-    }
-
-    pub(super) fn drop_to_scope(&self, scope_type: SemanticScopeType) -> Result<Vec<SemanticStatement>, SemanticError> {
-        let mut stmts: Vec<SemanticStatement> = vec![];
-        for scope in self.scopes.iter().rev() {
-            for var_id in scope.variables.values() {
-                let drop_stmt = SemanticStatement::DropVariable(*var_id);
-                eprintln!("Dropping variable ID {}", var_id);
-                stmts.push(drop_stmt);
-            }
-            if scope.scope_type == scope_type {
-                break;
-            }
-        }
-        Ok(stmts)
     }
 }
