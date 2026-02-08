@@ -1,19 +1,17 @@
-function main() -> int {
-  int n <- 1;
-  var adder <- lambda (int x) -> int {
-    x <- x + n;
-    n <- n + 1;
-    return x;
+function foo1(int a) -> (int) -> (int) -> (int) -> int {
+  return lambda (int b) -> (int) -> (int) -> int {
+    return lambda (int c) -> (int) -> int {
+      return lambda (int d) -> int {
+        return a + b + c + d;
+      };
+    };
   };
+}
 
-  prints("Enter number of iterations");
-  int i <- inputi();
-
-  while i > 0 {
-    int y <- adder(0);
-    printi(y);
-    i <- i - 1;
-  }
-
-  printi(n);
+function main() -> int {
+  var foo2 <- foo1(5);
+  var foo3 <- foo2(10);
+  var foo4 <- foo3(15);
+  var foo5 <- foo4(20);
+  printi(foo5);
 }

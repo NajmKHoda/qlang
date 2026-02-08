@@ -1,6 +1,7 @@
 use super::*;
 
 pub struct SemanticParameter {
+    pub name: String,
     pub sem_type: SemanticType,
     pub variable_id: u32,
 }
@@ -111,12 +112,11 @@ impl SemanticGen {
         }
     }
 
-    pub(super) fn define_function(
+    pub(super) fn declare_function(
         &mut self,
         name: &str,
         param_nodes: &[TypedQNameNode],
         return_type: &TypeNode,
-        body: &[StatementNode],
     ) -> Result<(), SemanticError> {
         if self.functions.contains_name(name) {
             return Err(SemanticError::DuplicateFunctionDefinition {
@@ -124,40 +124,59 @@ impl SemanticGen {
             });
         }
 
-        self.cur_return_type = self.try_get_semantic_type(return_type)?;
+        let sem_return_type = self.try_get_semantic_type(return_type)?;
+        let function_id = self.function_id_gen.next_id();
 
-        self.enter_scope(SemanticScopeType::Function);
-        let mut params: Vec<SemanticParameter> = vec![];
-        for param_node in param_nodes {
+        let params: Vec<SemanticParameter> = param_nodes.iter().map(|param_node| {
             let param_type = self.try_get_semantic_type(&param_node.type_node)?;
             let param_id = self.variable_id_gen.next_id();
-            let parameter_scope = &mut self.scopes.last_mut().unwrap().variables;
-
-            // Create associated variable
-            parameter_scope.insert(param_node.name.clone(), param_id);
-            self.variables.insert(param_id, SemanticVariable {
+            Ok(SemanticParameter {
                 name: param_node.name.clone(),
-                sem_type: param_type.clone(),
-                id: param_id,
-            });
-
-            // Add to parameter list
-            params.push(SemanticParameter {
                 sem_type: param_type,
                 variable_id: param_id,
-            });
-        }
+            })
+        }).collect::<Result<_, SemanticError>>()?;
 
-        if name == "main" && (!params.is_empty() || self.cur_return_type != SemanticTypeKind::Integer) {
+        if name == "main" && (!params.is_empty() || sem_return_type != SemanticTypeKind::Integer) {
             return Err(SemanticError::InvalidMainSignature);
         }
 
+        self.functions.insert(name.to_string(), function_id, SemanticFunction {
+            name: name.to_string(),
+            id: function_id,
+            params,
+            return_type: sem_return_type,
+            body: SemanticBlock {
+                statements: vec![],
+                terminates: false,
+            },
+        });
+
+        Ok(())
+    }
+
+    pub(super) fn define_function(&mut self, id: u32, body: &[StatementNode]) -> Result<(), SemanticError> {
+        // Set up function scope and parameters
+        self.enter_scope(SemanticScopeType::Function);
+        let parameter_scope = &mut self.scopes.last_mut().unwrap().variables;
+        for param in self.functions[id].params.iter() {
+            // Create associated variable
+            parameter_scope.insert(param.name.clone(), param.variable_id);
+            self.variables.insert(param.variable_id, SemanticVariable {
+                name: param.name.clone(),
+                sem_type: param.sem_type.clone(),
+                id: param.variable_id,
+            });
+        }
+
+        // Evaluate function body
+        self.cur_return_type = self.functions[id].return_type.clone();
         let mut body_block = self.eval_block(body, SemanticScopeType::Block)?;
         if !body_block.terminates {
             if self.cur_return_type == SemanticTypeKind::Void {
                 let ret_stmt = SemanticStatement::Return(None);
                 body_block.statements.push(ret_stmt);
-            } else if name == "main" {
+            } else if self.functions[id].name == "main" {
                 let literal_zero = SemanticExpression {
                     kind: SemanticExpressionKind::IntegerLiteral(0),
                     sem_type: SemanticType::new(SemanticTypeKind::Integer),
@@ -167,19 +186,12 @@ impl SemanticGen {
                 body_block.statements.push(ret_stmt);
             } else {
                 return Err(SemanticError::InexhaustiveReturnPaths {
-                    function_name: name.to_string(),
+                    function_name: self.functions[id].name.clone(),
                 });
             }
         }
+        self.functions[id].body = body_block;
 
-        let function_id = self.function_id_gen.next_id();
-        self.functions.insert(name.to_string(), function_id, SemanticFunction {
-            name: name.to_string(),
-            id: function_id,
-            params,
-            return_type: self.cur_return_type.clone(),
-            body: body_block,
-        });
         Ok(())
     }
 

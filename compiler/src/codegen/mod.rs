@@ -61,14 +61,22 @@ impl<'ctxt> CodeGen<'ctxt> {
             self.gen_table(&table)?;
         }
 
+        // Forward-declare closures and functions
         for closure in self.program.closures.values() {
-            self.gen_closure(closure)?;
+            self.declare_closure(closure)?;
+        }
+        for function in self.program.functions.values() {
+            self.declare_function(function)?;
         }
 
+        // Now, define closures and functions
+        for closure in self.program.closures.values() {
+            self.define_closure(closure)?;
+        }
         for function in self.program.functions.values() {
             self.define_function(&function)?;
         }
-    
+        
         let main_fn_type = self.int_type().fn_type(
             &[self.int_type().into(), self.ptr_type().into()],
             false

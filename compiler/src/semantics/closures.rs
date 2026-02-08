@@ -36,6 +36,7 @@ impl SemanticGen {
                 sem_type: sem_type.clone(),
             });
             params.push(SemanticParameter {
+                name: param_node.name.clone(),
                 variable_id,
                 sem_type: sem_type.clone(),
             });

@@ -193,7 +193,15 @@ impl SemanticGen {
         }
 
         for function in &program.functions {
-            self.define_function(&function.name, &function.params, &function.return_type, &function.body)?;
+            self.declare_function(&function.name, &function.params, &function.return_type)?;
+        }
+        if !self.functions.contains_name("main") {
+            return Err(SemanticError::MissingMainFunction);
+        }
+
+        for function in &program.functions {
+            let func_id = self.functions[function.name.as_str()].id;
+            self.define_function(func_id, &function.body)?;
         }
 
         Ok(SemanticProgram {

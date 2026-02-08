@@ -13,7 +13,7 @@ pub(super) struct GenClosureInfo<'ctxt> {
 }
 
 impl<'ctxt> CodeGen<'ctxt> {
-	pub(super) fn define_function(&mut self, function: &SemanticFunction) -> Result<(), CodeGenError> {
+	pub(super) fn declare_function(&mut self, function: &SemanticFunction) -> Result<(), CodeGenError> {
 		let llvm_param_types = function.params.iter()
 			.map(|p| self.llvm_basic_type(&p.sem_type).into())
 			.collect::<Vec<BasicMetadataTypeEnum>>(); 
@@ -30,6 +30,14 @@ impl<'ctxt> CodeGen<'ctxt> {
 		let llvm_name = if function.name == "main" { "__ql__user_main" } else { &function.name };
 		let llvm_fn = self.module.add_function(llvm_name, llvm_type, None);
 		self.llvm_functions.insert(function.id, llvm_fn);
+		Ok(())
+	}
+
+	pub(super) fn define_function(&mut self, function: &SemanticFunction) -> Result<(), CodeGenError> {
+		let llvm_fn = self.llvm_functions[&function.id];
+		let entry_block = self.context.append_basic_block(llvm_fn, "entry");
+		self.builder.position_at_end(entry_block);
+
 		for (i, param) in function.params.iter().enumerate() {
 			let param_var = &self.program.variables[&param.variable_id];
 			let llvm_param_val = llvm_fn.get_nth_param(i as u32).unwrap();
@@ -41,8 +49,6 @@ impl<'ctxt> CodeGen<'ctxt> {
 			self.llvm_variables.insert(param.variable_id, llvm_param_var);
 		}
 
-		let entry_block = self.context.append_basic_block(llvm_fn, "entry");
-		self.builder.position_at_end(entry_block);
 		for stmt in &function.body.statements {
 			self.gen_stmt(stmt)?;
 		}
@@ -171,7 +177,7 @@ impl<'ctxt> CodeGen<'ctxt> {
 		}
 	}
 
-	pub fn gen_closure(&mut self, closure: &SemanticClosure) -> Result<(), CodeGenError> {
+	pub fn declare_closure(&mut self, closure: &SemanticClosure) -> Result<(), CodeGenError> {
 		let captured_llvm_types = closure.captured_variables.iter()
 			.map(|(var_id, _)| {
 				let var = &self.program.variables[var_id];
@@ -199,15 +205,26 @@ impl<'ctxt> CodeGen<'ctxt> {
 
 		let fn_name = format!("__ql__closure_{}", closure.id);
 		let llvm_fn = self.module.add_function(&fn_name, llvm_fn_type, None);
-		let entry_block = self.context.append_basic_block(llvm_fn, "entry");
+
+		self.closure_info.insert(closure.id, GenClosureInfo {
+			llvm_fn,
+			llvm_context_type,
+		});
+
+		Ok(())
+	}
+
+	pub fn define_closure(&mut self, closure: &SemanticClosure) -> Result<(), CodeGenError> {
+		let closure_info = &self.closure_info[&closure.id];
+		let entry_block = self.context.append_basic_block(closure_info.llvm_fn, "entry");
 		self.builder.position_at_end(entry_block);
 		
 		// Set up captured variable pointers
-		let context_ptr = llvm_fn.get_nth_param(0).unwrap().into_pointer_value();
+		let context_ptr = closure_info.llvm_fn.get_nth_param(0).unwrap().into_pointer_value();
 		for (i, (var_id, _)) in closure.captured_variables.iter().enumerate() {
 			let var = &self.program.variables[var_id];
 			let field_ptr = self.builder.build_struct_gep(
-				llvm_context_type,
+				closure_info.llvm_context_type,
 				context_ptr,
 				i as u32,
 				&format!("__captured__{}", var.name)
@@ -218,7 +235,7 @@ impl<'ctxt> CodeGen<'ctxt> {
 		// Set up parameter pointers
 		for (i, param) in closure.parameters.iter().enumerate() {
 			let param_var = &self.program.variables[&param.variable_id];
-			let llvm_param_val = llvm_fn.get_nth_param((i + 1) as u32).unwrap();
+			let llvm_param_val = closure_info.llvm_fn.get_nth_param((i + 1) as u32).unwrap();
 			let llvm_param_var = self.builder.build_alloca(
 				self.llvm_basic_type(&param.sem_type),
 				&param_var.name
@@ -231,11 +248,6 @@ impl<'ctxt> CodeGen<'ctxt> {
 		for stmt in &closure.body.statements {
 			self.gen_stmt(stmt)?;
 		}
-
-		self.closure_info.insert(closure.id, GenClosureInfo {
-			llvm_fn,
-			llvm_context_type,
-		});
 
 		Ok(())
 	}

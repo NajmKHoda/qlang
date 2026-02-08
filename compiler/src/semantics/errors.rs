@@ -129,6 +129,7 @@ pub enum SemanticError {
         function_name: String,
     },
     InvalidMainSignature,
+    MissingMainFunction,
     InvalidLoopLabel {
         label: String,
     },
@@ -243,6 +244,9 @@ impl Display for SemanticError {
             }
             SemanticError::InvalidMainSignature => {
                 write!(f, "Function main must return an integer and accept no parameters")
+            }
+            SemanticError::MissingMainFunction => {
+                write!(f, "Program must contain a main function")
             }
             SemanticError::InvalidLoopLabel { label } => {
                 write!(f, "No loop with label {} exists", label)
