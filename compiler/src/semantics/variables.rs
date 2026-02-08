@@ -22,24 +22,32 @@ pub(super) struct SemanticScope {
 
 impl SemanticGen {
     pub(super) fn define_variable(&mut self, name: &str, type_node: &Option<TypeNode>, init_expr: &ExpressionNode) -> Result<SemanticStatement, SemanticError> {
-        let sem_init_expr = self.eval_expr(init_expr)?;
-
         let sem_type = match type_node {
-            Some(t) => {
-                let sem_type = self.try_get_semantic_type(t)?;
-                let compatible = self.try_unify(&sem_type, &sem_init_expr.sem_type);
-                if !compatible {
-                    return Err(SemanticError::IncompatibleAssignment {
-                        var_name: name.to_string(),
-                        var_type: sem_type,
-                        expr_type: sem_init_expr.sem_type
-                    });
-                }
-                sem_type
-            },
-            None => sem_init_expr.sem_type.clone(),
+            Some(t) => self.try_get_semantic_type(t)?,
+            None => SemanticType::new(SemanticTypeKind::Any),
         };
+        if sem_type == SemanticTypeKind::Void {
+            return Err(SemanticError::VoidVariableType {
+                var_name: name.to_string(),
+            });
+        }
 
+        let sem_init_expr = self.eval_expr(init_expr)?;
+        let compatible = self.try_unify(&sem_type, &sem_init_expr.sem_type);
+
+        // We have to check for void again due to unification
+        if sem_type == SemanticTypeKind::Void {
+            return Err(SemanticError::VoidVariableType {
+                var_name: name.to_string(),
+            });
+        }
+        if !compatible {
+            return Err(SemanticError::IncompatibleAssignment {
+                var_name: name.to_string(),
+                var_type: sem_type,
+                expr_type: sem_init_expr.sem_type
+            });
+        }
         if !sem_type.is_concrete() {
             return Err(SemanticError::AmbiguousVariableType {
                 var_name: name.to_string(),

@@ -43,7 +43,8 @@ pub struct CodeGen<'ctxt> {
     runtime_functions: RuntimeFunctions<'ctxt>,
     strings: HashMap<String, GlobalValue<'ctxt>>,
 
-    cur_fn_id: u32,
+    cur_fn: Option<FunctionValue<'ctxt>>,
+    vars_to_drop: Vec<u32>,
     callable_struct_type: StructType<'ctxt>,
 
     context: &'ctxt Context,
@@ -143,7 +144,8 @@ impl<'ctxt> CodeGen<'ctxt> {
                 self.gen_continue(*loop_id)
             }
             SemanticStatement::DropVariable(variable_id) => {
-                self.drop_var(*variable_id)
+                self.vars_to_drop.push(*variable_id);
+                Ok(())
             }
         }
     }
@@ -256,7 +258,8 @@ impl<'ctxt> CodeGen<'ctxt> {
             closure_info: HashMap::new(),
             runtime_functions: RuntimeFunctions::new(&context, &module),
             strings: HashMap::new(),
-            cur_fn_id: 0,
+            cur_fn: None,
+            vars_to_drop: vec![],
             callable_struct_type,
             context: &context,
             builder,

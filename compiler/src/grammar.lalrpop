@@ -21,7 +21,7 @@ Table: TableNode =
 Function: FunctionNode =
     "function" <name:QName>
     "(" <params:Comma<TypedQName>> ")"
-    "->" <return_type:TypeNameWithVoid>
+    "->" <return_type:TypeName>
     "{" <body:Statement*> "}"
     => FunctionNode { <> };
 
@@ -62,7 +62,7 @@ Expression: Box<ExpressionNode> = {
     "[" <Comma<Expression>> "]" => Box::new(ExpressionNode::Array(<>)),
     
     #[precedence(level="2")]
-    "lambda" "(" <Comma<TypedQName>> ")" <("->" <TypeNameWithVoid>)?> "{" <ClosureBody> "}" => Box::new(ExpressionNode::Closure(<>)),
+    "lambda" "(" <Comma<TypedQName>> ")" <("->" <TypeName>)?> "{" <ClosureBody> "}" => Box::new(ExpressionNode::Closure(<>)),
     <Expression> "[" <Expression> "]" => Box::new(ExpressionNode::ArrayIndex(<>)),
     <Expression> "." <QName> "(" <Comma<Expression>> ")" => Box::new(ExpressionNode::MethodCall(<>)),
     <Expression> "." <QName> => Box::new(ExpressionNode::StructField(<>)),
@@ -130,16 +130,12 @@ VariableType: Option<TypeNode> = {
     <TypeName> => Some(<>)
 }
 
-TypeNameWithVoid: TypeNode = {
-    <TypeName>,
-    "void" => TypeNode::Void
-}
-
 TypeName: TypeNode = {
     #[precedence(level="0")]
     "int" => TypeNode::Integer,
     "bool" => TypeNode::Bool,
     "str" => TypeNode::String,
+    "void" => TypeNode::Void,
     ProperQName => TypeNode::Struct(<>),
     #[precedence(level="1")]
     <TypeName> "[" "]" => TypeNode::Array(Box::new(<>)),

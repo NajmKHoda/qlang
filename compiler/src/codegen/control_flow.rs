@@ -1,7 +1,7 @@
-use inkwell::{basic_block::BasicBlock, values::{IntValue}};
+use inkwell::{basic_block::BasicBlock, values::{BasicValue, IntValue}};
 
 use super::{CodeGen, CodeGenError};
-use crate::semantics::{SemanticBlock, SemanticConditionalBranch, SemanticExpression};
+use crate::semantics::{SemanticBlock, SemanticConditionalBranch, SemanticExpression, SemanticTypeKind};
 
 pub(super) struct GenLoopInfo<'a> {
     cond_block: BasicBlock<'a>,
@@ -14,7 +14,7 @@ impl<'ctxt> CodeGen<'ctxt> {
         conditional_branches: &[SemanticConditionalBranch],
         else_branch: &Option<SemanticBlock>
     ) -> Result<(), CodeGenError> {
-        let cur_fn = self.llvm_functions[&self.cur_fn_id];
+        let cur_fn = self.cur_fn.unwrap();
         let initial_block = self.builder.get_insert_block().unwrap();
 
         struct BranchGenInfo<'a> {
@@ -33,9 +33,7 @@ impl<'ctxt> CodeGen<'ctxt> {
 
             let body_block = self.context.append_basic_block(cur_fn, &format!("branch{}_body", i+1));
             self.builder.position_at_end(body_block);
-            for stmt in &branch.body.statements {
-                self.gen_stmt(stmt)?;
-            }
+            self.gen_block(&branch.body)?;
 
             blocks.push(BranchGenInfo {
                 cond_value,
@@ -48,9 +46,7 @@ impl<'ctxt> CodeGen<'ctxt> {
             let else_jump_block = self.context.append_basic_block(cur_fn, "else_jump");
             let else_body_block = self.context.append_basic_block(cur_fn, "else_body");
             self.builder.position_at_end(else_body_block);
-            for stmt in &else_block.statements {
-                self.gen_stmt(stmt)?;
-            }
+            self.gen_block(else_block)?;
 
             blocks.push(BranchGenInfo {
                 cond_value: self.context.bool_type().const_int(1, false),
@@ -114,7 +110,7 @@ impl<'ctxt> CodeGen<'ctxt> {
         body: &SemanticBlock,
         id: u32,
     ) -> Result<(), CodeGenError> {
-        let cur_fn = self.llvm_functions[&self.cur_fn_id];
+        let cur_fn = self.cur_fn.unwrap();
         let cond_block = self.context.append_basic_block(cur_fn, "loop_cond");
         let entry_block = self.context.append_basic_block(cur_fn, "loop_body_entry");
         let after_block = self.context.append_basic_block(cur_fn, "after_loop");
@@ -128,25 +124,70 @@ impl<'ctxt> CodeGen<'ctxt> {
 
         // Build loop body
         self.builder.position_at_end(entry_block);
-        for stmt in &body.statements {
-            self.gen_stmt(stmt)?;
-        }
+        self.gen_block(body)?;
         if !body.terminates {
             self.builder.build_unconditional_branch(cond_block)?;
         }
 
+        let last_body_block = cur_fn.get_last_basic_block().unwrap();
+        let _ = after_block.move_after(last_body_block);
         self.builder.position_at_end(after_block);
         Ok(())
     }
 
-    pub fn gen_break(&self, loop_id: u32) -> Result<(), CodeGenError> {
+    pub fn gen_block(&mut self, block: &SemanticBlock) -> Result<(), CodeGenError> {
+        for stmt in &block.statements {
+            self.gen_stmt(stmt)?;
+        }
+
+        if !block.terminates {
+            for var_id in &self.vars_to_drop {
+                self.drop_var(*var_id)?;
+            }
+            self.vars_to_drop.clear();
+        } 
+        
+        Ok(())
+    }
+
+    pub fn gen_return(&mut self, value: &Option<SemanticExpression>) -> Result<(), CodeGenError> {
+		let return_value: Option<&dyn BasicValue> = match value {
+			Some(val) => {
+				let return_val = self.gen_eval(val)?;
+				if val.sem_type.kind() != SemanticTypeKind::Void {
+					self.add_ref(&return_val)?;
+					Some(&return_val.as_llvm_basic_value())
+				} else {
+					None
+				}
+			}
+			None => None
+		};
+
+		for var_id in &self.vars_to_drop {
+			self.drop_var(*var_id)?;
+		}
+        self.vars_to_drop.clear();
+		self.builder.build_return(return_value)?;
+		Ok(())
+	}
+
+    pub fn gen_break(&mut self, loop_id: u32) -> Result<(), CodeGenError> {
         let GenLoopInfo { after_block, .. } = self.loop_info[&loop_id];
+        for var_id in &self.vars_to_drop {
+            self.drop_var(*var_id)?;
+        }
+        self.vars_to_drop.clear();
         self.builder.build_unconditional_branch(after_block)?;
         Ok(())
     }
 
-    pub fn gen_continue(&self, loop_id: u32) -> Result<(), CodeGenError> {
+    pub fn gen_continue(&mut self, loop_id: u32) -> Result<(), CodeGenError> {
         let GenLoopInfo { cond_block, .. } = self.loop_info[&loop_id];
+        for var_id in &self.vars_to_drop {
+            self.drop_var(*var_id)?;
+        }
+        self.vars_to_drop.clear();
         self.builder.build_unconditional_branch(cond_block)?;
         Ok(())
     }

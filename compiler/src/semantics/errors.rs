@@ -85,6 +85,13 @@ pub enum SemanticError {
         var_name: String,
         var_type: SemanticType
     },
+    VoidVariableType {
+        var_name: String,
+    },
+    VoidParameterType {
+        function_name: String,
+        param_name: String,
+    },
     IncompatibleAssignment {
         var_name: String,
         var_type: SemanticType,
@@ -215,6 +222,12 @@ impl Display for SemanticError {
             SemanticError::AmbiguousVariableType { var_name, var_type } => {
                 write!(f, "Variable {} has an ambiguous type: {}", var_name, var_type)
             }
+            SemanticError::VoidVariableType { var_name } => {
+                write!(f, "Variable {} cannot have type void", var_name)
+            },
+            SemanticError::VoidParameterType { function_name, param_name } => {
+                write!(f, "Parameter {} of function {} cannot have type void", param_name, function_name)
+            },
             SemanticError::IncompatibleAssignment { var_name, var_type, expr_type } => {
                 write!(f, "Cannot assign value of type {} to variable {} of type {}", expr_type, var_name, var_type)
             }

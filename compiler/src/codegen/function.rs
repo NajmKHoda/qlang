@@ -1,7 +1,7 @@
 use std::iter::once;
 
 use inkwell::types::{BasicMetadataTypeEnum, BasicType, StructType};
-use inkwell::values::{AnyValue, BasicMetadataValueEnum, BasicValue, FunctionValue, ValueKind};
+use inkwell::values::{AnyValue, BasicMetadataValueEnum, FunctionValue, ValueKind};
 
 use super::{CodeGen, CodeGenError};
 use crate::codegen::data::GenValue;
@@ -35,6 +35,8 @@ impl<'ctxt> CodeGen<'ctxt> {
 
 	pub(super) fn define_function(&mut self, function: &SemanticFunction) -> Result<(), CodeGenError> {
 		let llvm_fn = self.llvm_functions[&function.id];
+
+		self.cur_fn = Some(llvm_fn);
 		let entry_block = self.context.append_basic_block(llvm_fn, "entry");
 		self.builder.position_at_end(entry_block);
 
@@ -48,11 +50,9 @@ impl<'ctxt> CodeGen<'ctxt> {
 			self.builder.build_store(llvm_param_var, llvm_param_val)?;
 			self.llvm_variables.insert(param.variable_id, llvm_param_var);
 		}
-
-		for stmt in &function.body.statements {
-			self.gen_stmt(stmt)?;
-		}
-
+		self.gen_block(&function.body)?;
+		
+		self.cur_fn = None;
 		Ok(())
 	}
 
@@ -139,23 +139,6 @@ impl<'ctxt> CodeGen<'ctxt> {
 		}
 	}
 
-	pub fn gen_return(&mut self, value: &Option<SemanticExpression>) -> Result<(), CodeGenError> {
-		let return_value: Option<&dyn BasicValue> = match value {
-			Some(val) => {
-				let return_val = self.gen_eval(val)?;
-				if val.sem_type.kind() != SemanticTypeKind::Void {
-					self.add_ref(&return_val)?;
-					Some(&return_val.as_llvm_basic_value())
-				} else {
-					None
-				}
-			}
-			None => None
-		};
-		self.builder.build_return(return_value)?;
-		Ok(())
-	}
-
 	pub fn gen_method_call(
 		&mut self,
 		object: GenValue<'ctxt>,
@@ -218,6 +201,7 @@ impl<'ctxt> CodeGen<'ctxt> {
 
 	pub fn define_closure(&mut self, closure: &SemanticClosure) -> Result<(), CodeGenError> {
 		let closure_info = &self.closure_info[&closure.id];
+		self.cur_fn = Some(closure_info.llvm_fn);
 		let entry_block = self.context.append_basic_block(closure_info.llvm_fn, "entry");
 		self.builder.position_at_end(entry_block);
 		
@@ -245,12 +229,9 @@ impl<'ctxt> CodeGen<'ctxt> {
 			self.builder.build_store(llvm_param_var, llvm_param_val)?;
 			self.llvm_variables.insert(param.variable_id, llvm_param_var);
 		}
+		self.gen_block(&closure.body)?;
 
-		// Generate closure body
-		for stmt in &closure.body.statements {
-			self.gen_stmt(stmt)?;
-		}
-
+		self.cur_fn = None;
 		Ok(())
 	}
 

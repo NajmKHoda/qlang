@@ -129,6 +129,12 @@ impl SemanticGen {
 
         let params: Vec<SemanticParameter> = param_nodes.iter().map(|param_node| {
             let param_type = self.try_get_semantic_type(&param_node.type_node)?;
+            if param_type == SemanticTypeKind::Void {
+                return Err(SemanticError::VoidParameterType {
+                    function_name: name.to_string(),
+                    param_name: param_node.name.clone(),
+                });
+            }
             let param_id = self.variable_id_gen.next_id();
             Ok(SemanticParameter {
                 name: param_node.name.clone(),
