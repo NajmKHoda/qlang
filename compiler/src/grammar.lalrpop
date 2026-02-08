@@ -26,10 +26,12 @@ Function: FunctionNode =
     => FunctionNode { <> };
 
 Statement: StatementNode = {
-    <VariableType> <QName> "<-" <Expression> ";" => StatementNode::VariableDefinition(<>),
-    <QName> "<-" <Expression> ";" => StatementNode::Assignment(<>),
+    "let" <name:QName> <var_type:(":" <TypeName>)?> "=" <init_expr:Expression> ";"
+        => StatementNode::VariableDefinition { <> },
+    <name:QName> "=" <expr:Expression> ";" => StatementNode::Assignment { <> },
     <ConditionalStatement>,
-    "while" <Expression> "{" <Statement*> "}" <("as" <QName> ";")?> => StatementNode::ConditionalLoop(<>),
+    "while" <condition:Expression> "{" <body:Statement*> "}" <label:("as" <QName> ";")?>
+        => StatementNode::ConditionalLoop { <> },
     "return" <Expression?> ";" => StatementNode::Return(<>),
     "break" <QName?> ";" => StatementNode::Break(<>),
     "continue" <QName?> ";" => StatementNode::Continue(<>),
@@ -39,11 +41,11 @@ Statement: StatementNode = {
 ConditionalStatement: StatementNode =
     "if" <head:ConditionalBranch>
     <middle:("else" "if" <ConditionalBranch>)*>
-    <else_body:("else" "{" <Statement*> "}")?>
+    <else_branch:("else" "{" <Statement*> "}")?>
 => {
     let mut branches = vec![head];
     branches.extend(middle.into_iter());
-    StatementNode::Conditional(branches, else_body)
+    StatementNode::Conditional { branches, else_branch }
 };
 
 ConditionalBranch: ConditionalBranchNode =
@@ -78,7 +80,7 @@ Expression: Box<ExpressionNode> = {
     <Expression> ">=" <Expression> => Box::new(ExpressionNode::Comparison(<>, ComparisonType::GreaterThanOrEqual)),
     <Expression> "<=" <Expression> => Box::new(ExpressionNode::Comparison(<>, ComparisonType::LessThanOrEqual)),
     #[precedence(level="5")] #[assoc(side="left")]
-    <Expression> "=" <Expression> => Box::new(ExpressionNode::Comparison(<>, ComparisonType::Equal)),
+    <Expression> "==" <Expression> => Box::new(ExpressionNode::Comparison(<>, ComparisonType::Equal)),
     <Expression> "!=" <Expression> => Box::new(ExpressionNode::Comparison(<>, ComparisonType::NotEqual))
 }
 
@@ -102,7 +104,7 @@ SelectQuery: SelectQueryNode =
     "select" "from" <table_name:ProperQName>
     <where_clause:WhereClause?> => SelectQueryNode { <> };
 
-WhereClause: WhereNode = "where" <column_name:QName> "=" <value:Expression> => WhereNode { <> };
+WhereClause: WhereNode = "where" <column_name:QName> "==" <value:Expression> => WhereNode { <> };
 
 InsertQuery: InsertQueryNode =
     "insert" <data_expr:Expression> "into" <table_name:ProperQName>
@@ -118,12 +120,13 @@ UpdateQuery: UpdateQueryNode =
     <where_clause:WhereClause?> => UpdateQueryNode { <> };
 
 UpdateAssignment: UpdateAssignmentNode =
-    <column_name:QName> "<-" <value_expr:Expression>
+    <column_name:QName> "=" <value_expr:Expression>
     => UpdateAssignmentNode { <> };
 
 // --- MISCELLANEOUS ---
 
-TypedQName: TypedQNameNode = <type_node:TypeName> <name:QName> => TypedQNameNode { <> };
+TypedQName: TypedQNameNode = <name:QName> ":" <type_node:TypeName>
+    => TypedQNameNode { <> };
 
 VariableType: Option<TypeNode> = {
     "var" => None,

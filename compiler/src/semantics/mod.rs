@@ -79,20 +79,20 @@ impl SemanticGen {
 
     fn eval_stmt(&mut self, stmt: &StatementNode) -> Result<Vec<SemanticStatement>, SemanticError> {
         match stmt {
-            StatementNode::VariableDefinition(var_type, name, init_expr) => {
+            StatementNode::VariableDefinition { var_type, name, init_expr } => {
                 self.define_variable(name, var_type, init_expr).map(|s| vec![s])
             },
-            StatementNode::Assignment(var_name, expr) => {
-                self.assign_variable(var_name, expr).map(|s| vec![s])
+            StatementNode::Assignment { name, expr } => {
+                self.assign_variable(name, expr).map(|s| vec![s])
             },
             StatementNode::LoneExpression(expr) => {
                 let sem_expr = self.eval_expr(expr)?;
                 Ok(vec![SemanticStatement::LoneExpression(sem_expr)])
             },
-            StatementNode::Conditional(branches, else_branch) => {
+            StatementNode::Conditional { branches, else_branch } => {
                 self.eval_conditional(branches, else_branch).map(|s| vec![s])
             },
-            StatementNode::ConditionalLoop(condition, body, label) => {
+            StatementNode::ConditionalLoop { condition, body, label } => {
                 self.eval_conditional_loop(condition, body, label).map(|s| vec![s])
             },
             StatementNode::Return(expr) => {

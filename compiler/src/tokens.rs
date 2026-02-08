@@ -24,10 +24,24 @@ pub struct FunctionNode {
 }
 
 pub enum StatementNode {
-    VariableDefinition(Option<TypeNode>, String, Box<ExpressionNode>),
-    Assignment(String, Box<ExpressionNode>),
-    Conditional(Vec<ConditionalBranchNode>, Option<Vec<StatementNode>>),
-    ConditionalLoop(Box<ExpressionNode>, Vec<StatementNode>, Option<String>),
+    VariableDefinition {
+        name: String,
+        var_type: Option<TypeNode>, 
+        init_expr: Box<ExpressionNode> 
+    },
+    Assignment {
+        name: String,
+        expr: Box<ExpressionNode>,
+    },
+    Conditional {
+        branches: Vec<ConditionalBranchNode>,
+        else_branch: Option<Vec<StatementNode>>,
+    },
+    ConditionalLoop {
+        condition: Box<ExpressionNode>,
+        body: Vec<StatementNode>,
+        label: Option<String>,
+    },
     LoneExpression(Box<ExpressionNode>),
     Return(Option<Box<ExpressionNode>>),
     Break(Option<String>),
