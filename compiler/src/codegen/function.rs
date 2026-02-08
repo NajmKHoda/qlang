@@ -143,12 +143,14 @@ impl<'ctxt> CodeGen<'ctxt> {
 		let return_value: Option<&dyn BasicValue> = match value {
 			Some(val) => {
 				let return_val = self.gen_eval(val)?;
-				self.add_ref(&return_val)?;
-				Some(&return_val.as_llvm_basic_value())
+				if val.sem_type.kind() != SemanticTypeKind::Void {
+					self.add_ref(&return_val)?;
+					Some(&return_val.as_llvm_basic_value())
+				} else {
+					None
+				}
 			}
-			None => {
-				None
-			}
+			None => None
 		};
 		self.builder.build_return(return_value)?;
 		Ok(())

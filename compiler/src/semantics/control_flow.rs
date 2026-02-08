@@ -138,7 +138,7 @@ impl SemanticGen {
         let sem_expr = match expr {
             Some(expr_node) => {
                 let sem_expr = self.eval_expr(expr_node)?;
-                if self.cur_return_type != sem_expr.sem_type {
+                if !self.try_unify(&self.cur_return_type, &sem_expr.sem_type) {
                     return Err(SemanticError::MistypedReturnValue {
                         expected: self.cur_return_type.clone(),
                         found: sem_expr.sem_type,

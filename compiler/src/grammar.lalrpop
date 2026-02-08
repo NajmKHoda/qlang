@@ -62,7 +62,7 @@ Expression: Box<ExpressionNode> = {
     "[" <Comma<Expression>> "]" => Box::new(ExpressionNode::Array(<>)),
     
     #[precedence(level="2")]
-    "lambda" "(" <Comma<TypedQName>> ")" "->" <TypeName> "{" <Statement*> "}" => Box::new(ExpressionNode::Closure(<>)),
+    "lambda" "(" <Comma<TypedQName>> ")" <("->" <TypeNameWithVoid>)?> "{" <ClosureBody> "}" => Box::new(ExpressionNode::Closure(<>)),
     <Expression> "[" <Expression> "]" => Box::new(ExpressionNode::ArrayIndex(<>)),
     <Expression> "." <QName> "(" <Comma<Expression>> ")" => Box::new(ExpressionNode::MethodCall(<>)),
     <Expression> "." <QName> => Box::new(ExpressionNode::StructField(<>)),
@@ -83,6 +83,11 @@ Expression: Box<ExpressionNode> = {
 }
 
 ColumnValue: ColumnValueNode = <name:QName> ":" <value:Expression> => ColumnValueNode { <> };
+
+ClosureBody: ClosureBodyNode = {
+    <Expression> => ClosureBodyNode::Expression(<>),
+    <Statement*> => ClosureBodyNode::Statements(<>)
+}
 
 // --- QUERIES ---
 

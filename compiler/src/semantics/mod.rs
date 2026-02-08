@@ -170,7 +170,7 @@ impl SemanticGen {
                 self.call_method(receiver, method_name, args)
             }
             ExpressionNode::Closure(params, return_type, body) => {
-                self.eval_closure(params, return_type, body)
+                self.eval_closure(params, return_type.as_ref(), body)
             }
             ExpressionNode::Query(query_node) => {
                 match query_node {

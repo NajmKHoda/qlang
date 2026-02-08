@@ -125,6 +125,9 @@ pub enum SemanticError {
         expected: SemanticType,
         found: SemanticType,
     },
+    AmbiguousReturnType {
+        return_type: SemanticType,
+    },
     InexhaustiveReturnPaths {
         function_name: String,
     },
@@ -238,6 +241,9 @@ impl Display for SemanticError {
             }
             SemanticError::MistypedReturnValue { expected, found } => {
                 write!(f, "Return value of type {} does not match expected type {}", found, expected)    
+            }
+            SemanticError::AmbiguousReturnType { return_type } => {
+                write!(f, "Closure has ambiguous return type: {}", return_type)
             }
             SemanticError::InexhaustiveReturnPaths { function_name } => {
                 write!(f, "Not all code paths in function {} return a value", function_name)

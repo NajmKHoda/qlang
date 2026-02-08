@@ -60,7 +60,7 @@ pub enum ExpressionNode {
     IntegerLiteral(i32),
     BoolLiteral(bool),
     StringLiteral(String),
-    Closure(Vec<TypedQNameNode>, TypeNode, Vec<StatementNode>),
+    Closure(Vec<TypedQNameNode>, Option<TypeNode>, ClosureBodyNode),
     Add(Box<ExpressionNode>, Box<ExpressionNode>),
     Subtract(Box<ExpressionNode>, Box<ExpressionNode>),
     Comparison(Box<ExpressionNode>, Box<ExpressionNode>, ComparisonType),
@@ -85,6 +85,11 @@ pub enum ComparisonType {
 pub struct ColumnValueNode {
     pub name: String,
     pub value: Box<ExpressionNode>
+}
+
+pub enum ClosureBodyNode {
+    Statements(Vec<StatementNode>),
+    Expression(Box<ExpressionNode>),
 }
 
 // --- QUERIES ---
