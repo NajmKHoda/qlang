@@ -8,7 +8,7 @@ impl<'ctxt> CodeGen<'ctxt> {
         for (str_val, global_val) in &self.strings {
             let raw_str = self.builder.build_global_string_ptr(str_val, "raw_str")?.as_pointer_value();
             let ql_string_ptr = self.builder.build_call(
-                self.runtime_functions.new_string.into(),
+                self.runtime_functions.new_string,
                 &[
                     raw_str.into(),
                     self.int_type().const_int(str_val.len() as u64, false).into(),
@@ -29,7 +29,7 @@ impl<'ctxt> CodeGen<'ctxt> {
                 "const_str_load_for_drop"
             )?.into_pointer_value();
             self.builder.build_call(
-                self.runtime_functions.remove_string_ref.into(),
+                self.runtime_functions.remove_string_ref,
                 &[str_ptr.into()],
                 "remove_const_str"
             )?;

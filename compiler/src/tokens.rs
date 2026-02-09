@@ -83,7 +83,11 @@ pub enum ExpressionNode {
     Array(Vec<Box<ExpressionNode>>),
     ArrayIndex(Box<ExpressionNode>, Box<ExpressionNode>),
     MethodCall(Box<ExpressionNode>, String, Vec<Box<ExpressionNode>>),
-    Query(QueryNode)
+    ImmediateQuery(QueryNode),
+    ParameterizedQuery {
+        parameters: Vec<TypedQNameNode>,
+        query: QueryNode
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

@@ -25,7 +25,7 @@ impl<'ctxt> CodeGen<'ctxt> {
             = (&val1, &val2) 
         {
             let res = self.builder.build_call(
-                self.runtime_functions.concat_string.into(),
+                self.runtime_functions.concat_string,
                 &[(*str1).into(), (*str2).into()],
                 "str_concat"
             )?.as_any_value_enum().into_pointer_value();
@@ -59,7 +59,7 @@ impl<'ctxt> CodeGen<'ctxt> {
             = (&val1, &val2) 
         {
             let res = self.builder.build_call(
-                self.runtime_functions.compare_string.into(),
+                self.runtime_functions.compare_string,
                 &[(*str1).into(), (*str2).into()],
                 "str_compare"
             )?.as_any_value_enum().into_int_value();

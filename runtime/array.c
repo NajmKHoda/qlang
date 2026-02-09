@@ -6,8 +6,7 @@
 
 QLTypeInfo __ql__QLArray_type_info = {
     .size = sizeof(QLArray*),
-    .elem_drop = __ql__QLArray_elem_drop,
-    .set_nth = NULL
+    .elem_drop = __ql__QLArray_elem_drop
 };
 
 static inline void* __ql__QLArray_get_nth_elem(QLArray* array, unsigned int n) {

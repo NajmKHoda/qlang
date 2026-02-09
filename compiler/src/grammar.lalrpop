@@ -73,7 +73,9 @@ Expression: Box<ExpressionNode> = {
     <Expression> "+" <Expression> => Box::new(ExpressionNode::Add(<>)),
     <Expression> "-" <Expression> => Box::new(ExpressionNode::Subtract(<>)),
     <QName> "(" <Comma<Expression>> ")" => Box::new(ExpressionNode::FunctionCall(<>)),
-    "query" "{" <Query> "}" => Box::new(ExpressionNode::Query(<>)),
+    "query" "{" <Query> "}" => Box::new(ExpressionNode::ImmediateQuery(<>)),
+    "query" "(" <parameters:Comma<TypedQName>> ")" "{" <query:Query> "}"
+        => Box::new(ExpressionNode::ParameterizedQuery { <> }),
     #[precedence(level="4")] #[assoc(side="left")]
     <Expression> ">" <Expression> => Box::new(ExpressionNode::Comparison(<>, ComparisonType::GreaterThan)),
     <Expression> "<" <Expression> => Box::new(ExpressionNode::Comparison(<>, ComparisonType::LessThan)),

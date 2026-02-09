@@ -2,29 +2,26 @@
 #define RUNTIME_SELECT_QUERY_H
 
 #include <stdbool.h>
-#include "database.h"
+#include "../metadata.h"
 
 typedef struct {
-    bool is_present;
-    char* column_name;
-    QueryDataType column_type;
-    void* value;
-} SelectWhereClause;
-
-typedef struct {
-    char* table_name;
     QLTypeInfo* struct_type_info;
-    unsigned int num_params;
-    SelectWhereClause where;
-} SelectQueryPlan;
+    char* table_name;
+    bool has_where_clause;
+    char* where_column;
+} SelectPlan;
 
-SelectQueryPlan* __ql__SelectQueryPlan_new(char* table_name, QLTypeInfo* struct_type_info, unsigned int num_params);
-void __ql__SelectQueryPlan_set_where(
-    SelectQueryPlan* plan,
-    char* column_name,
-    QueryDataType column_type,
-    void* value
-);
-PreparedQuery* __ql__SelectQueryPlan_prepare(sqlite3* db, SelectQueryPlan* plan);
+typedef struct {
+    sqlite3_stmt* stmt;
+    QLTypeInfo* struct_type_info;
+} PreparedSelect;
+
+SelectPlan* __ql__SelectPlan_new(char* table_name, QLTypeInfo* struct_type_info);
+void __ql__SelectPlan_set_where(SelectPlan* plan, char* column_name);
+PreparedSelect* __ql__SelectPlan_prepare(sqlite3* db, SelectPlan* plan);
+
+void __ql__PreparedSelect_bind_where(PreparedSelect* prepared_select, QLType value_type, void* value);
+QLArray* __ql__PreparedSelect_execute(PreparedSelect* prepared_select);
+void __ql__PreparedSelect_finalize(PreparedSelect* prepared_select);
 
 #endif

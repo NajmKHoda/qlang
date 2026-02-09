@@ -78,14 +78,14 @@ impl<'ctxt> CodeGen<'ctxt> {
         match val {
             GenValue::String { value: str_ptr, ownership: Ownership::Borrowed } => {
                 self.builder.build_call(
-                    self.runtime_functions.add_string_ref.into(),
+                    self.runtime_functions.add_string_ref,
                     &[(*str_ptr).into()],
                     "add_string_ref"
                 )?;
             }
             GenValue::Array { value: array_ptr, ownership: Ownership::Borrowed, .. } => {
                 self.builder.build_call(
-                    self.runtime_functions.add_array_ref.into(),
+                    self.runtime_functions.add_array_ref,
                     &[(*array_ptr).into()],
                     "add_array_ref"
                 )?;
@@ -108,14 +108,14 @@ impl<'ctxt> CodeGen<'ctxt> {
         match val {
             GenValue::String { value: str_ptr, .. } => {
                 self.builder.build_call(
-                    self.runtime_functions.remove_string_ref.into(),
+                    self.runtime_functions.remove_string_ref,
                     &[str_ptr.into()],
                     "remove_string_ref"
                 )?;
             }
             GenValue::Array { value: array_ptr, .. } => {
                 self.builder.build_call(
-                    self.runtime_functions.remove_array_ref.into(),
+                    self.runtime_functions.remove_array_ref,
                     &[array_ptr.into()],
                     "remove_array_ref"
                 )?;

@@ -3,11 +3,11 @@ use std::path::Path;
 use inkwell::context::Context;
 use inkwell::module::Module;
 use inkwell::builder::Builder;
-use inkwell::targets::{FileType, Target, TargetMachine};
+use inkwell::targets::{FileType, Target, TargetData, TargetMachine};
 use inkwell::types::{IntType, PointerType, StructType, VoidType};
 use inkwell::values::{AnyValue, FunctionValue, GlobalValue, PointerValue};
 
-use crate::semantics::{SemanticExpression, SemanticExpressionKind, SemanticProgram, SemanticQuery, SemanticStatement, SemanticTypeKind};
+use crate::semantics::{SemanticExpression, SemanticExpressionKind, SemanticProgram, SemanticStatement, SemanticTypeKind};
 
 mod control_flow;
 mod operations;
@@ -15,6 +15,7 @@ mod data;
 mod string;
 mod error;
 mod function;
+mod closure;
 mod variable;
 mod table;
 mod array;
@@ -26,7 +27,7 @@ use data::GenValue;
 use table::GenTableInfo;
 use structs::GenStructInfo;
 use control_flow::GenLoopInfo;
-use function::GenClosureInfo;
+use closure::GenClosureInfo;
 use runtime::RuntimeFunctions;
 pub use error::CodeGenError;
 
@@ -49,7 +50,8 @@ pub struct CodeGen<'ctxt> {
 
     context: &'ctxt Context,
     builder: Builder<'ctxt>,
-    module: Module<'ctxt>
+    module: Module<'ctxt>,
+    target_data: TargetData,
 }
 
 impl<'ctxt> CodeGen<'ctxt> {
@@ -218,20 +220,7 @@ impl<'ctxt> CodeGen<'ctxt> {
                 self.gen_method_call(receiver_val, *method, args)
             }
             SemanticExpressionKind::ImmediateQuery(query) => {
-                match query { 
-                    SemanticQuery::Select { table_id, where_clause } => {
-                        self.gen_select_query(*table_id, where_clause)
-                    }
-                    SemanticQuery::Insert { table_id, value } => {
-                        self.gen_insert_query(*table_id, value)
-                    }
-                    SemanticQuery::Update { table_id, assignments, where_clause } => {
-                        self.gen_update_query(*table_id, &assignments, where_clause)
-                    }
-                    SemanticQuery::Delete { table_id, where_clause } => {
-                        self.gen_delete_query(*table_id, where_clause)
-                    }
-                }
+                self.gen_immediate_query(query)
             }
         }
     }
@@ -240,6 +229,22 @@ impl<'ctxt> CodeGen<'ctxt> {
         let context = Context::create();
         let builder = context.create_builder();
         let module = context.create_module("main");
+
+        Target::initialize_all(&Default::default());
+        let target_triple = TargetMachine::get_default_triple();
+        let target = Target::from_triple(&target_triple).map_err(|e| CodeGenError::TargetError(e))?;
+        let target_machine = target.create_target_machine(
+            &target_triple,
+            "generic",
+            "",
+            inkwell::OptimizationLevel::Default,
+            inkwell::targets::RelocMode::Default,
+            inkwell::targets::CodeModel::Default,
+        ).ok_or_else(|| CodeGenError::TargetMachineError)?;
+        let target_data = target_machine.get_target_data();
+        let data_layout = target_data.get_data_layout();
+        module.set_triple(&target_triple);
+        module.set_data_layout(&data_layout);
 
         let callable_struct_type = context.opaque_struct_type("__ql__callable");
         callable_struct_type.set_body(&[
@@ -263,27 +268,11 @@ impl<'ctxt> CodeGen<'ctxt> {
             callable_struct_type,
             context: &context,
             builder,
-            module
+            module,
+            target_data,
         };
 
         let module = codegen._gen_code()?;
-
-        Target::initialize_all(&Default::default());
-        let target_triple = TargetMachine::get_default_triple();
-        let target = Target::from_triple(&target_triple).map_err(|e| CodeGenError::TargetError(e))?;
-        let target_machine = target.create_target_machine(
-            &target_triple,
-            "generic",
-            "",
-            inkwell::OptimizationLevel::Default,
-            inkwell::targets::RelocMode::Default,
-            inkwell::targets::CodeModel::Default,
-        ).ok_or_else(|| CodeGenError::TargetMachineError)?;
-
-        let data_layout = target_machine.get_target_data().get_data_layout();
-        module.set_triple(&target_triple);
-        module.set_data_layout(&data_layout);
-
         let path = Path::new("out/main.o");
         target_machine.write_to_file(&module, FileType::Object, path)
             .map_err(|_| CodeGenError::TargetMachineWriteError)

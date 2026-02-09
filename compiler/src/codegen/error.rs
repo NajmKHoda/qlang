@@ -3,8 +3,6 @@ use inkwell::builder::BuilderError;
 use inkwell::support::LLVMString;
 
 pub enum CodeGenError {
-    UnexpectedTypeError,
-
     BuilderError(BuilderError),
     ModuleVerificationError(LLVMString),
     TargetError(LLVMString),
@@ -15,9 +13,6 @@ pub enum CodeGenError {
 impl fmt::Display for CodeGenError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            CodeGenError::UnexpectedTypeError => write!(f, "Unexpected type encountered"),
-            
-
             CodeGenError::BuilderError(err) => write!(f, "Builder error: {err}"),
             CodeGenError::ModuleVerificationError(err) => write!(f, "Module verification error: {err}"),
             CodeGenError::TargetError(err) => write!(f, "Target error: {err}"),

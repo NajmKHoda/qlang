@@ -172,13 +172,11 @@ impl SemanticGen {
             ExpressionNode::Closure(params, return_type, body) => {
                 self.eval_closure(params, return_type.as_ref(), body)
             }
-            ExpressionNode::Query(query_node) => {
-                match query_node {
-                    QueryNode::Select(select) => self.eval_select_query(select),
-                    QueryNode::Insert(insert) => self.eval_insert_query(insert),
-                    QueryNode::Update(update) => self.eval_update_query(update),
-                    QueryNode::Delete(delete) => self.eval_delete_query(delete),
-                }
+            ExpressionNode::ImmediateQuery(query_node) => {
+                self.eval_immediate_query(query_node)
+            }
+            ExpressionNode::ParameterizedQuery { parameters, query } => {
+                self.eval_parameterized_query(parameters, query)
             }
         }
     }

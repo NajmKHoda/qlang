@@ -1,7 +1,7 @@
 #ifndef RUNTIME_ARRAY_H
 #define RUNTIME_ARRAY_H
 
-typedef struct QLTypeInfo QLTypeInfo;
+#include "metadata.h"
 
 typedef struct {
     unsigned int num_elems;

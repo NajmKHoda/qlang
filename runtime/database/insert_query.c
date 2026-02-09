@@ -1,73 +1,61 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 #include <stdbool.h>
 #include <sqlite3.h>
 #include "../metadata.h"
 #include "../qlstring.h"
 #include "../array.h"
-#include "database.h"
+#include "definitions.h"
 #include "insert_query.h"
 
-static void bind_row(sqlite3_stmt* stmt, unsigned int query_index, QLTypeInfo* struct_type_info, void* struct_ptr) {
-    unsigned int num_columns = struct_type_info->num_columns;
-    for (unsigned int i = 0; i < num_columns; i++) {
-        int datatype;
-        void* column_ptr;
-        struct_type_info->get_nth(struct_ptr, i, &datatype, &column_ptr);
-        switch (datatype) {
-            case QUERY_DATA_INTEGER: {
-                int val = *(int*)column_ptr;
-                sqlite3_bind_int(stmt, query_index + i, val);
-                break;
-            }
-            case QUERY_DATA_STRING: {
-                QLString* ql_str = *(QLString**)column_ptr;
-                sqlite3_bind_text(stmt, query_index + i, ql_str->raw_string, ql_str->length, SQLITE_STATIC);
-                break;
-            }
-        }
-    }
-}
-
-InsertQueryPlan* __ql__InsertQueryPlan_new(
-    char* table_name,
-    QLTypeInfo* struct_type_info,
-    unsigned int num_params,
-    bool is_parameter,
-    void* data
-) {
-    InsertQueryPlan* plan = malloc(sizeof(InsertQueryPlan));
+InsertPlan* __ql__InsertPlan_new(char* table_name, QLTypeInfo* struct_type_info) {
+    InsertPlan* plan = malloc(sizeof(InsertPlan));
     plan->table_name = table_name;
     plan->struct_type_info = struct_type_info;
-    plan->num_params = num_params;
-    plan->is_parameter = is_parameter;
-    plan->data = data;
     return plan;
 }
 
-PreparedQuery* __ql__InsertQueryPlan_prepare(sqlite3* db, InsertQueryPlan* plan) {
-    char* sql = malloc(MAX_SQL_LENGTH);
-    PreparedQuery* prepared_query = __ql__PreparedQuery_new(plan->num_params, NULL);
+PreparedInsert* __ql__InsertPlan_prepare(sqlite3* db, InsertPlan* plan) {
+    PreparedInsert* prepared_insert = malloc(sizeof(PreparedInsert));
+    prepared_insert->struct_type_info = plan->struct_type_info;
 
-    unsigned int num_columns = plan->struct_type_info->num_columns;
-    int offset = sprintf(sql, "INSERT INTO %s VALUES (?1", plan->table_name);
-    for (int i = 1; i < num_columns; i++) {
-        offset += sprintf(sql + offset, ", ?%d", i + 1);
+    char sql[MAX_SQL_LENGTH];
+    char* writer = sql;
+    writer += sprintf(writer, "INSERT INTO %s VALUES (?1", plan->table_name);
+
+    unsigned int n_fields = plan->struct_type_info->num_fields;
+    for (unsigned int i = 1; i < n_fields; i++) {
+        writer += sprintf(writer, ", ?%d", i + 1);
     }
-    sprintf(sql + offset, ");");
+    writer += sprintf(writer, ");");
 
-    sqlite3_prepare_v2(db, sql, -1, &prepared_query->stmt, NULL);
-
-    if (plan->is_parameter) {
-        int param_index = *((int*)plan->data);
-        prepared_query->query_param_indices[param_index] = 1;
-    } else {
-        bind_row(prepared_query->stmt, 1, plan->struct_type_info, plan->data);
-    }
-
-    free(sql);
+    sqlite3_prepare_v2(db, sql, -1, &prepared_insert->stmt, NULL);
     free(plan);
+    return prepared_insert;
+}
 
-    return prepared_query;
+void __ql__PreparedInsert_exec_row(PreparedInsert* prepared_insert, void* row) {
+    unsigned int n_fields = prepared_insert->struct_type_info->num_fields;
+    for (unsigned int i = 0; i < n_fields; i++) {
+        StructField field = prepared_insert->struct_type_info->fields[i];
+        void* field_ptr = (char*)row + field.offset;
+        __ql__bind_value(prepared_insert->stmt, i + 1, field.type, field_ptr);
+    }
+    int rc = sqlite3_step(prepared_insert->stmt);
+    if (rc != SQLITE_DONE) {
+        fprintf(stderr, "Error executing insert: %s\n", sqlite3_errmsg(sqlite3_db_handle(prepared_insert->stmt)));
+    }
+    sqlite3_reset(prepared_insert->stmt);
+}
+
+void __ql__PreparedInsert_exec_array(PreparedInsert* prepared_insert, QLArray* array) {
+    for (unsigned int i = 0; i < array->num_elems; i++) {
+        void* elem_ptr = __ql__QLArray_index(array, i);
+        __ql__PreparedInsert_exec_row(prepared_insert, elem_ptr);
+    }
+}
+
+void __ql__PreparedInsert_finalize(PreparedInsert* prepared_insert) {
+    sqlite3_finalize(prepared_insert->stmt);
+    free(prepared_insert);
 }

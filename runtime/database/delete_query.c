@@ -1,64 +1,50 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 #include <stdbool.h>
 #include <sqlite3.h>
 #include "../metadata.h"
 #include "../qlstring.h"
-#include "../array.h"
-#include "database.h"
+#include "definitions.h"
 #include "delete_query.h"
 
-DeleteQueryPlan* __ql__DeleteQueryPlan_new(char* table_name, unsigned int num_params) {
-    DeleteQueryPlan* plan = malloc(sizeof(DeleteQueryPlan));
+DeletePlan* __ql__DeletePlan_new(char* table_name) {
+    DeletePlan* plan = malloc(sizeof(DeletePlan));
     plan->table_name = table_name;
-    plan->num_params = num_params;
-    plan->where.is_present = false;
+    plan->has_where_clause = false;
     return plan;
 }
 
-void __ql__DeleteQueryPlan_set_where(
-    DeleteQueryPlan* plan,
-    char* column_name,
-    QueryDataType column_type,
-    void* value
-) {
-    plan->where.is_present = true;
-    plan->where.column_name = column_name;
-    plan->where.column_type = column_type;
-    plan->where.value = value;
+void __ql__DeletePlan_set_where(DeletePlan* plan, char* column_name) {
+    plan->has_where_clause = true;
+    plan->where_column = column_name;
 }
 
-PreparedQuery* __ql__DeleteQueryPlan_prepare(sqlite3* db, DeleteQueryPlan* plan) {
-    char* sql = malloc(MAX_SQL_LENGTH);
-    PreparedQuery* prepared_query = __ql__PreparedQuery_new(plan->num_params, NULL);
+PreparedDelete* __ql__DeletePlan_prepare(sqlite3* db, DeletePlan* plan) {
+    PreparedDelete* prepared_delete = malloc(sizeof(PreparedDelete));
     
-    if (plan->where.is_present) {
-        sprintf(sql, "DELETE FROM %s WHERE %s = ?;", plan->table_name, plan->where.column_name);
-        sqlite3_prepare_v2(db, sql, -1, &prepared_query->stmt, NULL);
-        switch (plan->where.column_type) {
-            case QUERY_DATA_INTEGER: {
-                sqlite3_bind_int(prepared_query->stmt, 1, *((int*)plan->where.value));
-                break;
-            }
-            case QUERY_DATA_STRING: {
-                QLString* ql_str = *(QLString**)plan->where.value;
-                sqlite3_bind_text(prepared_query->stmt, 1, ql_str->raw_string, ql_str->length, SQLITE_STATIC);
-                break;
-            }
-            case QUERY_DATA_PARAMETER: {
-                int param_index = *((int*)plan->where.value);
-                prepared_query->query_param_indices[param_index] = 1;
-                break;
-            }
-        }
+    char sql[MAX_SQL_LENGTH];
+    if (plan->has_where_clause) {
+        sprintf(sql, "DELETE FROM %s WHERE %s = ?;", plan->table_name, plan->where_column);
     } else {
         sprintf(sql, "DELETE FROM %s;", plan->table_name);
-        sqlite3_prepare_v2(db, sql, -1, &prepared_query->stmt, NULL);
     }
 
-    free(sql);
+    sqlite3_prepare_v2(db, sql, -1, &prepared_delete->stmt, NULL);
     free(plan);
+    return prepared_delete;
+}
 
-    return prepared_query;
+
+void __ql__PreparedDelete_bind_where(PreparedDelete* prepared_delete, QLType value_type, void* value) {
+    __ql__bind_value(prepared_delete->stmt, 1, value_type, value);
+}
+
+void __ql__PreparedDelete_exec(PreparedDelete* prepared_delete) {
+    sqlite3_step(prepared_delete->stmt);
+    sqlite3_reset(prepared_delete->stmt);
+}
+
+void __ql__PreparedDelete_finalize(PreparedDelete* prepared_delete) {
+    sqlite3_finalize(prepared_delete->stmt);
+    free(prepared_delete);
 }

@@ -2,46 +2,37 @@
 #define RUNTIME_UPDATE_QUERY_H
 
 #include <stdbool.h>
-#include "database.h"
-
-typedef struct {
-    bool is_present;
-    char* column_name;
-    QueryDataType column_type;
-    void* value;
-} UpdateWhereClause;
-
-typedef struct {
-    char* column_name;
-    QueryDataType column_type;
-    void* value;
-} UpdateAssignment;
+#include "../metadata.h"
 
 typedef struct {
     char* table_name;
-    QLTypeInfo* struct_type_info;
-    unsigned int num_params;
-
-    UpdateAssignment* assignments;
     unsigned int num_assignments;
-    unsigned int assignments_capacity;
+    char** assign_columns;
+    bool has_where_clause;
+    char* where_column;
+} UpdatePlan;
 
-    UpdateWhereClause where;
-} UpdateQueryPlan;
+UpdatePlan* __ql__UpdatePlan_new(
+    char* table_name,
+    unsigned int num_assignments,
+    char** assign_columns
+);
 
-UpdateQueryPlan* __ql__UpdateQueryPlan_new(char* table_name, QLTypeInfo* struct_type_info, unsigned int num_params);
-void __ql__UpdateQueryPlan_add_assignment(
-    UpdateQueryPlan* plan,
-    char* column_name,
-    QueryDataType column_type,
+typedef struct {
+    sqlite3_stmt* stmt;
+} PreparedUpdate;
+
+void __ql__UpdatePlan_set_where(UpdatePlan* plan, char* column_name);
+PreparedUpdate* __ql__UpdatePlan_prepare(sqlite3* db, UpdatePlan* plan);
+
+void __ql__PreparedUpdate_bind_where(PreparedUpdate* prepared_update, QLType value_type, void* value);
+void __ql__PreparedUpdate_bind_assignment(
+    PreparedUpdate* prepared_update,
+    unsigned int index,
+    QLType value_type,
     void* value
 );
-void __ql__UpdateQueryPlan_set_where(
-    UpdateQueryPlan* plan,
-    char* column_name,
-    QueryDataType column_type,
-    void* value
-);
-PreparedQuery* __ql__UpdateQueryPlan_prepare(sqlite3* db, UpdateQueryPlan* plan);
+void __ql__PreparedUpdate_exec(PreparedUpdate* prepared_update);
+void __ql__PreparedUpdate_finalize(PreparedUpdate* prepared_update);
 
 #endif

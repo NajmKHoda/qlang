@@ -31,7 +31,7 @@ impl<'ctxt> CodeGen<'ctxt> {
             let zero = self.context.i32_type().const_zero();
             
             let array_ptr = self.builder.build_call(
-                self.runtime_functions.new_array.into(),
+                self.runtime_functions.new_array,
                 &[null_ptr.into(), zero.into(), type_info.into()],
                 "empty_array"
             )?.as_any_value_enum().into_pointer_value();
@@ -66,7 +66,7 @@ impl<'ctxt> CodeGen<'ctxt> {
         // Call __ql__QLArray_new
         let num_elems = self.context.i32_type().const_int(num_elems as u64, false);
         let array_ptr = self.builder.build_call(
-            self.runtime_functions.new_array.into(),
+            self.runtime_functions.new_array,
             &[array_alloca.into(), num_elems.into(), type_info.into()],
             "array_alloc"
         )?.as_any_value_enum().into_pointer_value();
@@ -84,7 +84,7 @@ impl<'ctxt> CodeGen<'ctxt> {
         };
 
         let elem_ptr = self.builder.build_call(
-            self.runtime_functions.index_array.into(),
+            self.runtime_functions.index_array,
             &[array_ptr.into(), index.as_llvm_basic_value().into()],
             "array_index"
         )?.as_any_value_enum().into_pointer_value();
@@ -104,7 +104,7 @@ impl<'ctxt> CodeGen<'ctxt> {
         };
 
         let length_value = self.builder.build_call(
-            self.runtime_functions.array_length.into(),
+            self.runtime_functions.array_length,
             &[array_ptr.into()],
             "array_length"
         )?.as_any_value_enum().into_int_value();
@@ -125,7 +125,7 @@ impl<'ctxt> CodeGen<'ctxt> {
         self.builder.build_store(elem_ptr, elem.as_llvm_basic_value())?;
 
         self.builder.build_call(
-            self.runtime_functions.append_array.into(),
+            self.runtime_functions.append_array,
             &[array_ptr.into(), elem_ptr.into()],
             "array_append"
         )?;
@@ -139,7 +139,7 @@ impl<'ctxt> CodeGen<'ctxt> {
         };
 
         let elem_ptr = self.builder.build_call(
-            self.runtime_functions.pop_array.into(),
+            self.runtime_functions.pop_array,
             &[array_ptr.into()],
             "array_pop"
         )?.as_any_value_enum().into_pointer_value();

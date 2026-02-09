@@ -1,15 +1,9 @@
 use super::*;
 
-pub struct SemanticParameter {
-    pub name: String,
-    pub sem_type: SemanticType,
-    pub variable_id: u32,
-}
-
 pub struct SemanticFunction {
     pub name: String,
     pub id: u32,
-    pub params: Vec<SemanticParameter>,
+    pub param_ids: Vec<u32>,
     pub return_type: SemanticType,
     pub body: SemanticBlock,
 }
@@ -126,31 +120,16 @@ impl SemanticGen {
 
         let sem_return_type = self.try_get_semantic_type(return_type)?;
         let function_id = self.function_id_gen.next_id();
+        let param_ids = self.eval_params(param_nodes)?;
 
-        let params: Vec<SemanticParameter> = param_nodes.iter().map(|param_node| {
-            let param_type = self.try_get_semantic_type(&param_node.type_node)?;
-            if param_type == SemanticTypeKind::Void {
-                return Err(SemanticError::VoidParameterType {
-                    function_name: name.to_string(),
-                    param_name: param_node.name.clone(),
-                });
-            }
-            let param_id = self.variable_id_gen.next_id();
-            Ok(SemanticParameter {
-                name: param_node.name.clone(),
-                sem_type: param_type,
-                variable_id: param_id,
-            })
-        }).collect::<Result<_, SemanticError>>()?;
-
-        if name == "main" && (!params.is_empty() || sem_return_type != SemanticTypeKind::Integer) {
+        if name == "main" && (!param_ids.is_empty() || sem_return_type != SemanticTypeKind::Integer) {
             return Err(SemanticError::InvalidMainSignature);
         }
 
         self.functions.insert(name.to_string(), function_id, SemanticFunction {
             name: name.to_string(),
             id: function_id,
-            params,
+            param_ids,
             return_type: sem_return_type,
             body: SemanticBlock {
                 statements: vec![],
@@ -164,15 +143,10 @@ impl SemanticGen {
     pub(super) fn define_function(&mut self, id: u32, body: &[StatementNode]) -> Result<(), SemanticError> {
         // Set up function scope and parameters
         self.enter_scope(SemanticScopeType::Function);
-        let parameter_scope = &mut self.scopes.last_mut().unwrap().variables;
-        for param in self.functions[id].params.iter() {
-            // Create associated variable
-            parameter_scope.insert(param.name.clone(), param.variable_id);
-            self.variables.insert(param.variable_id, SemanticVariable {
-                name: param.name.clone(),
-                sem_type: param.sem_type.clone(),
-                id: param.variable_id,
-            });
+        for &param_id in &self.functions[id].param_ids {
+            let variable = &self.variables[&param_id];
+            let scope = self.scopes.last_mut().unwrap();
+            scope.variables.insert(variable.name.clone(), variable.id);
         }
 
         // Evaluate function body
@@ -199,6 +173,27 @@ impl SemanticGen {
         self.functions[id].body = body_block;
 
         Ok(())
+    }
+
+    pub(super) fn eval_params(&mut self, param_nodes: &[TypedQNameNode]) -> Result<Vec<u32>, SemanticError> {
+        let mut param_ids = vec![];
+        for param_node in param_nodes {
+            let param_type = self.try_get_semantic_type(&param_node.type_node)?;
+            if param_type == SemanticTypeKind::Void {
+                return Err(SemanticError::VoidParameterType {
+                    function_name: "<closure>".to_string(),
+                    param_name: param_node.name.clone(),
+                });
+            }
+            let var_id = self.variable_id_gen.next_id();
+            self.variables.insert(var_id, SemanticVariable {
+                name: param_node.name.clone(),
+                sem_type: param_type,
+                id: var_id,
+            });
+            param_ids.push(var_id);
+        }
+        Ok(param_ids)
     }
 
     pub(super) fn call_function(&mut self, name: &str, arg_exprs: &[Box<ExpressionNode>]) -> Result<SemanticExpression, SemanticError> {
@@ -237,8 +232,8 @@ impl SemanticGen {
                 })
             }
         } else if let Some(func) = self.functions.get_by_name(name) {
-            let param_types: Vec<SemanticType> = func.params.iter()
-                .map(|param| param.sem_type.clone())
+            let param_types: Vec<SemanticType> = func.param_ids.iter()
+                .map(|&param_id| self.variables[&param_id].sem_type.clone())
                 .collect();
             self.check_args(name, &sem_args, &param_types)?;
             Ok(SemanticExpression {

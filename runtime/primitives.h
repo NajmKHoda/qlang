@@ -1,7 +1,7 @@
 #ifndef RUNTIME_PRIMITIVES_H
 #define RUNTIME_PRIMITIVES_H
 
-typedef struct QLTypeInfo QLTypeInfo;
+#include "metadata.h"
 
 extern QLTypeInfo __ql__int_type_info;
 extern QLTypeInfo __ql__bool_type_info;

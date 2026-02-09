@@ -1,10 +1,20 @@
-use inkwell::{AddressSpace, values::{AnyValue, BasicValue, BasicValueEnum, FunctionValue, PointerValue}};
+use inkwell::{AddressSpace, values::{AnyValue, BasicValue, FunctionValue, PointerValue}};
 
-use crate::{codegen::{data::GenValue}, semantics::{Ownership, SemanticDatasource, SemanticExpression, SemanticType, SemanticTypeKind, WhereClause}};
+use crate::{codegen::{data::GenValue}, semantics::{Ownership, SemanticDatasource, SemanticQuery, SemanticType, SemanticTypeKind, WhereClause}};
 
 use super::{CodeGen, CodeGenError};
 
 impl<'ctxt> CodeGen<'ctxt> {
+    fn place_onto_stack(
+        &mut self,
+        value: &GenValue<'ctxt>,
+    ) -> Result<PointerValue<'ctxt>, CodeGenError> {
+        let llvm_value = value.as_llvm_basic_value();
+        let alloca = self.builder.build_alloca(llvm_value.get_type(), "stack_alloca")?;
+        self.builder.build_store(alloca, llvm_value)?;
+        Ok(alloca)
+    }
+
     pub(super) fn gen_database_ptr(&mut self, datasource: &SemanticDatasource) {
         let db_ptr_global = self.module.add_global(
             self.ptr_type(),
@@ -69,387 +79,341 @@ impl<'ctxt> CodeGen<'ctxt> {
         Ok(())
     }
 
-    pub fn gen_select_query(&mut self, table_id: u32, where_clause_opt: &Option<WhereClause>) -> Result<GenValue<'ctxt>, CodeGenError> {
-        let where_value = match where_clause_opt {
-            Some(where_clause) => self.gen_eval(&where_clause.value)?,
-            None => GenValue::Void,
-        };
-
-        let table = &self.program.tables[&table_id];
-        let assoc_struct = &self.program.structs[&table.struct_id];
-        let table_info = &self.table_info[&table_id];
-        let db_global_ptr = self.datasource_ptrs[&table.datasource_id];
-        let db_ptr = self.builder.build_load(self.ptr_type(), db_global_ptr, "db_ptr")?.into_pointer_value();
-        
-        let table_name_str = table_info.name_str.as_pointer_value();
-        let type_info_ptr = self.struct_info[&table.struct_id].type_info.as_pointer_value();
-        
-        let query_plan = self.builder.build_call(
-            self.runtime_functions.select_query_plan_new.into(),
-            &[
-                table_name_str.into(),
-                type_info_ptr.into(),
-                self.context.i32_type().const_zero().into(),
-            ],
-            "query_plan"
-        )?.as_any_value_enum().into_pointer_value();
-        
-        if let Some(WhereClause { column_name, .. }) = where_clause_opt {
-            let column_index = assoc_struct.field_order.iter()
-                .position(|name| name == column_name).unwrap();
-            let column_type = &assoc_struct.fields[column_name];
-            let column_name_str = table_info.column_name_strs[column_index].as_pointer_value();
-            
-            let query_data_type = match column_type.kind() {
-                SemanticTypeKind::Integer => 0, // QUERY_DATA_INTEGER
-                SemanticTypeKind::String => 1,  // QUERY_DATA_STRING
-                _ => panic!("Unexpected type in WHERE clause"),
-            };
-            let query_data_type_val = self.context.i32_type().const_int(query_data_type, false);
-            
-            // Allocate space for the value and store it
-            let value_ptr = match where_value {
-                GenValue::Integer(int_val) => {
-                    let ptr = self.builder.build_alloca(self.int_type(), "where_value")?;
-                    self.builder.build_store(ptr, int_val)?;
-                    ptr
-                },
-                GenValue::String { value: str_ptr, .. } => {
-                    let ptr = self.builder.build_alloca(self.ptr_type(), "where_value")?;
-                    self.builder.build_store(ptr, str_ptr)?;
-                    ptr
-                },
-                _ => panic!("Unexpected query value"),
-            };
-            
-            // Call __ql__SelectQueryPlan_set_where
-            self.builder.build_call(
-                self.runtime_functions.select_query_plan_set_where.into(),
-                &[
-                    query_plan.into(),
-                    column_name_str.into(),
-                    query_data_type_val.into(),
-                    value_ptr.into(),
-                ],
-                "set_where"
-            )?;
-        }
-        
-        // Prepare the query
-        let prepared_query = self.builder.build_call(
-            self.runtime_functions.select_query_plan_prepare.into(),
-            &[db_ptr.into(), query_plan.into()],
-            "prepared_query"
-        )?.as_any_value_enum().into_pointer_value();
-        
-        // Execute the prepared query
-        let result_array = self.builder.build_call(
-            self.runtime_functions.prepared_query_execute.into(),
-            &[prepared_query.into()],
-            "query_result"
-        )?.as_any_value_enum().into_pointer_value();
-        
-        // Free the prepared query
-        self.builder.build_call(
-            self.runtime_functions.prepared_query_remove_ref.into(),
-            &[prepared_query.into()],
-            "free_prepared_query"
-        )?;
-        
-        // Return the result as a GenValue::Array
-        Ok(GenValue::Array {
-            value: result_array,
-            elem_type: SemanticType::new(SemanticTypeKind::NamedStruct(
-                assoc_struct.id,
-                assoc_struct.name.clone()
-            )),
-            ownership: Ownership::Owned,
-        })
+    pub(super) fn gen_immediate_query(&mut self, query: &SemanticQuery) -> Result<GenValue<'ctxt>, CodeGenError> {
+        let prepared_stmt = self.prepare_query(query)?;
+        let result = self.execute_query(prepared_stmt, query)?;
+        self.finalize_query(prepared_stmt, query)?;
+        Ok(result)
     }
 
-    pub fn gen_insert_query(&mut self, table_id: u32, value: &SemanticExpression) -> Result<GenValue<'ctxt>, CodeGenError> {
-        let insert_data = self.gen_eval(value)?;
-        let table = &self.program.tables[&table_id];
-        let table_info = &self.table_info[&table_id];
-        let db_global_ptr = self.datasource_ptrs[&table.datasource_id];
-        let db_ptr = self.builder.build_load(self.ptr_type(), db_global_ptr, "db_ptr")?.into_pointer_value();
-        
-        let table_name_str = table_info.name_str.as_pointer_value();
-        let type_info_ptr = self.struct_info[&table_id].type_info.as_pointer_value();
-        
-        let llvm_insert_data: BasicValueEnum = match &insert_data {
-            GenValue::Struct { value: struct_val, .. } => struct_val.as_basic_value_enum(),
-            _ => panic!()
-        };
-        let insert_data_ptr = self.builder.build_alloca(llvm_insert_data.get_type(), "insert_data")?;
-        self.builder.build_store(insert_data_ptr, llvm_insert_data)?;
-        
-        // Create the insert query plan
-        let query_plan_ptr = self.builder.build_call(
-            self.runtime_functions.insert_query_plan_new.into(),
-            &[
-                table_name_str.into(),
-                type_info_ptr.into(),
-                self.context.i32_type().const_zero().into(),
-                self.bool_type().const_int(false as u64, false).into(),
-                insert_data_ptr.into(),
-            ],
-            "insert_query_plan"
-        )?.as_any_value_enum().into_pointer_value();
+    pub(super) fn prepare_query(&mut self, query: &SemanticQuery) -> Result<PointerValue<'ctxt>, CodeGenError> {
+        match query {
+            SemanticQuery::Select { table_id, where_clause } => {
+                let table = &self.program.tables[table_id];
+                let table_info = &self.table_info[table_id];
+                let struct_info = &self.struct_info[&table.struct_id];
+                let select_plan_ptr = self.builder.build_call(
+                    self.runtime_functions.select_plan_new,
+                    &[
+                        table_info.name_str.as_pointer_value().into(),
+                        struct_info.type_info.as_pointer_value().into(),
+                    ],
+                    "select_plan"
+                )?.as_any_value_enum().into_pointer_value();
 
-        // Prepare the query
-        let prepared_query = self.builder.build_call(
-            self.runtime_functions.insert_query_plan_prepare.into(),
-            &[db_ptr.into(), query_plan_ptr.into()],
-            "prepared_query"
-        )?.as_any_value_enum().into_pointer_value();
-
-        // Execute the prepared query
-        self.builder.build_call(
-            self.runtime_functions.prepared_query_execute.into(),
-            &[prepared_query.into()],
-            "execute_insert"
-        )?;
-        
-        // Free the prepared query
-        self.builder.build_call(
-            self.runtime_functions.prepared_query_remove_ref.into(),
-            &[prepared_query.into()],
-            "free_prepared_query"
-        )?;
-        
-        self.remove_if_owned(insert_data)?;
-
-        Ok(GenValue::Void)
-    }
-
-    pub fn gen_delete_query(&mut self, table_id: u32, where_clause_opt: &Option<WhereClause>) -> Result<GenValue<'ctxt>, CodeGenError> {
-        let where_value = match where_clause_opt {
-            Some(where_clause) => self.gen_eval(&where_clause.value)?,
-            None => GenValue::Void,
-        };
-
-        let table = &self.program.tables[&table_id];
-        let assoc_struct = &self.program.structs[&table.struct_id];
-        let table_info = &self.table_info[&table_id];
-        let db_global_ptr = self.datasource_ptrs[&table.datasource_id];
-        let db_ptr = self.builder.build_load(self.ptr_type(), db_global_ptr, "db_ptr")?.into_pointer_value();
-        
-        let table_name_str = table_info.name_str.as_pointer_value();
-        
-        let query_plan = self.builder.build_call(
-            self.runtime_functions.delete_query_plan_new.into(),
-            &[
-                table_name_str.into(),
-                self.context.i32_type().const_zero().into(),
-            ],
-            "delete_query_plan"
-        )?.as_any_value_enum().into_pointer_value();
-        
-        if let Some(WhereClause { column_name, .. }) = where_clause_opt {
-            let column_index = assoc_struct.field_order.iter()
-                .position(|name| name == column_name).unwrap();
-            let column_type = &assoc_struct.fields[column_name];
-            let column_name_str = table_info.column_name_strs[column_index].as_pointer_value();
-            
-            let query_data_type = match column_type.kind() {
-                SemanticTypeKind::Integer => 0, // QUERY_DATA_INTEGER
-                SemanticTypeKind::String => 1,  // QUERY_DATA_STRING
-                _ => panic!("Unexpected query value"),
-            };
-            let query_data_type_val = self.context.i32_type().const_int(query_data_type, false);
-            
-            // Allocate space for the value and store it
-            let value_ptr = match where_value {
-                GenValue::Integer(int_val) => {
-                    let ptr = self.builder.build_alloca(self.int_type(), "where_value")?;
-                    self.builder.build_store(ptr, int_val)?;
-                    ptr
-                },
-                GenValue::String { value: str_ptr, .. } => {
-                    let ptr = self.builder.build_alloca(self.ptr_type(), "where_value")?;
-                    self.builder.build_store(ptr, str_ptr)?;
-                    ptr
-                },
-                _ => panic!("Unexpected query value"),
-            };
-            
-            // Call __ql__DeleteQueryPlan_set_where
-            self.builder.build_call(
-                self.runtime_functions.delete_query_plan_set_where.into(),
-                &[
-                    query_plan.into(),
-                    column_name_str.into(),
-                    query_data_type_val.into(),
-                    value_ptr.into(),
-                ],
-                "set_where"
-            )?;
-        }
-        
-        // Prepare the query
-        let prepared_query = self.builder.build_call(
-            self.runtime_functions.delete_query_plan_prepare.into(),
-            &[db_ptr.into(), query_plan.into()],
-            "prepared_query"
-        )?.as_any_value_enum().into_pointer_value();
-        
-        // Execute the prepared query
-        self.builder.build_call(
-            self.runtime_functions.prepared_query_execute.into(),
-            &[prepared_query.into()],
-            "execute_delete"
-        )?;
-        
-        // Free the prepared query
-        self.builder.build_call(
-            self.runtime_functions.prepared_query_remove_ref.into(),
-            &[prepared_query.into()],
-            "free_prepared_query"
-        )?;
-
-        Ok(GenValue::Void)
-    }
-
-    pub fn gen_update_query(&mut self, table_id: u32, assignments: &[(String, SemanticExpression)], where_clause_opt: &Option<WhereClause>) -> Result<GenValue<'ctxt>, CodeGenError> {
-        let assignment_values = assignments.iter()
-            .map(|(col_name, expr)| {
-                match self.gen_eval(expr) {
-                    Ok(val) => Ok((col_name.as_str(), val)),
-                    Err(e) => Err(e),
+                if let Some(WhereClause { column_index, .. }) = where_clause {
+                    let column_name_str = table_info.column_name_strs[*column_index as usize];
+                    self.builder.build_call(
+                        self.runtime_functions.select_plan_set_where,
+                        &[
+                            select_plan_ptr.into(),
+                            column_name_str.as_pointer_value().into(),
+                        ],
+                        "select_plan_set_where"
+                    )?;
                 }
-            })
-            .collect::<Result<Vec<(&str, GenValue)>, _>>()?;
 
-        let where_value = match where_clause_opt {
-            Some(where_clause) => self.gen_eval(&where_clause.value)?,
-            None => GenValue::Void,
-        };
+                let database_global = self.datasource_ptrs[&table.datasource_id];
+                let database_ptr = self.builder.build_load(
+                    self.ptr_type(),
+                    database_global,
+                    "load_database_ptr"
+                )?.into_pointer_value();
+                let prepared_select = self.builder.build_call(
+                    self.runtime_functions.select_plan_prepare,
+                    &[database_ptr.into(), select_plan_ptr.into()],
+                    "prepared_select"
+                )?.as_any_value_enum().into_pointer_value();
 
-        let table = &self.program.tables[&table_id];
-        let assoc_struct = &self.program.structs[&table.struct_id];
-        let table_info = &self.table_info[&table_id];
-        let db_global_ptr = self.datasource_ptrs[&table.datasource_id];
-        let db_ptr = self.builder.build_load(self.ptr_type(), db_global_ptr, "db_ptr")?.into_pointer_value();
-        
-        let table_name_str = table_info.name_str.as_pointer_value();
-        let type_info_ptr = self.struct_info[&table.struct_id].type_info.as_pointer_value();
-        
-        let query_plan = self.builder.build_call(
-            self.runtime_functions.update_query_plan_new.into(),
-            &[
-                table_name_str.into(),
-                type_info_ptr.into(),
-                self.context.i32_type().const_zero().into(),
-            ],
-            "update_query_plan"
-        )?.as_any_value_enum().into_pointer_value();
+                Ok(prepared_select)
+            },
+            SemanticQuery::Insert { table_id, .. } => {
+                let table = &self.program.tables[table_id];
+                let table_info = &self.table_info[table_id];
+                let struct_info = &self.struct_info[&table.struct_id];
+                let insert_plan_ptr = self.builder.build_call(
+                    self.runtime_functions.insert_plan_new,
+                    &[
+                        table_info.name_str.as_pointer_value().into(),
+                        struct_info.type_info.as_pointer_value().into(),
+                    ],
+                    "insert_plan"
+                )?.as_any_value_enum().into_pointer_value();
 
-        // Add all assignments
-        for (column_name, assignment_value) in assignment_values {
-            let column_index = assoc_struct.field_order.iter()
-                .position(|name| name == column_name).unwrap();
-            let column_type = &assoc_struct.fields[column_name];
-            let column_name_str = table_info.column_name_strs[column_index].as_pointer_value();
-            
-            let query_data_type = match column_type.kind() {
-                SemanticTypeKind::Integer => 0, // QUERY_DATA_INTEGER
-                SemanticTypeKind::String => 1,  // QUERY_DATA_STRING
-                _ => panic!("Unexpected query value"),
-            };
-            let query_data_type_val = self.context.i32_type().const_int(query_data_type, false);
-            
-            // Allocate space for the value and store it
-            let value_ptr = match assignment_value {
-                GenValue::Integer(int_val) => {
-                    let ptr = self.builder.build_alloca(self.int_type(), "assignment_value")?;
-                    self.builder.build_store(ptr, int_val)?;
-                    ptr
-                },
-                GenValue::String { value: str_ptr, .. } => {
-                    let ptr = self.builder.build_alloca(self.ptr_type(), "assignment_value")?;
-                    self.builder.build_store(ptr, str_ptr)?;
-                    ptr
-                },
-                _ => panic!("Unexpected query value"),
-            };
-            
-            // Call __ql__UpdateQueryPlan_add_assignment
-            self.builder.build_call(
-                self.runtime_functions.update_query_plan_add_assignment.into(),
-                &[
-                    query_plan.into(),
-                    column_name_str.into(),
-                    query_data_type_val.into(),
-                    value_ptr.into(),
-                ],
-                "add_assignment"
-            )?;
+                let database_global = self.datasource_ptrs[&table.datasource_id];
+                let database_ptr = self.builder.build_load(
+                    self.ptr_type(),
+                    database_global,
+                    "load_database_ptr"
+                )?.into_pointer_value();
+                let prepared_insert = self.builder.build_call(
+                    self.runtime_functions.insert_plan_prepare,
+                    &[database_ptr.into(), insert_plan_ptr.into()],
+                    "prepared_insert"
+                )?.as_any_value_enum().into_pointer_value();
+
+                Ok(prepared_insert)
+            }
+            SemanticQuery::Update { table_id, assignments, where_clause } => {
+                let table = &self.program.tables[table_id];
+                let table_info = &self.table_info[table_id];
+
+                let col_name_arr_type = self.ptr_type().array_type(assignments.len() as u32);
+                let col_name_arr = self.builder.build_alloca(col_name_arr_type, "col_name_arr")?;
+                for (i, assignment) in assignments.iter().enumerate() {
+                    let col_index = assignment.column_index as usize;
+                    let column_name_str = table_info.column_name_strs[col_index]
+                        .as_basic_value_enum();
+                    let elem_ptr = unsafe { self.builder.build_gep(
+                        col_name_arr_type,
+                        col_name_arr,
+                        &[
+                            self.context.i32_type().const_zero(),
+                            self.context.i32_type().const_int(i as u64, false)
+                        ],
+                        &format!("col_name_ptr_{}", i)
+                    )? };
+                    self.builder.build_store(elem_ptr, column_name_str)?;
+                }
+
+                let update_plan_ptr = self.builder.build_call(
+                    self.runtime_functions.update_plan_new,
+                    &[
+                        table_info.name_str.as_pointer_value().into(),
+                        self.int_type().const_int(assignments.len() as u64, false).into(),
+                        col_name_arr.into(),
+                    ],
+                    "update_plan"
+                )?.as_any_value_enum().into_pointer_value();
+
+                if let Some(WhereClause { column_index, .. }) = where_clause {
+                    let column_name_str = table_info.column_name_strs[*column_index as usize];
+                    self.builder.build_call(
+                        self.runtime_functions.update_plan_set_where,
+                        &[
+                            update_plan_ptr.into(),
+                            column_name_str.as_pointer_value().into(),
+                        ],
+                        "update_plan_set_where"
+                    )?;
+                }
+
+                let database_global = self.datasource_ptrs[&table.datasource_id];
+                let database_ptr = self.builder.build_load(
+                    self.ptr_type(),
+                    database_global,
+                    "load_database_ptr"
+                )?.into_pointer_value();
+                let prepared_update = self.builder.build_call(
+                    self.runtime_functions.update_plan_prepare,
+                    &[database_ptr.into(), update_plan_ptr.into()],
+                    "prepared_update"
+                )?.as_any_value_enum().into_pointer_value();
+
+                Ok(prepared_update)
+            }
+            SemanticQuery::Delete { table_id, where_clause } => {
+                let table = &self.program.tables[table_id];
+                let table_info = &self.table_info[table_id];
+                let struct_info = &self.struct_info[&table.struct_id];
+                let select_plan_ptr = self.builder.build_call(
+                    self.runtime_functions.delete_plan_new,
+                    &[
+                        table_info.name_str.as_pointer_value().into(),
+                        struct_info.type_info.as_pointer_value().into(),
+                    ],
+                    "delete_plan"
+                )?.as_any_value_enum().into_pointer_value();
+
+                if let Some(WhereClause { column_index, .. }) = where_clause {
+                    let column_name_str = table_info.column_name_strs[*column_index as usize];
+                    self.builder.build_call(
+                        self.runtime_functions.delete_plan_set_where,
+                        &[
+                            select_plan_ptr.into(),
+                            column_name_str.as_pointer_value().into(),
+                        ],
+                        "delete_plan_set_where"
+                    )?;
+                }
+
+                let database_global = self.datasource_ptrs[&table.datasource_id];
+                let database_ptr = self.builder.build_load(
+                    self.ptr_type(),
+                    database_global,
+                    "load_database_ptr"
+                )?.into_pointer_value();
+                let prepared_delete = self.builder.build_call(
+                    self.runtime_functions.delete_plan_prepare,
+                    &[database_ptr.into(), select_plan_ptr.into()],
+                    "prepared_delete"
+                )?.as_any_value_enum().into_pointer_value();
+
+                Ok(prepared_delete)
+            }
         }
-        
-        // Handle WHERE clause if present
-        if let Some(WhereClause { column_name, .. }) = where_clause_opt {
-            let column_index = assoc_struct.field_order.iter()
-                .position(|name| name == column_name).unwrap();
-            let column_type = &assoc_struct.fields[column_name];
-            let column_name_str = table_info.column_name_strs[column_index].as_pointer_value();
-            
-            let query_data_type = match column_type.kind() {
-                SemanticTypeKind::Integer => 0, // QUERY_DATA_INTEGER
-                SemanticTypeKind::String => 1,  // QUERY_DATA_STRING
-                _ => panic!("Unexpected query value"),
-            };
-            let query_data_type_val = self.context.i32_type().const_int(query_data_type, false);
-            
-            // Allocate space for the value and store it
-            let value_ptr = match where_value {
-                GenValue::Integer(int_val) => {
-                    let ptr = self.builder.build_alloca(self.int_type(), "where_value")?;
-                    self.builder.build_store(ptr, int_val)?;
-                    ptr
-                },
-                GenValue::String { value: str_ptr, .. } => {
-                    let ptr = self.builder.build_alloca(self.ptr_type(), "where_value")?;
-                    self.builder.build_store(ptr, str_ptr)?;
-                    ptr
-                },
-                _ => panic!("Unexpected query value"),
-            };
-            
-            // Call __ql__UpdateQueryPlan_set_where
-            self.builder.build_call(
-                self.runtime_functions.update_query_plan_set_where.into(),
-                &[
-                    query_plan.into(),
-                    column_name_str.into(),
-                    query_data_type_val.into(),
-                    value_ptr.into(),
-                ],
-                "set_where"
-            )?;
-        }
-        
-        // Prepare the query
-        let prepared_query = self.builder.build_call(
-            self.runtime_functions.update_query_plan_prepare.into(),
-            &[db_ptr.into(), query_plan.into()],
-            "prepared_query"
-        )?.as_any_value_enum().into_pointer_value();
-        
-        // Execute the prepared query
-        self.builder.build_call(
-            self.runtime_functions.prepared_query_execute.into(),
-            &[prepared_query.into()],
-            "execute_update"
-        )?;
-        
-        // Free the prepared query
-        self.builder.build_call(
-            self.runtime_functions.prepared_query_remove_ref.into(),
-            &[prepared_query.into()],
-            "free_prepared_query"
-        )?;
+    }
 
-        Ok(GenValue::Void)
+    pub(super) fn execute_query(
+        &mut self,
+        statement: PointerValue<'ctxt>,
+        query: &SemanticQuery
+    ) -> Result<GenValue<'ctxt>, CodeGenError> {
+        match query {
+            SemanticQuery::Select { where_clause, table_id } => {
+                if let Some(WhereClause { value, .. }) = where_clause {
+                    let gen_value = self.gen_eval(value)?;
+                    let value_ptr = self.place_onto_stack(&gen_value)?;
+                    self.builder.build_call(
+                        self.runtime_functions.prepared_select_bind_where,
+                        &[
+                            statement.into(),
+                            value.sem_type.to_type_enum(self.int_type()).into(),
+                            value_ptr.into(),
+                        ],
+                        "select_bind_where"
+                    )?;
+                }
+                let result = self.builder.build_call(
+                    self.runtime_functions.prepared_select_execute.into(),
+                    &[statement.into()],
+                    "execute_select"
+                )?.as_any_value_enum().into_pointer_value();
+
+                let table = &self.program.tables[table_id];
+                let elem_type = SemanticType::new(
+                    SemanticTypeKind::NamedStruct(table.struct_id, table.name.clone())
+                );
+                Ok(GenValue::Array {
+                    value: result,
+                    elem_type,
+                    ownership: Ownership::Owned,
+                })
+            },
+            SemanticQuery::Insert { value: insert_value, .. } => {
+                let gen_value = self.gen_eval(insert_value)?;
+                match gen_value {
+                    GenValue::Array { value: llvm_value, .. } => {
+                        self.builder.build_call(
+                            self.runtime_functions.prepared_insert_exec_array.into(),
+                            &[statement.into(), llvm_value.into()],
+                            "insert_exec_array"
+                        )?;
+                    }
+                    GenValue::Struct { .. } => {
+                        let data_ptr = self.place_onto_stack(&gen_value)?;
+                        self.builder.build_call(
+                            self.runtime_functions.prepared_insert_exec_row.into(),
+                            &[statement.into(), data_ptr.into()],
+                            "insert_exec_row"
+                        )?;
+                    }
+                    _ => panic!("Unexpected insert value type")
+                }
+                Ok(GenValue::Void)
+            },
+            SemanticQuery::Update { assignments, where_clause, .. } => {
+                for (i, assignment) in assignments.iter().enumerate() {
+                    let gen_value = self.gen_eval(&assignment.value)?.as_llvm_basic_value();
+                    let value_ptr = self.builder.build_alloca(
+                        gen_value.get_type(),
+                        &format!("update_assign_ptr_{}", i)
+                    )?;
+                    self.builder.build_store(value_ptr, gen_value)?;
+                    self.builder.build_call(
+                        self.runtime_functions.prepared_update_bind_assignment,
+                        &[
+                            statement.into(),
+                            self.context.i32_type().const_int(i as u64, false).into(),
+                            assignment.value.sem_type.to_type_enum(self.int_type()).into(),
+                            value_ptr.into(),
+                        ],
+                        &format!("update_bind_assign_{}", i)
+                    )?;
+                }
+
+                if let Some(WhereClause { value, .. }) = where_clause {
+                    let gen_value = self.gen_eval(value)?;
+                    let value_ptr = self.place_onto_stack(&gen_value)?;
+                    self.builder.build_call(
+                        self.runtime_functions.prepared_update_bind_where,
+                        &[
+                            statement.into(),
+                            value.sem_type.to_type_enum(self.int_type()).into(),
+                            value_ptr.into(),
+                        ],
+                        "update_bind_where"
+                    )?;
+                }
+
+                self.builder.build_call(
+                    self.runtime_functions.prepared_update_exec.into(),
+                    &[statement.into()],
+                    "execute_update"
+                )?;
+                Ok(GenValue::Void)
+            },
+            SemanticQuery::Delete { where_clause, .. } => {
+                if let Some(WhereClause { value, .. }) = where_clause {
+                    let gen_value = self.gen_eval(value)?;
+                    let value_ptr = self.place_onto_stack(&gen_value)?;
+                    self.builder.build_call(
+                        self.runtime_functions.prepared_delete_bind_where,
+                        &[
+                            statement.into(),
+                            value.sem_type.to_type_enum(self.int_type()).into(),
+                            value_ptr.into(),
+                        ],
+                        "delete_bind_where"
+                    )?;
+                }
+
+                self.builder.build_call(
+                    self.runtime_functions.prepared_delete_exec.into(),
+                    &[statement.into()],
+                    "execute_delete"
+                )?.as_any_value_enum().into_pointer_value();
+
+                Ok(GenValue::Void)
+            }
+        }
+    }
+
+    pub(super) fn finalize_query(
+        &self,
+        statement: PointerValue<'ctxt>,
+        query: &SemanticQuery
+    ) -> Result<(), CodeGenError> {
+        match query {
+            SemanticQuery::Select { .. } => {
+                self.builder.build_call(
+                    self.runtime_functions.prepared_select_finalize.into(),
+                    &[statement.into()],
+                    "finalize_select"
+                )?;
+            },
+            SemanticQuery::Insert { .. } => {
+                self.builder.build_call(
+                    self.runtime_functions.prepared_insert_finalize.into(),
+                    &[statement.into()],
+                    "finalize_insert"
+                )?;
+            },
+            SemanticQuery::Update { .. } => {
+                self.builder.build_call(
+                    self.runtime_functions.prepared_update_finalize.into(),
+                    &[statement.into()],
+                    "finalize_update"
+                )?;
+            },
+            SemanticQuery::Delete { .. } => {
+                self.builder.build_call(
+                    self.runtime_functions.prepared_delete_finalize.into(),
+                    &[statement.into()],
+                    "finalize_delete"
+                )?;
+            }
+        }
+        Ok(())
     }
 }

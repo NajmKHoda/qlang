@@ -5,20 +5,20 @@
 #include "database.h"
 
 typedef struct {
-    char* table_name;
     QLTypeInfo* struct_type_info;
-    unsigned int num_params;
-    bool is_parameter;
-    void* data;
-} InsertQueryPlan;
+    char* table_name;
+} InsertPlan;
 
-InsertQueryPlan* __ql__InsertQueryPlan_new(
-    char* table_name,
-    QLTypeInfo* struct_type_info,
-    unsigned int num_params,
-    bool is_parameter,
-    void* data
-);
-PreparedQuery* __ql__InsertQueryPlan_prepare(sqlite3* db, InsertQueryPlan* plan);
+typedef struct {
+    sqlite3_stmt* stmt;
+    QLTypeInfo* struct_type_info;
+} PreparedInsert;
+
+InsertPlan* __ql__InsertPlan_new(char* table_name, QLTypeInfo* struct_type_info);
+PreparedInsert* __ql__InsertPlan_prepare(sqlite3* db, InsertPlan* plan);
+
+void __ql__PreparedInsert_exec_row(PreparedInsert* prepared_insert, void* row);
+void __ql__PreparedInsert_exec_array(PreparedInsert* prepared_insert, QLArray* array);
+void __ql__PreparedInsert_finalize(PreparedInsert* prepared_insert);
 
 #endif

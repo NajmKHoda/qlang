@@ -2,28 +2,23 @@
 #define RUNTIME_DELETE_QUERY_H
 
 #include <stdbool.h>
-#include "database.h"
-
-typedef struct {
-    bool is_present;
-    char* column_name;
-    QueryDataType column_type;
-    void* value;
-} DeleteWhereClause;
 
 typedef struct {
     char* table_name;
-    unsigned int num_params;
-    DeleteWhereClause where;
-} DeleteQueryPlan;
+    bool has_where_clause;
+    char* where_column;
+} DeletePlan;
 
-DeleteQueryPlan* __ql__DeleteQueryPlan_new(char* table_name, unsigned int num_params);
-void __ql__DeleteQueryPlan_set_where(
-    DeleteQueryPlan* plan,
-    char* column_name,
-    QueryDataType column_type,
-    void* value
-);
-PreparedQuery* __ql__DeleteQueryPlan_prepare(sqlite3* db, DeleteQueryPlan* plan);
+typedef struct {
+    sqlite3_stmt* stmt;
+} PreparedDelete;
+
+DeletePlan* __ql__DeletePlan_new(char* table_name);
+void __ql__DeletePlan_set_where(DeletePlan* plan, char* column_name);
+PreparedDelete* __ql__DeletePlan_prepare(sqlite3* db, DeletePlan* plan);
+
+void __ql__PreparedDelete_bind_where(PreparedDelete* prepared_delete, QLType value_type, void* value);
+void __ql__PreparedDelete_exec(PreparedDelete* prepared_delete);
+void __ql__PreparedDelete_finalize(PreparedDelete* prepared_delete);
 
 #endif

@@ -1,152 +1,73 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 #include <stdbool.h>
 #include <sqlite3.h>
 #include "../metadata.h"
-#include "../qlstring.h"
-#include "../array.h"
-#include "database.h"
+#include "definitions.h"
 #include "update_query.h"
 
-UpdateQueryPlan* __ql__UpdateQueryPlan_new(char* table_name, QLTypeInfo* struct_type_info, unsigned int num_params) {
-    UpdateQueryPlan* plan = malloc(sizeof(UpdateQueryPlan));
+UpdatePlan* __ql__UpdatePlan_new(
+    char* table_name,
+    unsigned int num_assignments,
+    char** assign_columns
+) {
+    UpdatePlan* plan = malloc(sizeof(UpdatePlan));
     plan->table_name = table_name;
-    plan->struct_type_info = struct_type_info;
-    plan->num_params = num_params;
-
-    plan->num_assignments = 0;
-    plan->assignments_capacity = 4;
-    plan->assignments = malloc(sizeof(UpdateAssignment) * plan->assignments_capacity);
-
-    plan->where.is_present = false;
+    plan->num_assignments = num_assignments;
+    plan->assign_columns = assign_columns;
+    plan->has_where_clause = false;
     return plan;
 }
 
-void __ql__UpdateQueryPlan_add_assignment(
-    UpdateQueryPlan* plan,
-    char* column_name,
-    QueryDataType column_type,
-    void* value
-) {
-    if (plan->num_assignments >= plan->assignments_capacity) {
-        plan->assignments_capacity *= 2;
-        plan->assignments = realloc(plan->assignments, sizeof(UpdateAssignment) * plan->assignments_capacity);
-    }
-    plan->assignments[plan->num_assignments].column_name = column_name;
-    plan->assignments[plan->num_assignments].column_type = column_type;
-    plan->assignments[plan->num_assignments].value = value;
-    plan->num_assignments++;
+void __ql__UpdatePlan_set_where(UpdatePlan* plan, char* column_name) {
+    plan->has_where_clause = true;
+    plan->where_column = column_name;
 }
 
-void __ql__UpdateQueryPlan_set_where(
-    UpdateQueryPlan* plan,
-    char* column_name,
-    QueryDataType column_type,
-    void* value
-) {
-    plan->where.is_present = true;
-    plan->where.column_name = column_name;
-    plan->where.column_type = column_type;
-    plan->where.value = value;
-}
+PreparedUpdate* __ql__UpdatePlan_prepare(sqlite3* db, UpdatePlan* plan) {
+    PreparedUpdate* prepared_update = malloc(sizeof(PreparedUpdate));
 
-PreparedQuery* __ql__UpdateQueryPlan_prepare(sqlite3* db, UpdateQueryPlan* plan) {
-    char* sql = malloc(MAX_SQL_LENGTH);
-    PreparedQuery* prepared_query = __ql__PreparedQuery_new(plan->num_params, NULL);
-    
+    char sql[MAX_SQL_LENGTH];
+    char* writer = sql;
+
     // Build SET clause
-    int next_index = 1;
-    int offset = sprintf(sql, "UPDATE %s SET ", plan->table_name);
+    writer += sprintf(writer, "UPDATE %s SET ", plan->table_name);
     for (unsigned int i = 0; i < plan->num_assignments; i++) {
-        if (i > 0) offset += sprintf(sql + offset, ", ");
-
-        int query_index;
-        if (plan->assignments[i].column_type == QUERY_DATA_PARAMETER) {
-            int param_index = *((int*)plan->assignments[i].value);
-            unsigned int* param_query_index = &prepared_query->query_param_indices[param_index];
-            if (*param_query_index == 0) {
-                *param_query_index = next_index;
-                query_index = next_index;
-                next_index++;
-            } else {
-                query_index = *param_query_index;
-            }
-        } else {
-            query_index = next_index;
-            next_index++;
-        }
-
-        offset += sprintf(sql + offset, "%s = ?%d", plan->assignments[i].column_name, query_index);
+        if (i > 0) writer += sprintf(writer, ", ");
+        writer += sprintf(writer, "%s = ?%d", plan->assign_columns[i], i + 2);
     }
     
     // Add WHERE clause if present
-    if (plan->where.is_present) {
-        int where_index = next_index;
-        if (plan->where.column_type == QUERY_DATA_PARAMETER) {
-            int param_index = *((int*)plan->where.value);
-            unsigned int* param_query_index = &prepared_query->query_param_indices[param_index];
-            if (*param_query_index == 0) {
-                *param_query_index = where_index;
-            } else {
-                where_index = *param_query_index;
-            }
-        }
-        sprintf(sql + offset, " WHERE %s = ?%d;", plan->where.column_name, where_index);
+    if (plan->has_where_clause) {
+        writer += sprintf(writer, " WHERE %s = ?1;", plan->where_column);
     } else {
-        sprintf(sql + offset, ";");
+        writer += sprintf(writer, ";");
     }
     
-    sqlite3_prepare_v2(db, sql, -1, &prepared_query->stmt, NULL);
-    
-    // Bind assignment values
-    int query_index = 1;
-    for (unsigned int i = 0; i < plan->num_assignments; i++) {
-        switch (plan->assignments[i].column_type) {
-            case QUERY_DATA_INTEGER: {
-                sqlite3_bind_int(prepared_query->stmt, query_index, *((int*)plan->assignments[i].value));
-                query_index++;
-                break;
-            }
-            case QUERY_DATA_STRING: {
-                QLString* ql_str = *(QLString**)plan->assignments[i].value;
-                sqlite3_bind_text(prepared_query->stmt, query_index, ql_str->raw_string, ql_str->length, SQLITE_STATIC);
-                query_index++;
-                break;
-            }
-            case QUERY_DATA_PARAMETER: {
-                int param_index = *((int*)plan->assignments[i].value);
-                int param_query_index = prepared_query->query_param_indices[param_index];
-                if (param_query_index == query_index) {
-                    query_index++;
-                }
-                break;
-            }
-        }
-    }
-    
-    // Bind WHERE value if present
-    if (plan->where.is_present) {
-        switch (plan->where.column_type) {
-            case QUERY_DATA_INTEGER: {
-                sqlite3_bind_int(prepared_query->stmt, next_index, *((int*)plan->where.value));
-                break;
-            }
-            case QUERY_DATA_STRING: {
-                QLString* ql_str = *(QLString**)plan->where.value;
-                sqlite3_bind_text(prepared_query->stmt, next_index, ql_str->raw_string, ql_str->length, SQLITE_STATIC);
-                break;
-            }
-            case QUERY_DATA_PARAMETER: {
-                // Binding will occur later
-                break;
-            }
-        }
-    }
-
-    free(sql);
-    free(plan->assignments);
+    sqlite3_prepare_v2(db, sql, -1, &prepared_update->stmt, NULL);
     free(plan);
+    return prepared_update;
+}
 
-    return prepared_query;
+void __ql__PreparedUpdate_bind_where(PreparedUpdate* prepared_update, QLType value_type, void* value) {
+    __ql__bind_value(prepared_update->stmt, 1, value_type, value);
+}
+
+void __ql__PreparedUpdate_bind_assignment(
+    PreparedUpdate* prepared_update,
+    unsigned int index,
+    QLType value_type,
+    void* value
+) {
+    __ql__bind_value(prepared_update->stmt, index + 2, value_type, value);
+}
+
+void __ql__PreparedUpdate_exec(PreparedUpdate* prepared_update) {
+    sqlite3_step(prepared_update->stmt);
+    sqlite3_reset(prepared_update->stmt);
+}
+
+void __ql__PreparedUpdate_finalize(PreparedUpdate* prepared_update) {
+    sqlite3_finalize(prepared_update->stmt);
+    free(prepared_update);
 }

@@ -1,13 +1,31 @@
-use crate::tokens::{ClosureBodyNode, TypeNode, TypedQNameNode};
+use crate::{semantics::SemanticQuery, tokens::{ClosureBodyNode, TypeNode, TypedQNameNode}};
 
-use super::{SemanticGen, SemanticType, SemanticBlock, SemanticParameter, SemanticScopeType, SemanticError, SemanticVariable, Ownership, SemanticExpression, SemanticExpressionKind, SemanticStatement, SemanticTypeKind};
+use super::{SemanticGen, SemanticType, SemanticBlock, SemanticScopeType, SemanticError, SemanticVariable, Ownership, SemanticExpression, SemanticExpressionKind, SemanticStatement, SemanticTypeKind};
 
 pub struct SemanticClosure {
     pub id: u32,
-    pub parameters: Vec<SemanticParameter>,
+    pub param_ids: Vec<u32>,
     pub captured_variables: Vec<(u32, u32)>,
     pub return_type: SemanticType,
-    pub body: SemanticBlock,
+    pub body: SemanticClosureBody,
+}
+
+pub enum SemanticClosureBody {
+    Procedural(SemanticBlock),
+    Query(SemanticQuery),
+}
+
+impl SemanticClosureBody {
+    pub(super) fn dummy() -> Self {
+        SemanticClosureBody::Procedural(SemanticBlock {
+            statements: vec![],
+            terminates: false,
+        })
+    }
+
+    pub fn is_query(&self) -> bool {
+        matches!(self, SemanticClosureBody::Query(_))
+    }
 }
 
 impl SemanticGen {
@@ -18,7 +36,7 @@ impl SemanticGen {
         body: &ClosureBodyNode
     ) -> Result<SemanticExpression, SemanticError> {
         let id = self.closure_id_gen.next_id();
-        let mut params: Vec<SemanticParameter> = vec![];
+        let mut param_ids: Vec<u32> = vec![];
         let mut sem_param_types: Vec<SemanticType> = vec![];
 
         // Create parameter variables at closure scope
@@ -33,11 +51,7 @@ impl SemanticGen {
                 id: variable_id,
                 sem_type: sem_type.clone(),
             });
-            params.push(SemanticParameter {
-                name: param_node.name.clone(),
-                variable_id,
-                sem_type: sem_type.clone(),
-            });
+            param_ids.push(variable_id);
             sem_param_types.push(sem_type);
         }
 
@@ -47,13 +61,10 @@ impl SemanticGen {
         };
         self.closures.insert(id, SemanticClosure {
             id,
-            parameters: params,
+            param_ids,
             captured_variables: vec![],
             return_type: sem_ret_type.clone(),
-            body: SemanticBlock {
-                statements: vec![],
-                terminates: false,
-            },
+            body: SemanticClosureBody::dummy()
         });
 
         match body {
@@ -65,10 +76,11 @@ impl SemanticGen {
                         found: ret_expr.sem_type,
                     })
                 }
-                self.closures.get_mut(&id).unwrap().body = SemanticBlock {
+                let closure = self.closures.get_mut(&id).unwrap();
+                closure.body = SemanticClosureBody::Procedural(SemanticBlock {
                     statements: vec![SemanticStatement::Return(Some(ret_expr))],
                     terminates: true
-                }
+                });
             },
             ClosureBodyNode::Statements(stmts) => {
                 let prev_return_type = self.cur_return_type.clone();
@@ -89,7 +101,8 @@ impl SemanticGen {
                     }
                 }
 
-                self.closures.get_mut(&id).unwrap().body = body_block;
+                let closure = self.closures.get_mut(&id).unwrap();
+                closure.body = SemanticClosureBody::Procedural(body_block);
             },
         }
 

@@ -1,7 +1,8 @@
 #ifndef RUNTIME_STRING_H
 #define RUNTIME_STRING_H
 
-typedef struct QLTypeInfo QLTypeInfo;
+#include <stdbool.h>
+#include "metadata.h"
 
 extern QLTypeInfo __ql__QLString_type_info;
 

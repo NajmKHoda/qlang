@@ -1,65 +1,83 @@
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
-#include <stdbool.h>
+#include <stdlib.h>
 #include <sqlite3.h>
 #include "../metadata.h"
 #include "../qlstring.h"
 #include "../array.h"
-#include "database.h"
+#include "definitions.h"
 #include "select_query.h"
 
-SelectQueryPlan* __ql__SelectQueryPlan_new(char* table_name, QLTypeInfo* struct_type_info, unsigned int num_params) {
-    SelectQueryPlan* plan = malloc(sizeof(SelectQueryPlan));
+SelectPlan* __ql__SelectPlan_new(char* table_name, QLTypeInfo* struct_type_info) {
+    SelectPlan* plan = malloc(sizeof(SelectPlan));
     plan->table_name = table_name;
     plan->struct_type_info = struct_type_info;
-    plan->num_params = num_params;
-    plan->where.is_present = false;
+    plan->has_where_clause = false;
     return plan;
 }
 
-void __ql__SelectQueryPlan_set_where(
-    SelectQueryPlan* plan,
-    char* column_name,
-    QueryDataType column_type,
-    void* value
-) {
-    plan->where.is_present = true;
-    plan->where.column_name = column_name;
-    plan->where.column_type = column_type;
-    plan->where.value = value;
+void __ql__SelectPlan_set_where(SelectPlan* plan, char* column_name){
+    plan->has_where_clause = true;
+    plan->where_column = column_name;
 }
 
-PreparedQuery* __ql__SelectQueryPlan_prepare(sqlite3* db, SelectQueryPlan* plan) {
-    PreparedQuery* prepared_query = __ql__PreparedQuery_new(plan->num_params, plan->struct_type_info);
+PreparedSelect* __ql__SelectPlan_prepare(sqlite3* db, SelectPlan* plan) {
+    PreparedSelect* prepared_select = malloc(sizeof(PreparedSelect));
+    prepared_select->struct_type_info = plan->struct_type_info;
 
-    char* sql = malloc(MAX_SQL_LENGTH);
-
-    if (plan->where.is_present) {
-        sprintf(sql, "SELECT * FROM %s WHERE %s = ?1;", plan->table_name, plan->where.column_name);
-        sqlite3_prepare_v2(db, sql, -1, &prepared_query->stmt, NULL);
-        switch (plan->where.column_type) {
-            case QUERY_DATA_INTEGER: {
-                sqlite3_bind_int(prepared_query->stmt, 1, *((int*)plan->where.value));
-                break;
-            }
-            case QUERY_DATA_STRING: {
-                QLString* ql_str = *(QLString**)plan->where.value;
-                sqlite3_bind_text(prepared_query->stmt, 1, ql_str->raw_string, ql_str->length, SQLITE_STATIC);
-                break;
-            }
-            case QUERY_DATA_PARAMETER: {
-                int param_index = *((int*)plan->where.value);
-                prepared_query->query_param_indices[param_index] = 1;
-                break;
-            }
-        }
+    char sql[MAX_SQL_LENGTH];
+    if (plan->has_where_clause) {
+        sprintf(sql, "SELECT * FROM %s WHERE %s = ?1;", plan->table_name, plan->where_column);
+        sqlite3_prepare_v2(db, sql, -1, &prepared_select->stmt, NULL);
     } else {
         sprintf(sql, "SELECT * FROM %s;", plan->table_name);
-        sqlite3_prepare_v2(db, sql, -1, &prepared_query->stmt, NULL);
+        sqlite3_prepare_v2(db, sql, -1, &prepared_select->stmt, NULL);
     }
 
-    free(sql);
     free(plan);
-    return prepared_query;
+    return prepared_select;
+}
+
+void __ql__PreparedSelect_bind_where(PreparedSelect* prepared_select, QLType value_type, void* value) {
+    __ql__bind_value(prepared_select->stmt, 1, value_type, value);
+}
+
+QLArray* __ql__PreparedSelect_execute(PreparedSelect* prepared_select) {
+    QLArray* results = __ql__QLArray_new(NULL, 0, prepared_select->struct_type_info);
+
+    int n_cols = prepared_select->struct_type_info->num_fields;
+    void* struct_ptr = malloc(prepared_select->struct_type_info->size);
+    while (sqlite3_step(prepared_select->stmt) == SQLITE_ROW) {
+        for (int i = 0; i < n_cols; i++) {
+            StructField field = prepared_select->struct_type_info->fields[i];
+            void* field_ptr = (char*)struct_ptr + field.offset;
+            int column_type = sqlite3_column_type(prepared_select->stmt, i);
+            switch (column_type) {
+                case SQLITE_TEXT: {
+                    const unsigned char* text = sqlite3_column_text(prepared_select->stmt, i);
+                    unsigned int length = sqlite3_column_bytes(prepared_select->stmt, i);
+                    QLString* val = __ql__QLString_new(malloc(length), length, false);
+                    memcpy(val->raw_string, text, length);
+                    *(QLString**)field_ptr = val;
+                    break;
+                }
+                case SQLITE_INTEGER: {
+                    int val = sqlite3_column_int(prepared_select->stmt, i);
+                    *(int*)field_ptr = val;
+                    break;
+                }
+            }
+            
+        }
+        __ql__QLArray_append(results, struct_ptr);
+    }
+
+    free(struct_ptr);
+    sqlite3_reset(prepared_select->stmt);
+    return results;
+}
+
+void __ql__PreparedSelect_finalize(PreparedSelect* prepared_select) {
+    sqlite3_finalize(prepared_select->stmt);
+    free(prepared_select);
 }

@@ -118,7 +118,7 @@ pub enum SemanticQuery {
     },
     Update {
         table_id: u32,
-        assignments: Vec<(String, SemanticExpression)>,
+        assignments: Vec<UpdateAssignment>,
         where_clause: Option<WhereClause>,
     },
     Delete {
@@ -127,7 +127,12 @@ pub enum SemanticQuery {
     }
 }
 
+pub struct UpdateAssignment {
+    pub column_index: u32,
+    pub value: SemanticExpression,
+}
+
 pub struct WhereClause {
-    pub column_name: String,
+    pub column_index: u32,
     pub value: Box<SemanticExpression>,
 }
