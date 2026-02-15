@@ -47,4 +47,5 @@ void __ql__PreparedDelete_exec(PreparedDelete* prepared_delete) {
 void __ql__PreparedDelete_finalize(PreparedDelete* prepared_delete) {
     sqlite3_finalize(prepared_delete->stmt);
     free(prepared_delete);
+    fprintf(stderr, "finalize PreparedDelete\n");
 }

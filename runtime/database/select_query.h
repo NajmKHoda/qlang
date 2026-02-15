@@ -4,6 +4,9 @@
 #include <stdbool.h>
 #include "../metadata.h"
 
+struct sqlite3;
+struct sqlite3_stmt;
+
 typedef struct {
     QLTypeInfo* struct_type_info;
     char* table_name;
@@ -12,13 +15,13 @@ typedef struct {
 } SelectPlan;
 
 typedef struct {
-    sqlite3_stmt* stmt;
+    struct sqlite3_stmt* stmt;
     QLTypeInfo* struct_type_info;
 } PreparedSelect;
 
 SelectPlan* __ql__SelectPlan_new(char* table_name, QLTypeInfo* struct_type_info);
 void __ql__SelectPlan_set_where(SelectPlan* plan, char* column_name);
-PreparedSelect* __ql__SelectPlan_prepare(sqlite3* db, SelectPlan* plan);
+PreparedSelect* __ql__SelectPlan_prepare(struct sqlite3* db, SelectPlan* plan);
 
 void __ql__PreparedSelect_bind_where(PreparedSelect* prepared_select, QLType value_type, void* value);
 QLArray* __ql__PreparedSelect_execute(PreparedSelect* prepared_select);

@@ -48,6 +48,7 @@ impl SemanticTypeKind {
             SemanticTypeKind::String => true,
             SemanticTypeKind::Array(_) => true,
             SemanticTypeKind::NamedStruct(_, _) => true,
+            SemanticTypeKind::Callable(_,_) => true,
             _ => false
         }
     }

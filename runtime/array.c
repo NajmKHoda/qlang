@@ -2,11 +2,12 @@
 #include <string.h>
 #include <stdio.h>
 #include "metadata.h"
+#include "memory.h"
 #include "array.h"
 
 QLTypeInfo __ql__QLArray_type_info = {
-    .size = sizeof(QLArray*),
-    .elem_drop = __ql__QLArray_elem_drop
+    .type = TYPE_ARRAY,
+    .size = sizeof(QLArray*)
 };
 
 static inline void* __ql__QLArray_get_nth_elem(QLArray* array, unsigned int n) {
@@ -46,11 +47,9 @@ void __ql__QLArray_add_ref(QLArray* array) {
 void __ql__QLArray_remove_ref(QLArray* array) {
     array->ref_count--;
     if (array->ref_count == 0) {
-        if (array->type_info->elem_drop != NULL) {
-            for (unsigned int i = 0; i < array->num_elems; i++) {
-                void* elem_ptr = __ql__QLArray_get_nth_elem(array, i);
-                array->type_info->elem_drop(elem_ptr);
-            }
+        for (unsigned int i = 0; i < array->num_elems; i++) {
+            void* elem_ptr = __ql__QLArray_get_nth_elem(array, i);
+            __ql__drop_value(elem_ptr, array->type_info);
         }
         free(array->elems);
         free(array);

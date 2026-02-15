@@ -70,4 +70,5 @@ void __ql__PreparedUpdate_exec(PreparedUpdate* prepared_update) {
 void __ql__PreparedUpdate_finalize(PreparedUpdate* prepared_update) {
     sqlite3_finalize(prepared_update->stmt);
     free(prepared_update);
+    fprintf(stderr, "finalize PreparedUpdate\n");
 }

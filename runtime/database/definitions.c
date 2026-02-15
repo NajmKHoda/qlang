@@ -20,5 +20,7 @@ void __ql__bind_value(sqlite3_stmt* stmt, unsigned int index, QLType value_type,
             sqlite3_bind_int(stmt, index, as_int);
             break;
         }
+        default:
+            break;
     }
 }

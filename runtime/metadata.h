@@ -6,16 +6,20 @@ typedef enum {
     TYPE_BOOL,
     TYPE_STRING,
     TYPE_ARRAY,
+    TYPE_STRUCT,
+    TYPE_CALLABLE
 } QLType;
 
-typedef struct {
-    QLType type;
+typedef struct QLTypeInfo QLTypeInfo;
+
+typedef struct StructField {
     unsigned int offset;
+    QLTypeInfo* type_info;
 } StructField;
 
-typedef struct {
+typedef struct QLTypeInfo {
+    QLType type;
     unsigned long size;
-    void (*elem_drop)(void* elem_ptr);
     unsigned int num_fields;
     StructField* fields;
 } QLTypeInfo;

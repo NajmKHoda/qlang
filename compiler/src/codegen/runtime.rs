@@ -1,8 +1,20 @@
 use inkwell::AddressSpace;
-use inkwell::types::StructType;
+use inkwell::types::{StructType};
 use inkwell::{context::Context};
 use inkwell::module::{Linkage, Module};
-use inkwell::values::{FunctionValue, GlobalValue};
+use inkwell::values::{FunctionValue, GlobalValue, IntValue};
+
+use crate::codegen::CodeGen;
+use crate::semantics::{SemanticType, SemanticTypeKind};
+
+pub(super) enum QLType {
+    Integer,
+    Bool,
+    String,
+    Array,
+    Struct,
+    Callable,
+}
 
 pub(super) struct Runtime<'ctxt> {
     pub(super) type_info_type: StructType<'ctxt>,
@@ -11,7 +23,7 @@ pub(super) struct Runtime<'ctxt> {
     pub(super) bool_type_info: GlobalValue<'ctxt>,
     pub(super) string_type_info: GlobalValue<'ctxt>,
     pub(super) array_type_info: GlobalValue<'ctxt>,
-
+    pub(super) callable_type_info: GlobalValue<'ctxt>,
     pub(super) print_integer: FunctionValue<'ctxt>,
     pub(super) print_boolean: FunctionValue<'ctxt>,
     pub(super) print_string: FunctionValue<'ctxt>,
@@ -66,6 +78,16 @@ pub(super) struct Runtime<'ctxt> {
     pub(super) prepared_update_bind_assignment: FunctionValue<'ctxt>,
     pub(super) prepared_update_exec: FunctionValue<'ctxt>,
     pub(super) prepared_update_finalize: FunctionValue<'ctxt>,
+
+    // Callable functions
+    pub(super) callable_new: FunctionValue<'ctxt>,
+    pub(super) callable_set_stmt: FunctionValue<'ctxt>,
+    pub(super) callable_capture: FunctionValue<'ctxt>,
+    pub(super) callable_get_fn: FunctionValue<'ctxt>,
+    pub(super) callable_get_context: FunctionValue<'ctxt>,
+    pub(super) callable_get_stmt: FunctionValue<'ctxt>,
+    pub(super) callable_add_ref: FunctionValue<'ctxt>,
+    pub(super) callable_remove_ref: FunctionValue<'ctxt>,
 }
 
 impl<'ctxt> Runtime<'ctxt> {
@@ -343,11 +365,60 @@ impl<'ctxt> Runtime<'ctxt> {
             Some(Linkage::External),
         );
 
+        // Callable functions
+        let callable_new = module.add_function(
+            "__ql__QLCallable_new",
+            ptr_type.fn_type(&[ptr_type.into(), int_type.into(), ptr_type.into()], false),
+            Some(Linkage::External),
+        );
+
+        let callable_set_stmt = module.add_function(
+            "__ql__QLCallable_set_stmt",
+            void_type.fn_type(&[ptr_type.into(), ptr_type.into()], false),
+            Some(Linkage::External),
+        );
+
+        let callable_capture = module.add_function(
+            "__ql__QLCallable_capture",
+            void_type.fn_type(&[ptr_type.into(), int_type.into(), ptr_type.into()], false),
+            Some(Linkage::External),
+        );
+
+        let callable_get_fn = module.add_function(
+            "__ql__QLCallable_get_fn",
+            ptr_type.fn_type(&[ptr_type.into()], false),
+            Some(Linkage::External),
+        );
+
+        let callable_get_context = module.add_function(
+            "__ql__QLCallable_get_context",
+            ptr_type.fn_type(&[ptr_type.into()], false),
+            Some(Linkage::External),
+        );
+
+        let callable_get_stmt = module.add_function(
+            "__ql__QLCallable_get_stmt",
+            ptr_type.fn_type(&[ptr_type.into()], false),
+            Some(Linkage::External),
+        );
+
+        let callable_add_ref = module.add_function(
+            "__ql__QLCallable_add_ref",
+            void_type.fn_type(&[ptr_type.into()], false),
+            Some(Linkage::External),
+        );
+
+        let callable_remove_ref = module.add_function(
+            "__ql__QLCallable_remove_ref",
+            void_type.fn_type(&[ptr_type.into()], false),
+            Some(Linkage::External),
+        );
+
         let type_info_type = context.opaque_struct_type("QLTypeInfo");
         type_info_type.set_body(
             &[
+                int_type.into(),       // type
                 long_type.into(),      // size
-                ptr_type.into(),       // elem_drop
                 int_type.into(),       // num_fields
                 ptr_type.into(),       // fields
             ],
@@ -357,8 +428,8 @@ impl<'ctxt> Runtime<'ctxt> {
         let struct_field_type = context.opaque_struct_type("StructField");
         struct_field_type.set_body(
             &[
-                int_type.into(),       // type enum
                 int_type.into(),       // offset
+                ptr_type.into(),       // type_info
             ],
             false,
         );
@@ -391,6 +462,13 @@ impl<'ctxt> Runtime<'ctxt> {
         );
         array_type_info.set_linkage(Linkage::External);
 
+        let callable_type_info = module.add_global(
+            type_info_type,
+            Some(AddressSpace::default()),
+            "__ql__QLCallable_type_info"
+        );
+        callable_type_info.set_linkage(Linkage::External);
+
         Runtime {
             type_info_type,
             struct_field_type,
@@ -398,6 +476,7 @@ impl<'ctxt> Runtime<'ctxt> {
             bool_type_info,
             string_type_info,
             array_type_info,
+            callable_type_info,
 
             print_integer,
             print_boolean,
@@ -447,6 +526,45 @@ impl<'ctxt> Runtime<'ctxt> {
             prepared_update_bind_assignment,
             prepared_update_exec,
             prepared_update_finalize,
+
+            callable_new,
+            callable_set_stmt,
+            callable_capture,
+            callable_get_fn,
+            callable_get_context,
+            callable_get_stmt,
+            callable_add_ref,
+            callable_remove_ref,
+        }
+    }
+}
+
+impl<'ctxt> CodeGen<'ctxt> {
+    // Convert to runtime QLType enum value
+    pub(super) fn get_qltype(&self, sem_type: &SemanticType) -> IntValue<'ctxt> {
+        let enum_value = match sem_type.kind() {
+            SemanticTypeKind::Integer => QLType::Integer,
+            SemanticTypeKind::Bool => QLType::Bool,
+            SemanticTypeKind::String => QLType::String,
+            SemanticTypeKind::Array(_) => QLType::Array,
+            SemanticTypeKind::NamedStruct(_, _) => QLType::Struct,
+            SemanticTypeKind::Callable(_, _) => QLType::Callable,
+            _ => panic!("Unsupported type for type enum conversion"),
+        } as u64;
+        self.int_type().const_int(enum_value, false)
+    }
+
+    pub(super) fn get_type_info(&self, sem_type: &SemanticType) -> GlobalValue<'ctxt> {
+        match sem_type.kind() {
+            SemanticTypeKind::Integer => self.runtime.int_type_info,
+            SemanticTypeKind::Bool => self.runtime.bool_type_info,
+            SemanticTypeKind::String => self.runtime.string_type_info,
+            SemanticTypeKind::Array(_) => self.runtime.array_type_info,
+            SemanticTypeKind::NamedStruct(struct_id, _) => {
+                self.struct_info[&struct_id].type_info   
+            },
+            SemanticTypeKind::Callable(_, _) => self.runtime.callable_type_info,
+            _ => panic!("Unsupported type for type info retrieval"),
         }
     }
 }

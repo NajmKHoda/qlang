@@ -6,26 +6,24 @@ table Person from data {
   occupation: str
 }
 
-function main() -> int {
-  let insert_person = query(_age: int, _name: str, _occupation: str) {
-    insert {
-      age: _age,
-      name: _name,
-      occupation: _occupation
-    } into Person
+function get_query_fn() -> () -> Person[] {
+  prints("Enter occupation of interest:");
+  let _occupation: str = inputs();
+  return query() {
+    select from Person
+    where occupation == _occupation
   };
+}
 
-  prints("Enter a name (or 'STOP'):");
-  let name = inputs();
-  while name != "STOP" {
-    prints("Age:");
-    let age = inputi();
-    prints("Occupation:");
-    let occupation = inputs();
-    insert_person(age, name, occupation);
-
-    prints("Enter another name (or 'STOP'):");
-    name = inputs();
+function main() -> int {
+  let get_by_age = get_query_fn();
+  let people: Person[] = get_by_age();
+  
+  let i = 0;
+  while i < people.length() {
+    let person = people[i];
+    prints(person.name);
+    i = i + 1;
   }
 }
 

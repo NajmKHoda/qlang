@@ -268,7 +268,7 @@ impl<'ctxt> CodeGen<'ctxt> {
                         self.runtime.prepared_select_bind_where,
                         &[
                             statement.into(),
-                            value.sem_type.to_type_enum(self.int_type()).into(),
+                            self.get_qltype(&value.sem_type).into(),
                             value_ptr.into(),
                         ],
                         "select_bind_where"
@@ -325,7 +325,7 @@ impl<'ctxt> CodeGen<'ctxt> {
                         &[
                             statement.into(),
                             self.context.i32_type().const_int(i as u64, false).into(),
-                            assignment.value.sem_type.to_type_enum(self.int_type()).into(),
+                            self.get_qltype(&assignment.value.sem_type).into(),
                             value_ptr.into(),
                         ],
                         &format!("update_bind_assign_{}", i)
@@ -339,7 +339,7 @@ impl<'ctxt> CodeGen<'ctxt> {
                         self.runtime.prepared_update_bind_where,
                         &[
                             statement.into(),
-                            value.sem_type.to_type_enum(self.int_type()).into(),
+                            self.get_qltype(&value.sem_type).into(),
                             value_ptr.into(),
                         ],
                         "update_bind_where"
@@ -361,7 +361,7 @@ impl<'ctxt> CodeGen<'ctxt> {
                         self.runtime.prepared_delete_bind_where,
                         &[
                             statement.into(),
-                            value.sem_type.to_type_enum(self.int_type()).into(),
+                            self.get_qltype(&value.sem_type).into(),
                             value_ptr.into(),
                         ],
                         "delete_bind_where"

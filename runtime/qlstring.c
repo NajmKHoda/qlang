@@ -7,8 +7,8 @@
 #include "qlstring.h"
 
 QLTypeInfo __ql__QLString_type_info = {
+    .type = TYPE_STRING,
     .size = sizeof(QLString*),
-    .elem_drop = __ql__QLString_elem_drop
 };
 
 QLString* __ql__QLString_new(char* raw_string, int length, bool is_global) {

@@ -80,4 +80,5 @@ QLArray* __ql__PreparedSelect_execute(PreparedSelect* prepared_select) {
 void __ql__PreparedSelect_finalize(PreparedSelect* prepared_select) {
     sqlite3_finalize(prepared_select->stmt);
     free(prepared_select);
+    fprintf(stderr, "finalize PreparedSelect\n");
 }

@@ -4,7 +4,7 @@ use inkwell::context::Context;
 use inkwell::module::Module;
 use inkwell::builder::Builder;
 use inkwell::targets::{FileType, Target, TargetData, TargetMachine};
-use inkwell::types::{IntType, PointerType, StructType, VoidType};
+use inkwell::types::{IntType, PointerType, VoidType};
 use inkwell::values::{AnyValue, FunctionValue, GlobalValue, PointerValue};
 
 use crate::semantics::{SemanticExpression, SemanticExpressionKind, SemanticProgram, SemanticStatement, SemanticTypeKind};
@@ -46,7 +46,6 @@ pub struct CodeGen<'ctxt> {
 
     cur_fn: Option<FunctionValue<'ctxt>>,
     vars_to_drop: Vec<u32>,
-    callable_struct_type: StructType<'ctxt>,
 
     context: &'ctxt Context,
     builder: Builder<'ctxt>,
@@ -177,7 +176,7 @@ impl<'ctxt> CodeGen<'ctxt> {
                 self.gen_array(elements, &elem_type)
             }
             SemanticExpressionKind::Closure(closure_id) => {
-                self.gen_closure_instance(*closure_id)
+                self.gen_callable(*closure_id)
             }
             SemanticExpressionKind::Variable(var_id) => {
                 self.load_var(*var_id)
@@ -246,12 +245,6 @@ impl<'ctxt> CodeGen<'ctxt> {
         module.set_triple(&target_triple);
         module.set_data_layout(&data_layout);
 
-        let callable_struct_type = context.opaque_struct_type("__ql__callable");
-        callable_struct_type.set_body(&[
-            context.ptr_type(Default::default()).into(), // Function pointer
-            context.ptr_type(Default::default()).into() // Context pointer for closures
-        ], false);
-
         let codegen = CodeGen {
             program,
             datasource_ptrs: HashMap::new(),
@@ -265,7 +258,6 @@ impl<'ctxt> CodeGen<'ctxt> {
             strings: HashMap::new(),
             cur_fn: None,
             vars_to_drop: vec![],
-            callable_struct_type,
             context: &context,
             builder,
             module,

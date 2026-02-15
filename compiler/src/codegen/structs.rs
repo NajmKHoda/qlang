@@ -1,8 +1,8 @@
 use std::{collections::HashMap};
 
-use inkwell::{AddressSpace, types::{BasicTypeEnum, IntType, StructType}, values::{ArrayValue, FunctionValue, GlobalValue, IntValue, PointerValue, StructValue}};
+use inkwell::{AddressSpace, types::{BasicTypeEnum, StructType}, values::{ArrayValue, FunctionValue, GlobalValue, StructValue}};
 
-use crate::{codegen::{CodeGenError, data::GenValue}, semantics::{Ownership, SemanticExpression, SemanticStruct, SemanticType, SemanticTypeKind}};
+use crate::{codegen::{CodeGenError, data::GenValue, runtime::QLType}, semantics::{Ownership, SemanticExpression, SemanticStruct, SemanticType }};
 
 use super::CodeGen;
 
@@ -11,19 +11,6 @@ pub(super) struct GenStructInfo<'a> {
     pub(super) type_info: GlobalValue<'a>,
     pub(super) copy_fn: Option<FunctionValue<'a>>,
     pub(super) drop_fn: Option<FunctionValue<'a>>,
-}
-
-impl SemanticType {
-    pub(super) fn to_type_enum<'a>(&self, int_type: IntType<'a>) -> IntValue<'a> {
-        let enum_value = match self.kind() {
-            SemanticTypeKind::Integer => 0,
-            SemanticTypeKind::Bool => 1,
-            SemanticTypeKind::String => 2,
-            SemanticTypeKind::Array(_) => 3,
-            _ => panic!("Unsupported type for type enum conversion"),
-        };
-        int_type.const_int(enum_value, false)
-    }
 }
 
 impl<'ctxt> CodeGen<'ctxt> {
@@ -93,50 +80,62 @@ impl<'ctxt> CodeGen<'ctxt> {
         Ok(drop_fn_value)
     }
 
-    fn create_elem_drop_fn(
-        &self,
-        sem_struct: &SemanticStruct,
-        struct_type: StructType<'ctxt>,
-        drop_fn: FunctionValue<'ctxt>,
-    ) -> Result<PointerValue<'ctxt>, CodeGenError> {
-        let elem_drop_type = self.void_type().fn_type(
-            &[self.context.ptr_type(Default::default()).into()],
-            false
-        );
-        let elem_drop_fn = self.module.add_function(
-            &format!("__ql__{}_elem_drop", sem_struct.name),
-            elem_drop_type,
-            None
-        );
-        let elem_drop_entry = self.context.append_basic_block(elem_drop_fn, "entry");
-        self.builder.position_at_end(elem_drop_entry);
-        
-        let ptr_arg = elem_drop_fn.get_nth_param(0).unwrap().into_pointer_value();
-        let struct_val = self.builder.build_load(struct_type, ptr_arg, "struct_val")?
-        .into_struct_value();
-        
-        self.builder.build_call(drop_fn, &[struct_val.into()], "call_drop")?;
-        
-        self.builder.build_return(None)?;
-        Ok(elem_drop_fn.as_global_value().as_pointer_value().into())
-    }
-
-    pub fn gen_struct(&mut self, sem_struct: &SemanticStruct) -> Result<(), CodeGenError> {
-        let field_types = sem_struct.field_order.iter()
-            .map(|field_name| {
-                let field_type = &sem_struct.fields[field_name];
-                self.llvm_basic_type(field_type)
-            })
+    pub(super) fn gen_struct_type_info(&mut self, name: &str, field_types: &[&SemanticType])
+        -> Result<(StructType<'ctxt>, GlobalValue<'ctxt>), CodeGenError>
+    {
+        let llvm_field_types = field_types.iter()
+            .map(|ty| self.llvm_basic_type(ty))
             .collect::<Vec<BasicTypeEnum>>();
 
-        let struct_type = self.context.opaque_struct_type(&sem_struct.name);
-        struct_type.set_body(&field_types, false);
+        let struct_type = self.context.opaque_struct_type(name);
+        struct_type.set_body(&llvm_field_types, false);
+        let num_fields = field_types.len() as u32;
+        let fields_arr: ArrayValue = self.runtime.struct_field_type
+            .const_array(&field_types.iter().enumerate()
+            .map(|(i, field_type)| {
+                let offset = self.target_data.offset_of_element(&struct_type, i as u32).unwrap();
+                self.runtime.struct_field_type.const_named_struct(&[
+                    self.int_type().const_int(offset, false).into(),
+                    self.get_type_info(field_type).as_pointer_value().into(),
+                ])
+            })
+            .collect::<Vec<StructValue>>());
+        let fields_global = self.module.add_global(
+            self.runtime.struct_field_type.array_type(num_fields),
+            Some(AddressSpace::default()),
+            &format!("__ql__{}_fields", name)
+        );
+        fields_global.set_initializer(&fields_arr);
+        fields_global.set_constant(true);
+
+        let type_info_value = self.runtime.type_info_type.const_named_struct(&[
+            self.int_type().const_int(QLType::Struct as u64, false).into(),
+            struct_type.size_of().unwrap().into(),
+            self.int_type().const_int(num_fields as u64, false).into(),
+            fields_global.as_pointer_value().into(),
+        ]);
+        let type_info_global = self.module.add_global(
+            self.runtime.type_info_type,
+            Some(AddressSpace::default()),
+            &format!("__ql__{}_type_info", name)
+        );
+        type_info_global.set_initializer(&type_info_value);
+        type_info_global.set_constant(true);
+
+        Ok((struct_type, type_info_global))
+    }
+
+    pub fn gen_struct(&mut self, sem_struct: &SemanticStruct) -> Result<(), CodeGenError> {        
+        let (struct_type, type_info_global) = self.gen_struct_type_info(
+            &sem_struct.name,
+            sem_struct.field_order.iter()
+                .map(|field_name| &sem_struct.fields[field_name])
+                .collect::<Vec<&SemanticType>>().as_slice()
+        )?;
         
-        let num_fields = sem_struct.field_order.len() as u32;
         let has_heap_fields = sem_struct.fields
             .values()
             .any(|field_type| field_type.can_be_owned());
-
         let (copy_fn, drop_fn) = if has_heap_fields {
             let copy_fn = self.create_copy_fn(sem_struct, struct_type)?;
             let drop_fn = self.create_drop_fn(sem_struct, struct_type)?;
@@ -144,44 +143,6 @@ impl<'ctxt> CodeGen<'ctxt> {
         } else {
             (None, None)
         };
-
-        let elem_drop_fn_ptr = match drop_fn {
-            Some(drop_fn) => self.create_elem_drop_fn(sem_struct, struct_type, drop_fn)?,
-            None => self.ptr_type().const_null().into(),
-        };
-
-        let fields_arr: ArrayValue = self.runtime.struct_field_type
-            .const_array(&sem_struct.field_order.iter().enumerate()
-            .map(|(i, field_name)| {
-                let field_type = &sem_struct.fields[field_name];
-                let offset = self.target_data.offset_of_element(&struct_type, i as u32).unwrap();
-                self.runtime.struct_field_type.const_named_struct(&[
-                    field_type.to_type_enum(self.int_type()).into(),
-                    self.context.i32_type().const_int(offset, false).into(),
-                ])
-            })
-            .collect::<Vec<StructValue>>());
-        let fields_global = self.module.add_global(
-            self.runtime.struct_field_type.array_type(num_fields),
-            Some(AddressSpace::default()),
-            &format!("__ql__{}_fields", sem_struct.name)
-        );
-        fields_global.set_initializer(&fields_arr);
-        fields_global.set_constant(true);
-
-        let type_info_value = self.runtime.type_info_type.const_named_struct(&[
-            struct_type.size_of().unwrap().into(),
-            elem_drop_fn_ptr.into(),
-            self.context.i32_type().const_int(num_fields as u64, false).into(),
-            fields_global.as_pointer_value().into(),
-        ]);
-        let type_info_global = self.module.add_global(
-            self.runtime.type_info_type,
-            Some(AddressSpace::default()),
-            &format!("__ql__{}_type_info", sem_struct.name)
-        );
-        type_info_global.set_initializer(&type_info_value);
-        type_info_global.set_constant(true);
 
         self.struct_info.insert(sem_struct.id, GenStructInfo {
             struct_type,

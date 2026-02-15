@@ -22,7 +22,10 @@ pub enum GenValue<'a> {
         struct_id: u32,
         ownership: Ownership
     },
-    Callable(StructValue<'a>),
+    Callable {
+        value: PointerValue<'a>,
+        ownership: Ownership
+    },
     Void
 }
 
@@ -45,7 +48,10 @@ impl<'a> GenValue<'a> {
                 struct_id,
                 ownership: ownership
             },
-            SemanticTypeKind::Callable(_,_) => GenValue::Callable(llvm_value.into_struct_value()),
+            SemanticTypeKind::Callable(_,_) => GenValue::Callable {
+                value: llvm_value.into_pointer_value(),
+                ownership: ownership
+            },
             SemanticTypeKind::Void => GenValue::Void,
             _ => panic!("Incomplete type found in semantic IR"),
         }
@@ -55,7 +61,8 @@ impl<'a> GenValue<'a> {
         match self {
             GenValue::String { ownership, .. }
             | GenValue::Array { ownership, .. }
-            | GenValue::Struct { ownership, .. } => *ownership,
+            | GenValue::Struct { ownership, .. }
+            | GenValue::Callable { ownership, .. } => *ownership,
             _ => Ownership::Trivial,
         }
     }
@@ -67,7 +74,7 @@ impl<'a> GenValue<'a> {
             GenValue::String { value: str_val, .. } => BasicValueEnum::PointerValue(*str_val),
             GenValue::Array { value: arr_val, .. } => BasicValueEnum::PointerValue(*arr_val),
             GenValue::Struct { value: struct_val, .. } => BasicValueEnum::StructValue(*struct_val),
-            GenValue::Callable(callable_val) => BasicValueEnum::StructValue(*callable_val),
+            GenValue::Callable { value: callable_val, .. } => BasicValueEnum::PointerValue(*callable_val),
             GenValue::Void => panic!("Unexpected void value"),
         }
     }
@@ -99,6 +106,13 @@ impl<'ctxt> CodeGen<'ctxt> {
                     )?;
                 }
             }
+            GenValue::Callable { value: callable_ptr, ownership: Ownership::Borrowed } => {
+                self.builder.build_call(
+                    self.runtime.callable_add_ref,
+                    &[(*callable_ptr).into()],
+                    "callable_add_ref"
+                )?;
+            }
             _ => { }
         }
         Ok(())
@@ -129,6 +143,13 @@ impl<'ctxt> CodeGen<'ctxt> {
                     )?;
                 }
             }
+            GenValue::Callable { value: callable_ptr, .. } => {
+                self.builder.build_call(
+                    self.runtime.callable_remove_ref,
+                    &[callable_ptr.into()],
+                    "callable_remove_ref"
+                )?;
+            }
             _ => { }
         }
         Ok(())
@@ -148,7 +169,7 @@ impl<'ctxt> CodeGen<'ctxt> {
             SemanticTypeKind::String => self.ptr_type().into(),
             SemanticTypeKind::Array(_) => self.ptr_type().into(),
             SemanticTypeKind::NamedStruct(id, _) => self.struct_info[&id].struct_type.into(),
-            SemanticTypeKind::Callable(_, _) => self.callable_struct_type.into(),
+            SemanticTypeKind::Callable(_, _) => self.ptr_type().into(),
             _ => panic!("Incomplete type found in semantic IR"),
         }
     }

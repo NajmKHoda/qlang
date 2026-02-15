@@ -22,10 +22,6 @@ impl SemanticClosureBody {
             terminates: false,
         })
     }
-
-    pub fn is_query(&self) -> bool {
-        matches!(self, SemanticClosureBody::Query(_))
-    }
 }
 
 impl SemanticGen {
