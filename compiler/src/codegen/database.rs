@@ -53,7 +53,7 @@ impl<'ctxt> CodeGen<'ctxt> {
 
         // Call into the runtime to initialize databases
         self.builder.build_call(
-            self.runtime_functions.init_dbs.into(),
+            self.runtime.init_dbs.into(),
             &[
                 argc.into(),
                 argv.into(),
@@ -69,7 +69,7 @@ impl<'ctxt> CodeGen<'ctxt> {
     pub(super) fn close_databases(&self, db_ptr_arr: PointerValue<'ctxt>) -> Result<(), CodeGenError> {
         let num_dbs = self.datasource_ptrs.len() as u32;
         self.builder.build_call(
-            self.runtime_functions.close_dbs.into(),
+            self.runtime.close_dbs.into(),
             &[
                 self.context.i32_type().const_int(num_dbs as u64, false).into(),
                 db_ptr_arr.into(),
@@ -93,7 +93,7 @@ impl<'ctxt> CodeGen<'ctxt> {
                 let table_info = &self.table_info[table_id];
                 let struct_info = &self.struct_info[&table.struct_id];
                 let select_plan_ptr = self.builder.build_call(
-                    self.runtime_functions.select_plan_new,
+                    self.runtime.select_plan_new,
                     &[
                         table_info.name_str.as_pointer_value().into(),
                         struct_info.type_info.as_pointer_value().into(),
@@ -104,7 +104,7 @@ impl<'ctxt> CodeGen<'ctxt> {
                 if let Some(WhereClause { column_index, .. }) = where_clause {
                     let column_name_str = table_info.column_name_strs[*column_index as usize];
                     self.builder.build_call(
-                        self.runtime_functions.select_plan_set_where,
+                        self.runtime.select_plan_set_where,
                         &[
                             select_plan_ptr.into(),
                             column_name_str.as_pointer_value().into(),
@@ -120,7 +120,7 @@ impl<'ctxt> CodeGen<'ctxt> {
                     "load_database_ptr"
                 )?.into_pointer_value();
                 let prepared_select = self.builder.build_call(
-                    self.runtime_functions.select_plan_prepare,
+                    self.runtime.select_plan_prepare,
                     &[database_ptr.into(), select_plan_ptr.into()],
                     "prepared_select"
                 )?.as_any_value_enum().into_pointer_value();
@@ -132,7 +132,7 @@ impl<'ctxt> CodeGen<'ctxt> {
                 let table_info = &self.table_info[table_id];
                 let struct_info = &self.struct_info[&table.struct_id];
                 let insert_plan_ptr = self.builder.build_call(
-                    self.runtime_functions.insert_plan_new,
+                    self.runtime.insert_plan_new,
                     &[
                         table_info.name_str.as_pointer_value().into(),
                         struct_info.type_info.as_pointer_value().into(),
@@ -147,7 +147,7 @@ impl<'ctxt> CodeGen<'ctxt> {
                     "load_database_ptr"
                 )?.into_pointer_value();
                 let prepared_insert = self.builder.build_call(
-                    self.runtime_functions.insert_plan_prepare,
+                    self.runtime.insert_plan_prepare,
                     &[database_ptr.into(), insert_plan_ptr.into()],
                     "prepared_insert"
                 )?.as_any_value_enum().into_pointer_value();
@@ -177,7 +177,7 @@ impl<'ctxt> CodeGen<'ctxt> {
                 }
 
                 let update_plan_ptr = self.builder.build_call(
-                    self.runtime_functions.update_plan_new,
+                    self.runtime.update_plan_new,
                     &[
                         table_info.name_str.as_pointer_value().into(),
                         self.int_type().const_int(assignments.len() as u64, false).into(),
@@ -189,7 +189,7 @@ impl<'ctxt> CodeGen<'ctxt> {
                 if let Some(WhereClause { column_index, .. }) = where_clause {
                     let column_name_str = table_info.column_name_strs[*column_index as usize];
                     self.builder.build_call(
-                        self.runtime_functions.update_plan_set_where,
+                        self.runtime.update_plan_set_where,
                         &[
                             update_plan_ptr.into(),
                             column_name_str.as_pointer_value().into(),
@@ -205,7 +205,7 @@ impl<'ctxt> CodeGen<'ctxt> {
                     "load_database_ptr"
                 )?.into_pointer_value();
                 let prepared_update = self.builder.build_call(
-                    self.runtime_functions.update_plan_prepare,
+                    self.runtime.update_plan_prepare,
                     &[database_ptr.into(), update_plan_ptr.into()],
                     "prepared_update"
                 )?.as_any_value_enum().into_pointer_value();
@@ -217,7 +217,7 @@ impl<'ctxt> CodeGen<'ctxt> {
                 let table_info = &self.table_info[table_id];
                 let struct_info = &self.struct_info[&table.struct_id];
                 let select_plan_ptr = self.builder.build_call(
-                    self.runtime_functions.delete_plan_new,
+                    self.runtime.delete_plan_new,
                     &[
                         table_info.name_str.as_pointer_value().into(),
                         struct_info.type_info.as_pointer_value().into(),
@@ -228,7 +228,7 @@ impl<'ctxt> CodeGen<'ctxt> {
                 if let Some(WhereClause { column_index, .. }) = where_clause {
                     let column_name_str = table_info.column_name_strs[*column_index as usize];
                     self.builder.build_call(
-                        self.runtime_functions.delete_plan_set_where,
+                        self.runtime.delete_plan_set_where,
                         &[
                             select_plan_ptr.into(),
                             column_name_str.as_pointer_value().into(),
@@ -244,7 +244,7 @@ impl<'ctxt> CodeGen<'ctxt> {
                     "load_database_ptr"
                 )?.into_pointer_value();
                 let prepared_delete = self.builder.build_call(
-                    self.runtime_functions.delete_plan_prepare,
+                    self.runtime.delete_plan_prepare,
                     &[database_ptr.into(), select_plan_ptr.into()],
                     "prepared_delete"
                 )?.as_any_value_enum().into_pointer_value();
@@ -265,7 +265,7 @@ impl<'ctxt> CodeGen<'ctxt> {
                     let gen_value = self.gen_eval(value)?;
                     let value_ptr = self.place_onto_stack(&gen_value)?;
                     self.builder.build_call(
-                        self.runtime_functions.prepared_select_bind_where,
+                        self.runtime.prepared_select_bind_where,
                         &[
                             statement.into(),
                             value.sem_type.to_type_enum(self.int_type()).into(),
@@ -275,7 +275,7 @@ impl<'ctxt> CodeGen<'ctxt> {
                     )?;
                 }
                 let result = self.builder.build_call(
-                    self.runtime_functions.prepared_select_execute.into(),
+                    self.runtime.prepared_select_execute.into(),
                     &[statement.into()],
                     "execute_select"
                 )?.as_any_value_enum().into_pointer_value();
@@ -295,7 +295,7 @@ impl<'ctxt> CodeGen<'ctxt> {
                 match gen_value {
                     GenValue::Array { value: llvm_value, .. } => {
                         self.builder.build_call(
-                            self.runtime_functions.prepared_insert_exec_array.into(),
+                            self.runtime.prepared_insert_exec_array.into(),
                             &[statement.into(), llvm_value.into()],
                             "insert_exec_array"
                         )?;
@@ -303,7 +303,7 @@ impl<'ctxt> CodeGen<'ctxt> {
                     GenValue::Struct { .. } => {
                         let data_ptr = self.place_onto_stack(&gen_value)?;
                         self.builder.build_call(
-                            self.runtime_functions.prepared_insert_exec_row.into(),
+                            self.runtime.prepared_insert_exec_row.into(),
                             &[statement.into(), data_ptr.into()],
                             "insert_exec_row"
                         )?;
@@ -321,7 +321,7 @@ impl<'ctxt> CodeGen<'ctxt> {
                     )?;
                     self.builder.build_store(value_ptr, gen_value)?;
                     self.builder.build_call(
-                        self.runtime_functions.prepared_update_bind_assignment,
+                        self.runtime.prepared_update_bind_assignment,
                         &[
                             statement.into(),
                             self.context.i32_type().const_int(i as u64, false).into(),
@@ -336,7 +336,7 @@ impl<'ctxt> CodeGen<'ctxt> {
                     let gen_value = self.gen_eval(value)?;
                     let value_ptr = self.place_onto_stack(&gen_value)?;
                     self.builder.build_call(
-                        self.runtime_functions.prepared_update_bind_where,
+                        self.runtime.prepared_update_bind_where,
                         &[
                             statement.into(),
                             value.sem_type.to_type_enum(self.int_type()).into(),
@@ -347,7 +347,7 @@ impl<'ctxt> CodeGen<'ctxt> {
                 }
 
                 self.builder.build_call(
-                    self.runtime_functions.prepared_update_exec.into(),
+                    self.runtime.prepared_update_exec.into(),
                     &[statement.into()],
                     "execute_update"
                 )?;
@@ -358,7 +358,7 @@ impl<'ctxt> CodeGen<'ctxt> {
                     let gen_value = self.gen_eval(value)?;
                     let value_ptr = self.place_onto_stack(&gen_value)?;
                     self.builder.build_call(
-                        self.runtime_functions.prepared_delete_bind_where,
+                        self.runtime.prepared_delete_bind_where,
                         &[
                             statement.into(),
                             value.sem_type.to_type_enum(self.int_type()).into(),
@@ -369,7 +369,7 @@ impl<'ctxt> CodeGen<'ctxt> {
                 }
 
                 self.builder.build_call(
-                    self.runtime_functions.prepared_delete_exec.into(),
+                    self.runtime.prepared_delete_exec.into(),
                     &[statement.into()],
                     "execute_delete"
                 )?.as_any_value_enum().into_pointer_value();
@@ -387,28 +387,28 @@ impl<'ctxt> CodeGen<'ctxt> {
         match query {
             SemanticQuery::Select { .. } => {
                 self.builder.build_call(
-                    self.runtime_functions.prepared_select_finalize.into(),
+                    self.runtime.prepared_select_finalize.into(),
                     &[statement.into()],
                     "finalize_select"
                 )?;
             },
             SemanticQuery::Insert { .. } => {
                 self.builder.build_call(
-                    self.runtime_functions.prepared_insert_finalize.into(),
+                    self.runtime.prepared_insert_finalize.into(),
                     &[statement.into()],
                     "finalize_insert"
                 )?;
             },
             SemanticQuery::Update { .. } => {
                 self.builder.build_call(
-                    self.runtime_functions.prepared_update_finalize.into(),
+                    self.runtime.prepared_update_finalize.into(),
                     &[statement.into()],
                     "finalize_update"
                 )?;
             },
             SemanticQuery::Delete { .. } => {
                 self.builder.build_call(
-                    self.runtime_functions.prepared_delete_finalize.into(),
+                    self.runtime.prepared_delete_finalize.into(),
                     &[statement.into()],
                     "finalize_delete"
                 )?;

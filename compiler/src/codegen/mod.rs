@@ -28,7 +28,7 @@ use table::GenTableInfo;
 use structs::GenStructInfo;
 use control_flow::GenLoopInfo;
 use closure::GenClosureInfo;
-use runtime::RuntimeFunctions;
+use runtime::Runtime;
 pub use error::CodeGenError;
 
 pub struct CodeGen<'ctxt> {
@@ -41,7 +41,7 @@ pub struct CodeGen<'ctxt> {
     struct_info: HashMap<u32, GenStructInfo<'ctxt>>,
     loop_info: HashMap<u32, GenLoopInfo<'ctxt>>,
     closure_info: HashMap<u32, GenClosureInfo<'ctxt>>,
-    runtime_functions: RuntimeFunctions<'ctxt>,
+    runtime: Runtime<'ctxt>,
     strings: HashMap<String, GlobalValue<'ctxt>>,
 
     cur_fn: Option<FunctionValue<'ctxt>>,
@@ -261,7 +261,7 @@ impl<'ctxt> CodeGen<'ctxt> {
             struct_info: HashMap::new(),
             loop_info: HashMap::new(),
             closure_info: HashMap::new(),
-            runtime_functions: RuntimeFunctions::new(&context, &module),
+            runtime: Runtime::new(&context, &module),
             strings: HashMap::new(),
             cur_fn: None,
             vars_to_drop: vec![],

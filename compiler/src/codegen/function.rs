@@ -86,7 +86,7 @@ impl<'ctxt> CodeGen<'ctxt> {
 			BuiltinFunction::PrintString => {
 				let str_val = &arg_values[0];
 				self.builder.build_call(
-					self.runtime_functions.print_string,
+					self.runtime.print_string,
 					&[str_val.as_llvm_basic_value().into()],
 					"print_string"
 				)?;
@@ -95,7 +95,7 @@ impl<'ctxt> CodeGen<'ctxt> {
 			BuiltinFunction::PrintInteger => {
 				let int_val = &arg_values[0];
 				self.builder.build_call(
-					self.runtime_functions.print_integer,
+					self.runtime.print_integer,
 					&[int_val.as_llvm_basic_value().into()],
 					"print_integer"
 				)?;
@@ -104,7 +104,7 @@ impl<'ctxt> CodeGen<'ctxt> {
 			BuiltinFunction::PrintBool => {
 				let bool_val = &arg_values[0];
 				self.builder.build_call(
-					self.runtime_functions.print_boolean,
+					self.runtime.print_boolean,
 					&[bool_val.as_llvm_basic_value().into()],
 					"print_boolean"
 				)?;
@@ -112,7 +112,7 @@ impl<'ctxt> CodeGen<'ctxt> {
 			}
 			BuiltinFunction::InputString => {
 				let input = self.builder.build_call(
-					self.runtime_functions.input_string,
+					self.runtime.input_string,
 					&[],
 					"input_string"
 				)?.as_any_value_enum().into_pointer_value();
@@ -123,7 +123,7 @@ impl<'ctxt> CodeGen<'ctxt> {
 			}
 			BuiltinFunction::InputInteger => {
 				let input = self.builder.build_call(
-					self.runtime_functions.input_integer,
+					self.runtime.input_integer,
 					&[],
 					"input_integer"
 				)?.as_any_value_enum().into_int_value();

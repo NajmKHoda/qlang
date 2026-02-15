@@ -150,33 +150,33 @@ impl<'ctxt> CodeGen<'ctxt> {
             None => self.ptr_type().const_null().into(),
         };
 
-        let fields_arr: ArrayValue = self.runtime_functions.struct_field_type
+        let fields_arr: ArrayValue = self.runtime.struct_field_type
             .const_array(&sem_struct.field_order.iter().enumerate()
             .map(|(i, field_name)| {
                 let field_type = &sem_struct.fields[field_name];
                 let offset = self.target_data.offset_of_element(&struct_type, i as u32).unwrap();
-                self.runtime_functions.struct_field_type.const_named_struct(&[
+                self.runtime.struct_field_type.const_named_struct(&[
                     field_type.to_type_enum(self.int_type()).into(),
                     self.context.i32_type().const_int(offset, false).into(),
                 ])
             })
             .collect::<Vec<StructValue>>());
         let fields_global = self.module.add_global(
-            self.runtime_functions.struct_field_type.array_type(num_fields),
+            self.runtime.struct_field_type.array_type(num_fields),
             Some(AddressSpace::default()),
             &format!("__ql__{}_fields", sem_struct.name)
         );
         fields_global.set_initializer(&fields_arr);
         fields_global.set_constant(true);
 
-        let type_info_value = self.runtime_functions.type_info_type.const_named_struct(&[
+        let type_info_value = self.runtime.type_info_type.const_named_struct(&[
             struct_type.size_of().unwrap().into(),
             elem_drop_fn_ptr.into(),
             self.context.i32_type().const_int(num_fields as u64, false).into(),
             fields_global.as_pointer_value().into(),
         ]);
         let type_info_global = self.module.add_global(
-            self.runtime_functions.type_info_type,
+            self.runtime.type_info_type,
             Some(AddressSpace::default()),
             &format!("__ql__{}_type_info", sem_struct.name)
         );

@@ -4,7 +4,7 @@ use inkwell::{context::Context};
 use inkwell::module::{Linkage, Module};
 use inkwell::values::{FunctionValue, GlobalValue};
 
-pub(super) struct RuntimeFunctions<'ctxt> {
+pub(super) struct Runtime<'ctxt> {
     pub(super) type_info_type: StructType<'ctxt>,
     pub(super) struct_field_type: StructType<'ctxt>,
     pub(super) int_type_info: GlobalValue<'ctxt>,
@@ -68,7 +68,7 @@ pub(super) struct RuntimeFunctions<'ctxt> {
     pub(super) prepared_update_finalize: FunctionValue<'ctxt>,
 }
 
-impl<'ctxt> RuntimeFunctions<'ctxt> {
+impl<'ctxt> Runtime<'ctxt> {
     pub(super) fn new(context: &'ctxt Context, module: &Module<'ctxt>) -> Self {
         let void_type = context.void_type();
         let int_type = context.i32_type();
@@ -391,7 +391,7 @@ impl<'ctxt> RuntimeFunctions<'ctxt> {
         );
         array_type_info.set_linkage(Linkage::External);
 
-        RuntimeFunctions {
+        Runtime {
             type_info_type,
             struct_field_type,
             int_type_info,
