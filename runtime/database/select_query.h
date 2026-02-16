@@ -23,7 +23,7 @@ SelectPlan* __ql__SelectPlan_new(char* table_name, QLTypeInfo* struct_type_info)
 void __ql__SelectPlan_set_where(SelectPlan* plan, char* column_name);
 PreparedSelect* __ql__SelectPlan_prepare(struct sqlite3* db, SelectPlan* plan);
 
-void __ql__PreparedSelect_bind_where(PreparedSelect* prepared_select, QLType value_type, void* value);
+void __ql__PreparedSelect_bind_where(PreparedSelect* prepared_select, ColumnType value_type, void* value);
 QLArray* __ql__PreparedSelect_execute(PreparedSelect* prepared_select);
 void __ql__PreparedSelect_finalize(PreparedSelect* prepared_select);
 

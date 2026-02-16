@@ -2,12 +2,12 @@
 #include <string.h>
 #include <stdio.h>
 #include "metadata.h"
-#include "memory.h"
 #include "array.h"
 
 QLTypeInfo __ql__QLArray_type_info = {
-    .type = TYPE_ARRAY,
-    .size = sizeof(QLArray*)
+    .size = sizeof(QLArray*),
+    .copy = (void (*)(void*)) __ql__QLArray_copy,
+    .drop = (void (*)(void*)) __ql__QLArray_drop
 };
 
 static inline void* __ql__QLArray_get_nth_elem(QLArray* array, unsigned int n) {
@@ -40,25 +40,25 @@ QLArray* __ql__QLArray_new(void* elems, unsigned int num_elems, QLTypeInfo* type
     return array;
 }
 
-void __ql__QLArray_add_ref(QLArray* array) {
+void __ql__QLArray_copy(QLArray** array_ptr) {
+    QLArray* array = *array_ptr;
     array->ref_count++;
 }
 
-void __ql__QLArray_remove_ref(QLArray* array) {
+void __ql__QLArray_drop(QLArray** array_ptr) {
+    QLArray* array = *array_ptr;
     array->ref_count--;
     if (array->ref_count == 0) {
-        for (unsigned int i = 0; i < array->num_elems; i++) {
-            void* elem_ptr = __ql__QLArray_get_nth_elem(array, i);
-            __ql__drop_value(elem_ptr, array->type_info);
+        if (array->type_info->drop != NULL) {
+            for (unsigned int i = 0; i < array->num_elems; i++) {
+                void* elem_ptr = __ql__QLArray_get_nth_elem(array, i);
+                array->type_info->drop(elem_ptr);
+            }
         }
         free(array->elems);
         free(array);
         fprintf(stderr, "free(array %p)\n", (void*)array);
     }
-}
-
-void __ql__QLArray_elem_drop(void* array_ptr) {
-    __ql__QLArray_remove_ref(*(QLArray**)array_ptr);
 }
 
 void* __ql__QLArray_index(QLArray* array, unsigned int index) {

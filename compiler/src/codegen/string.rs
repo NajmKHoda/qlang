@@ -23,14 +23,9 @@ impl<'ctxt> CodeGen<'ctxt> {
 
     pub(super) fn drop_const_strs(&self) -> Result<(), CodeGenError> {
         for (_, global_val) in &self.strings {
-            let str_ptr = self.builder.build_load(
-                self.ptr_type(),
-                global_val.as_pointer_value(),
-                "const_str_load_for_drop"
-            )?.into_pointer_value();
             self.builder.build_call(
-                self.runtime.remove_string_ref,
-                &[str_ptr.into()],
+                self.runtime.string_drop,
+                &[global_val.as_pointer_value().into()],
                 "remove_const_str"
             )?;
         }

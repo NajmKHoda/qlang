@@ -3,7 +3,7 @@ use std::path::Path;
 use inkwell::context::Context;
 use inkwell::module::Module;
 use inkwell::builder::Builder;
-use inkwell::targets::{FileType, Target, TargetData, TargetMachine};
+use inkwell::targets::{FileType, Target, TargetMachine};
 use inkwell::types::{IntType, PointerType, VoidType};
 use inkwell::values::{AnyValue, FunctionValue, GlobalValue, PointerValue};
 
@@ -50,7 +50,6 @@ pub struct CodeGen<'ctxt> {
     context: &'ctxt Context,
     builder: Builder<'ctxt>,
     module: Module<'ctxt>,
-    target_data: TargetData,
 }
 
 impl<'ctxt> CodeGen<'ctxt> {
@@ -127,7 +126,7 @@ impl<'ctxt> CodeGen<'ctxt> {
             }
             SemanticStatement::LoneExpression(expr) => {
                 let value = self.gen_eval(expr)?;
-                self.remove_if_owned(value)
+                self.remove_if_owned(value, &expr.sem_type)
             }
             SemanticStatement::Conditional { branches, else_branch } => {
                 self.gen_conditional(branches, else_branch)
@@ -191,19 +190,13 @@ impl<'ctxt> CodeGen<'ctxt> {
                 self.gen_array_index(array_value, index_value)
             }
             SemanticExpressionKind::Add { left, right } => {
-                let val1 = self.gen_eval(&left)?;
-                let val2 = self.gen_eval(&right)?;
-                self.gen_add(val1, val2)
+                self.gen_add(left, right)
             }
             SemanticExpressionKind::Subtract { left, right } => {
-                let val1 = self.gen_eval(&left)?;
-                let val2 = self.gen_eval(&right)?;
-                self.gen_subtract(val1, val2)
+                self.gen_subtract(left, right)
             }
             SemanticExpressionKind::Compare { left, right, op } => {
-                let val1 = self.gen_eval(&left)?;
-                let val2 = self.gen_eval(&right)?;
-                self.gen_compare(val1, val2, *op)
+                self.gen_compare(left, right, *op)
             }
             SemanticExpressionKind::DirectFunctionCall { function_id, args } => {
                 self.gen_direct_call(*function_id, args)
@@ -261,7 +254,6 @@ impl<'ctxt> CodeGen<'ctxt> {
             context: &context,
             builder,
             module,
-            target_data,
         };
 
         let module = codegen._gen_code()?;

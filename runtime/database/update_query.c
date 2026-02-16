@@ -49,14 +49,14 @@ PreparedUpdate* __ql__UpdatePlan_prepare(sqlite3* db, UpdatePlan* plan) {
     return prepared_update;
 }
 
-void __ql__PreparedUpdate_bind_where(PreparedUpdate* prepared_update, QLType value_type, void* value) {
+void __ql__PreparedUpdate_bind_where(PreparedUpdate* prepared_update, ColumnType value_type, void* value) {
     __ql__bind_value(prepared_update->stmt, 1, value_type, value);
 }
 
 void __ql__PreparedUpdate_bind_assignment(
     PreparedUpdate* prepared_update,
     unsigned int index,
-    QLType value_type,
+    ColumnType value_type,
     void* value
 ) {
     __ql__bind_value(prepared_update->stmt, index + 2, value_type, value);

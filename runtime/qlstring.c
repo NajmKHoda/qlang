@@ -7,8 +7,9 @@
 #include "qlstring.h"
 
 QLTypeInfo __ql__QLString_type_info = {
-    .type = TYPE_STRING,
     .size = sizeof(QLString*),
+    .copy = (void (*)(void*)) __ql__QLString_copy,
+    .drop = (void (*)(void*)) __ql__QLString_drop
 };
 
 QLString* __ql__QLString_new(char* raw_string, int length, bool is_global) {
@@ -35,11 +36,13 @@ int __ql__QLString_compare(QLString* a, QLString* b) {
     return (cmp != 0) ? cmp : (an - bn);
 }
 
-void __ql__QLString_add_ref(QLString* str) {
+void __ql__QLString_copy(QLString** str_ptr) {
+    QLString* str = *str_ptr;
     str->ref_count++;
 }
 
-void __ql__QLString_remove_ref(QLString* str) {
+void __ql__QLString_drop(QLString** str_ptr) {
+    QLString* str = *str_ptr;
     str->ref_count--;
     if (str->ref_count == 0) {
         fprintf(stderr, "free(\"%.*s\")\n", str->length, str->raw_string);
@@ -48,10 +51,6 @@ void __ql__QLString_remove_ref(QLString* str) {
         }
         free(str);
     }
-}
-
-void __ql__QLString_elem_drop(void* elem_ptr) {
-    __ql__QLString_remove_ref(*(QLString**)elem_ptr);
 }
 
 void prints(QLString* str) {

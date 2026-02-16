@@ -2,23 +2,13 @@ use inkwell::AddressSpace;
 use inkwell::types::{StructType};
 use inkwell::{context::Context};
 use inkwell::module::{Linkage, Module};
-use inkwell::values::{FunctionValue, GlobalValue, IntValue};
+use inkwell::values::{FunctionValue, GlobalValue};
 
 use crate::codegen::CodeGen;
 use crate::semantics::{SemanticType, SemanticTypeKind};
 
-pub(super) enum QLType {
-    Integer,
-    Bool,
-    String,
-    Array,
-    Struct,
-    Callable,
-}
-
 pub(super) struct Runtime<'ctxt> {
     pub(super) type_info_type: StructType<'ctxt>,
-    pub(super) struct_field_type: StructType<'ctxt>,
     pub(super) int_type_info: GlobalValue<'ctxt>,
     pub(super) bool_type_info: GlobalValue<'ctxt>,
     pub(super) string_type_info: GlobalValue<'ctxt>,
@@ -31,14 +21,14 @@ pub(super) struct Runtime<'ctxt> {
     pub(super) input_string: FunctionValue<'ctxt>,
 
     pub(super) new_string: FunctionValue<'ctxt>,
-    pub(super) add_string_ref: FunctionValue<'ctxt>,
-    pub(super) remove_string_ref: FunctionValue<'ctxt>,
+    pub(super) string_copy: FunctionValue<'ctxt>,
+    pub(super) string_drop: FunctionValue<'ctxt>,
     pub(super) concat_string: FunctionValue<'ctxt>,
     pub(super) compare_string: FunctionValue<'ctxt>,
 
     pub(super) new_array: FunctionValue<'ctxt>,
-    pub(super) add_array_ref: FunctionValue<'ctxt>,
-    pub(super) remove_array_ref: FunctionValue<'ctxt>,
+    pub(super) array_copy: FunctionValue<'ctxt>,
+    pub(super) array_drop: FunctionValue<'ctxt>,
     pub(super) index_array: FunctionValue<'ctxt>,
     pub(super) append_array: FunctionValue<'ctxt>,
     pub(super) array_length: FunctionValue<'ctxt>,
@@ -82,12 +72,11 @@ pub(super) struct Runtime<'ctxt> {
     // Callable functions
     pub(super) callable_new: FunctionValue<'ctxt>,
     pub(super) callable_set_stmt: FunctionValue<'ctxt>,
-    pub(super) callable_capture: FunctionValue<'ctxt>,
     pub(super) callable_get_fn: FunctionValue<'ctxt>,
     pub(super) callable_get_context: FunctionValue<'ctxt>,
     pub(super) callable_get_stmt: FunctionValue<'ctxt>,
-    pub(super) callable_add_ref: FunctionValue<'ctxt>,
-    pub(super) callable_remove_ref: FunctionValue<'ctxt>,
+    pub(super) callable_copy: FunctionValue<'ctxt>,
+    pub(super) callable_drop: FunctionValue<'ctxt>,
 }
 
 impl<'ctxt> Runtime<'ctxt> {
@@ -134,14 +123,14 @@ impl<'ctxt> Runtime<'ctxt> {
             Some(Linkage::External),
         );
 
-        let add_string_ref = module.add_function(
-            "__ql__QLString_add_ref",
+        let string_copy = module.add_function(
+            "__ql__QLString_copy",
             void_type.fn_type(&[ptr_type.into()], false),
             Some(Linkage::External),
         );
 
-        let remove_string_ref = module.add_function(
-            "__ql__QLString_remove_ref",
+        let string_drop = module.add_function(
+            "__ql__QLString_drop",
             void_type.fn_type(&[ptr_type.into()], false),
             Some(Linkage::External),
         );
@@ -164,14 +153,14 @@ impl<'ctxt> Runtime<'ctxt> {
             Some(Linkage::External),
         );
 
-        let add_array_ref = module.add_function(
-            "__ql__QLArray_add_ref",
+        let array_copy = module.add_function(
+            "__ql__QLArray_copy",
             void_type.fn_type(&[ptr_type.into()], false),
             Some(Linkage::External),
         );
 
-        let remove_array_ref = module.add_function(
-            "__ql__QLArray_remove_ref",
+        let array_drop = module.add_function(
+            "__ql__QLArray_drop",
             void_type.fn_type(&[ptr_type.into()], false),
             Some(Linkage::External),
         );
@@ -378,12 +367,6 @@ impl<'ctxt> Runtime<'ctxt> {
             Some(Linkage::External),
         );
 
-        let callable_capture = module.add_function(
-            "__ql__QLCallable_capture",
-            void_type.fn_type(&[ptr_type.into(), int_type.into(), ptr_type.into()], false),
-            Some(Linkage::External),
-        );
-
         let callable_get_fn = module.add_function(
             "__ql__QLCallable_get_fn",
             ptr_type.fn_type(&[ptr_type.into()], false),
@@ -402,34 +385,28 @@ impl<'ctxt> Runtime<'ctxt> {
             Some(Linkage::External),
         );
 
-        let callable_add_ref = module.add_function(
-            "__ql__QLCallable_add_ref",
+        let callable_copy = module.add_function(
+            "__ql__QLCallable_copy",
             void_type.fn_type(&[ptr_type.into()], false),
             Some(Linkage::External),
         );
 
-        let callable_remove_ref = module.add_function(
-            "__ql__QLCallable_remove_ref",
+        let callable_drop = module.add_function(
+            "__ql__QLCallable_drop",
             void_type.fn_type(&[ptr_type.into()], false),
             Some(Linkage::External),
         );
 
+        // QLTypeInfo
         let type_info_type = context.opaque_struct_type("QLTypeInfo");
         type_info_type.set_body(
             &[
-                int_type.into(),       // type
                 long_type.into(),      // size
                 int_type.into(),       // num_fields
-                ptr_type.into(),       // fields
-            ],
-            false,
-        );
-
-        let struct_field_type = context.opaque_struct_type("StructField");
-        struct_field_type.set_body(
-            &[
-                int_type.into(),       // offset
-                ptr_type.into(),       // type_info
+                ptr_type.into(),       // copy_fn pointer
+                ptr_type.into(),       // drop_fn pointer
+                ptr_type.into(),       // get_nth pointer
+                ptr_type.into(),       // set_nth pointer
             ],
             false,
         );
@@ -471,7 +448,6 @@ impl<'ctxt> Runtime<'ctxt> {
 
         Runtime {
             type_info_type,
-            struct_field_type,
             int_type_info,
             bool_type_info,
             string_type_info,
@@ -484,13 +460,13 @@ impl<'ctxt> Runtime<'ctxt> {
             input_integer,
             input_string,
             new_string,
-            add_string_ref,
-            remove_string_ref,
+            string_copy,
+            string_drop,
             concat_string,
             compare_string, 
             new_array,
-            add_array_ref,
-            remove_array_ref,
+            array_copy,
+            array_drop,
             index_array,
             append_array,
             pop_array,
@@ -529,31 +505,16 @@ impl<'ctxt> Runtime<'ctxt> {
 
             callable_new,
             callable_set_stmt,
-            callable_capture,
             callable_get_fn,
             callable_get_context,
             callable_get_stmt,
-            callable_add_ref,
-            callable_remove_ref,
+            callable_copy,
+            callable_drop,
         }
     }
 }
 
 impl<'ctxt> CodeGen<'ctxt> {
-    // Convert to runtime QLType enum value
-    pub(super) fn get_qltype(&self, sem_type: &SemanticType) -> IntValue<'ctxt> {
-        let enum_value = match sem_type.kind() {
-            SemanticTypeKind::Integer => QLType::Integer,
-            SemanticTypeKind::Bool => QLType::Bool,
-            SemanticTypeKind::String => QLType::String,
-            SemanticTypeKind::Array(_) => QLType::Array,
-            SemanticTypeKind::NamedStruct(_, _) => QLType::Struct,
-            SemanticTypeKind::Callable(_, _) => QLType::Callable,
-            _ => panic!("Unsupported type for type enum conversion"),
-        } as u64;
-        self.int_type().const_int(enum_value, false)
-    }
-
     pub(super) fn get_type_info(&self, sem_type: &SemanticType) -> GlobalValue<'ctxt> {
         match sem_type.kind() {
             SemanticTypeKind::Integer => self.runtime.int_type_info,

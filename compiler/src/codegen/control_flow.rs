@@ -1,7 +1,7 @@
 use inkwell::{basic_block::BasicBlock, values::{BasicValue, IntValue}};
 
 use super::{CodeGen, CodeGenError};
-use crate::semantics::{SemanticBlock, SemanticConditionalBranch, SemanticExpression, SemanticTypeKind};
+use crate::semantics::{Ownership, SemanticBlock, SemanticConditionalBranch, SemanticExpression, SemanticTypeKind};
 
 pub(super) struct GenLoopInfo<'a> {
     cond_block: BasicBlock<'a>,
@@ -155,7 +155,10 @@ impl<'ctxt> CodeGen<'ctxt> {
 			Some(val) => {
 				let return_val = self.gen_eval(val)?;
 				if val.sem_type.kind() != SemanticTypeKind::Void {
-					self.add_ref(&return_val)?;
+                    if return_val.ownership() == Ownership::Borrowed {
+                        let value_ptr = self.put_on_stack(&return_val, "return_val_ptr")?;
+                        self.copy_value(value_ptr, &val.sem_type)?;
+                    }
 					Some(&return_val.as_llvm_basic_value())
 				} else {
 					None

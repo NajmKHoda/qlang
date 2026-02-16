@@ -2,7 +2,7 @@ use core::panic;
 
 use inkwell::{types::BasicType, values::{AnyValue}};
 
-use crate::semantics::{Ownership, SemanticType, SemanticTypeKind};
+use crate::semantics::{Ownership, SemanticType};
 
 use super::*;
 
@@ -12,18 +12,8 @@ impl<'ctxt> CodeGen<'ctxt> {
             .map(|expr| self.gen_eval(expr))
             .collect::<Result<Vec<GenValue<'ctxt>>, CodeGenError>>()?;
 
-        // Get the LLVM type for the array elements
         let llvm_elem_type = self.llvm_basic_type(&elem_type);
-
-        let type_info = match elem_type.kind() {
-            SemanticTypeKind::Integer => self.runtime.int_type_info.as_pointer_value(),
-            SemanticTypeKind::Bool => self.runtime.bool_type_info.as_pointer_value(),
-            SemanticTypeKind::String => self.runtime.string_type_info.as_pointer_value(),
-            SemanticTypeKind::NamedStruct(struct_id, _) => self.struct_info[&struct_id].type_info.as_pointer_value(),
-            SemanticTypeKind::Array(_) => self.runtime.array_type_info.as_pointer_value(),
-            _ => self.ptr_type().const_null(),
-        };
-        
+        let type_info = self.get_type_info(elem_type).as_pointer_value();
         let num_elems = elems.len();
         if num_elems == 0 {
             // Create an empty array
@@ -49,18 +39,20 @@ impl<'ctxt> CodeGen<'ctxt> {
 
         // Store each element in the array
         for (i, elem) in elems.into_iter().enumerate() {
-            self.add_ref(&elem)?;
             let elem_basic = elem.as_llvm_basic_value();
             let index = self.context.i32_type().const_int(i as u64, false);
             let elem_ptr = unsafe {
                 self.builder.build_gep(
                     array_type,
                     array_alloca,
-                    &[self.context.i32_type().const_int(0, false), index],
+                    &[self.context.i32_type().const_zero(), index],
                     &format!("elem_ptr_{}", i)
                 )?
             };
             self.builder.build_store(elem_ptr, elem_basic)?;
+            if elem.ownership() == Ownership::Borrowed {
+                self.copy_value(elem_ptr, elem_type)?;
+            }
         }
 
         // Call __ql__QLArray_new
@@ -117,12 +109,14 @@ impl<'ctxt> CodeGen<'ctxt> {
             panic!("Expected array value");
         };
 
-        self.add_ref(&elem)?;
         let elem_ptr = self.builder.build_alloca(
             self.llvm_basic_type(&elem_type),
             "append_elem_ptr"
         )?;
         self.builder.build_store(elem_ptr, elem.as_llvm_basic_value())?;
+        if elem.ownership() == Ownership::Borrowed {
+            self.copy_value(elem_ptr, &elem_type)?;
+        }
 
         self.builder.build_call(
             self.runtime.append_array,

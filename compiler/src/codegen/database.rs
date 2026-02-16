@@ -4,17 +4,25 @@ use crate::{codegen::{data::GenValue}, semantics::{Ownership, SemanticDatasource
 
 use super::{CodeGen, CodeGenError};
 
-impl<'ctxt> CodeGen<'ctxt> {
-    fn place_onto_stack(
-        &mut self,
-        value: &GenValue<'ctxt>,
-    ) -> Result<PointerValue<'ctxt>, CodeGenError> {
-        let llvm_value = value.as_llvm_basic_value();
-        let alloca = self.builder.build_alloca(llvm_value.get_type(), "stack_alloca")?;
-        self.builder.build_store(alloca, llvm_value)?;
-        Ok(alloca)
-    }
+pub(super) enum ColumnType {
+    Integer,
+    Bool,
+    String,
+    // Real
+}
 
+impl From<&SemanticType> for ColumnType {
+    fn from(sem_type: &SemanticType) -> Self {
+        match sem_type.kind() {
+            SemanticTypeKind::Integer => ColumnType::Integer,
+            SemanticTypeKind::Bool => ColumnType::Bool,
+            SemanticTypeKind::String => ColumnType::String,
+            _ => panic!("Unsupported column type in semantic IR"),
+        }
+    }
+}
+
+impl<'ctxt> CodeGen<'ctxt> {
     pub(super) fn gen_database_ptr(&mut self, datasource: &SemanticDatasource) {
         let db_ptr_global = self.module.add_global(
             self.ptr_type(),
@@ -263,12 +271,14 @@ impl<'ctxt> CodeGen<'ctxt> {
             SemanticQuery::Select { where_clause, table_id } => {
                 if let Some(WhereClause { value, .. }) = where_clause {
                     let gen_value = self.gen_eval(value)?;
-                    let value_ptr = self.place_onto_stack(&gen_value)?;
+                    let value_ptr = self.put_on_stack(&gen_value, "select_where")?;
+                    let column_type: ColumnType = (&value.sem_type).into();
+                    let column_type_int = self.context.i32_type().const_int(column_type as u64, false);
                     self.builder.build_call(
                         self.runtime.prepared_select_bind_where,
                         &[
                             statement.into(),
-                            self.get_qltype(&value.sem_type).into(),
+                            column_type_int.into(),
                             value_ptr.into(),
                         ],
                         "select_bind_where"
@@ -301,7 +311,7 @@ impl<'ctxt> CodeGen<'ctxt> {
                         )?;
                     }
                     GenValue::Struct { .. } => {
-                        let data_ptr = self.place_onto_stack(&gen_value)?;
+                        let data_ptr = self.put_on_stack(&gen_value, "insert_row")?;
                         self.builder.build_call(
                             self.runtime.prepared_insert_exec_row.into(),
                             &[statement.into(), data_ptr.into()],
@@ -314,18 +324,16 @@ impl<'ctxt> CodeGen<'ctxt> {
             },
             SemanticQuery::Update { assignments, where_clause, .. } => {
                 for (i, assignment) in assignments.iter().enumerate() {
-                    let gen_value = self.gen_eval(&assignment.value)?.as_llvm_basic_value();
-                    let value_ptr = self.builder.build_alloca(
-                        gen_value.get_type(),
-                        &format!("update_assign_ptr_{}", i)
-                    )?;
-                    self.builder.build_store(value_ptr, gen_value)?;
+                    let gen_value = self.gen_eval(&assignment.value)?;
+                    let value_ptr = self.put_on_stack(&gen_value, "update_assign")?;
+                    let column_type: ColumnType = (&assignment.value.sem_type).into();
+                    let column_type_int = self.context.i32_type().const_int(column_type as u64, false);
                     self.builder.build_call(
                         self.runtime.prepared_update_bind_assignment,
                         &[
                             statement.into(),
                             self.context.i32_type().const_int(i as u64, false).into(),
-                            self.get_qltype(&assignment.value.sem_type).into(),
+                            column_type_int.into(),
                             value_ptr.into(),
                         ],
                         &format!("update_bind_assign_{}", i)
@@ -334,12 +342,14 @@ impl<'ctxt> CodeGen<'ctxt> {
 
                 if let Some(WhereClause { value, .. }) = where_clause {
                     let gen_value = self.gen_eval(value)?;
-                    let value_ptr = self.place_onto_stack(&gen_value)?;
+                    let value_ptr = self.put_on_stack(&gen_value, "update_where")?;
+                    let column_type: ColumnType = (&value.sem_type).into();
+                    let column_type_int = self.context.i32_type().const_int(column_type as u64, false);
                     self.builder.build_call(
                         self.runtime.prepared_update_bind_where,
                         &[
                             statement.into(),
-                            self.get_qltype(&value.sem_type).into(),
+                            column_type_int.into(),
                             value_ptr.into(),
                         ],
                         "update_bind_where"
@@ -356,12 +366,14 @@ impl<'ctxt> CodeGen<'ctxt> {
             SemanticQuery::Delete { where_clause, .. } => {
                 if let Some(WhereClause { value, .. }) = where_clause {
                     let gen_value = self.gen_eval(value)?;
-                    let value_ptr = self.place_onto_stack(&gen_value)?;
+                    let value_ptr = self.put_on_stack(&gen_value, "delete_where")?;
+                    let column_type: ColumnType = (&value.sem_type).into();
+                    let column_type_int = self.context.i32_type().const_int(column_type as u64, false);
                     self.builder.build_call(
                         self.runtime.prepared_delete_bind_where,
                         &[
                             statement.into(),
-                            self.get_qltype(&value.sem_type).into(),
+                            column_type_int.into(),
                             value_ptr.into(),
                         ],
                         "delete_bind_where"

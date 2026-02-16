@@ -37,9 +37,9 @@ PreparedInsert* __ql__InsertPlan_prepare(sqlite3* db, InsertPlan* plan) {
 void __ql__PreparedInsert_exec_row(PreparedInsert* prepared_insert, void* row) {
     unsigned int n_fields = prepared_insert->struct_type_info->num_fields;
     for (unsigned int i = 0; i < n_fields; i++) {
-        StructField field = prepared_insert->struct_type_info->fields[i];
-        void* field_ptr = (char*)row + field.offset;
-        __ql__bind_value(prepared_insert->stmt, i + 1, field.type_info->type, field_ptr);
+        ColumnType field_type;
+        void* field_ptr = prepared_insert->struct_type_info->get_nth(row, i, &field_type);
+        __ql__bind_value(prepared_insert->stmt, i + 1, field_type, field_ptr);
     }
     sqlite3_step(prepared_insert->stmt);
     sqlite3_reset(prepared_insert->stmt);

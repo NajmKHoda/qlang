@@ -3,7 +3,6 @@
 #include <stdio.h>
 #include "qlstring.h"
 #include "array.h"
-#include "memory.h"
 #include "metadata.h"
 #include "database/select_query.h"
 #include "database/insert_query.h"
@@ -12,8 +11,9 @@
 #include "callable.h"
 
 const QLTypeInfo __ql__QLCallable_type_info = {
-    .type = TYPE_CALLABLE,
-    .size = sizeof(QLCallable*)
+    .size = sizeof(QLCallable*),
+    .copy = (void (*)(void*)) __ql__QLCallable_copy,
+    .drop = (void (*)(void*)) __ql__QLCallable_drop
 };
 
 QLCallable* __ql__QLCallable_new(void* invoke_fn, CallableType type, QLTypeInfo* captured_info) {
@@ -37,12 +37,6 @@ void __ql__QLCallable_set_stmt(QLCallable* callable, void* prepared_stmt) {
     callable->prepared_stmt = prepared_stmt;
 }
 
-void __ql__QLCallable_capture(QLCallable* callable, unsigned int index, void* value_ptr) {
-    StructField field = callable->context_info->fields[index];
-    void* field_ptr = (char*)callable->context_struct + field.offset;
-    memcpy(field_ptr, value_ptr, field.type_info->size);
-}
-
 void* __ql__QLCallable_get_fn(QLCallable* callable) {
     return callable->invoke_fn;
 }
@@ -55,17 +49,16 @@ void* __ql__QLCallable_get_stmt(QLCallable* callable) {
     return callable->prepared_stmt;
 }
 
-void __ql__QLCallable_add_ref(QLCallable* callable) {
+void __ql__QLCallable_copy(QLCallable** callable_ptr) {
+    QLCallable* callable = *callable_ptr;
     callable->ref_count++;
 }
 
-void __ql__QLCallable_remove_ref(QLCallable* callable) {
+void __ql__QLCallable_drop(QLCallable** callable_ptr) {
+    QLCallable* callable = *callable_ptr;
     callable->ref_count--;
     if (callable->ref_count == 0) {
-        if (callable->context_info != NULL) {
-            __ql__drop_value(callable->context_struct, callable->context_info);
-        }
-
+        fprintf(stderr, "free(callable %d)\n", callable->type);
         switch (callable->type) {
             case CALLABLE_SELECT: {
                 PreparedSelect* prepared_select = (PreparedSelect*)callable->prepared_stmt;
@@ -91,10 +84,11 @@ void __ql__QLCallable_remove_ref(QLCallable* callable) {
                 break;
         }
         if (callable->context_struct != NULL) {
+            if (callable->context_info->drop != NULL) {
+                callable->context_info->drop(callable->context_struct);
+            }
             free(callable->context_struct);
         }
         free(callable);
-        fprintf(stderr, "free(callable %d)\n", callable->type);
-        
     }
 }

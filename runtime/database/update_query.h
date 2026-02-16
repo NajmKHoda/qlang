@@ -25,11 +25,15 @@ typedef struct {
 void __ql__UpdatePlan_set_where(UpdatePlan* plan, char* column_name);
 PreparedUpdate* __ql__UpdatePlan_prepare(sqlite3* db, UpdatePlan* plan);
 
-void __ql__PreparedUpdate_bind_where(PreparedUpdate* prepared_update, QLType value_type, void* value);
+void __ql__PreparedUpdate_bind_where(
+    PreparedUpdate* prepared_update,
+    ColumnType value_type,
+    void* value
+);
 void __ql__PreparedUpdate_bind_assignment(
     PreparedUpdate* prepared_update,
     unsigned int index,
-    QLType value_type,
+    ColumnType value_type,
     void* value
 );
 void __ql__PreparedUpdate_exec(PreparedUpdate* prepared_update);

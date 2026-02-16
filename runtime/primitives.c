@@ -4,12 +4,10 @@
 #include "primitives.h"
 
 QLTypeInfo __ql__int_type_info = {
-    .type = TYPE_INT,
     .size = sizeof(int)
 };
 
 QLTypeInfo __ql__bool_type_info = {
-    .type = TYPE_BOOL,
     .size = sizeof(bool)
 };
 

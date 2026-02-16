@@ -1,6 +1,6 @@
 use inkwell::{types::{BasicMetadataTypeEnum, BasicType, StructType}, values::{AnyValue, BasicMetadataValueEnum, BasicValue, FunctionValue, GlobalValue, ValueKind}};
 
-use crate::{codegen::{CodeGen, CodeGenError, data::GenValue}, semantics::{Ownership, SemanticClosure, SemanticClosureBody, SemanticExpression, SemanticQuery, SemanticTypeKind}};
+use crate::{codegen::{CodeGen, CodeGenError, data::GenValue}, semantics::{Ownership, SemanticClosure, SemanticClosureBody, SemanticExpression, SemanticQuery, SemanticType, SemanticTypeKind}};
 
 pub(super) struct GenClosureInfo<'ctxt> {
 	pub(super) llvm_fn: FunctionValue<'ctxt>,
@@ -12,14 +12,15 @@ impl<'ctxt> CodeGen<'ctxt> {
     pub fn declare_closure(&mut self, closure: &SemanticClosure) -> Result<(), CodeGenError> {
 		// Closure context (captured variables)
 		let captured_llvm_types = closure.captured_variables.iter()
-			.map(|(var_id, _)| &self.program.variables[var_id].sem_type)
-			.collect::<Vec<_>>();
+			.map(|(var_id, _)| self.program.variables[var_id].sem_type.clone())
+			.collect::<Vec<SemanticType>>();
 		let (context_type, context_type_info) = if !captured_llvm_types.is_empty() {
-			let (_type, _type_info) = self.gen_struct_type_info(
-				&format!("__ql__context_{}", closure.id),
-				captured_llvm_types.as_slice()
+			let struct_info = self.gen_struct_info(
+				&format!("context_{}", closure.id),
+				captured_llvm_types.as_slice(),
+				false
 			)?;
-			(Some(_type), Some(_type_info))
+			(Some(struct_info.struct_type), Some(struct_info.type_info))
 		} else {
 			(None, None)
 		};
@@ -136,21 +137,33 @@ impl<'ctxt> CodeGen<'ctxt> {
 		)?.as_any_value_enum().into_pointer_value();
 		
 		// Allocate context struct and populate captured variables
-		for (i, (_, captured_id)) in closure.captured_variables.iter().enumerate() {
-			let variable = &self.program.variables[captured_id];
-			let variable_ptr = self.llvm_variables[&captured_id];
+		if closure.captured_variables.len() > 0 {
+			let context_ptr = self.builder.build_call(
+				self.runtime.callable_get_context,
+				&[callable_ptr.into()],
+				"callable_get_context"
+			)?.as_any_value_enum().into_pointer_value();
 
-			let variable_val = self.load_var(*captured_id)?;
-			self.add_ref(&variable_val)?;
-			self.builder.build_call(
-				self.runtime.callable_capture,
-				&[
-					callable_ptr.into(),
-					self.int_type().const_int(i as u64, false).into(),
-					variable_ptr.into(),
-				],
-				&format!("callable_capture_{}", variable.name)
-			)?;
+			for (i, (_, captured_id)) in closure.captured_variables.iter().enumerate() {
+				let variable = &self.program.variables[captured_id];
+				let variable_ptr = self.llvm_variables[&captured_id];
+				self.copy_value(variable_ptr, &variable.sem_type)?;
+
+				let ctxt_field_ptr = self.builder.build_struct_gep(
+					closure_info.context_type.unwrap(),
+					context_ptr,
+					i as u32,
+					&format!("context_{}", variable.name)
+				)?;
+
+				let llvm_type = self.llvm_basic_type(&variable.sem_type);
+				let variable_val = self.builder.build_load(
+					llvm_type,
+					variable_ptr,
+					&format!("load_captured_{}", variable.name)
+				)?;
+				self.builder.build_store(ctxt_field_ptr, variable_val)?;
+			}
 		}
 
         if let SemanticClosureBody::Query(ref query) = closure.body {

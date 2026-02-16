@@ -62,8 +62,13 @@ impl<'ctxt> CodeGen<'ctxt> {
 			.collect::<Vec<BasicMetadataValueEnum>>();
 
 		let call_site = self.builder.build_call(llvm_function, &llvm_arg_values, "call")?;
-		for arg in arg_values {
-			self.remove_if_owned(arg)?;
+		for (i, arg) in arg_values.iter().enumerate() {
+			if arg.ownership() == Ownership::Owned {
+				let param_id = sem_function.param_ids[i];
+				let param_type = &self.program.variables[&param_id].sem_type;
+				let arg_ptr = self.put_on_stack(&arg, &format!("{}_arg_ptr", sem_function.name))?;
+				self.drop_value(arg_ptr, param_type)?;
+			}
 		}
 
 		match call_site.try_as_basic_value() {

@@ -81,36 +81,38 @@ impl<'a> GenValue<'a> {
 }
 
 impl<'ctxt> CodeGen<'ctxt> {
-    pub(super) fn add_ref(&self, val: &GenValue<'ctxt>) -> Result<(), CodeGenError> {
-        match val {
-            GenValue::String { value: str_ptr, ownership: Ownership::Borrowed } => {
+    pub(super) fn copy_value(&self, ptr: PointerValue, ptr_type: &SemanticType) -> Result<(), CodeGenError> {
+        match ptr_type.kind() {
+            SemanticTypeKind::String => {
                 self.builder.build_call(
-                    self.runtime.add_string_ref,
-                    &[(*str_ptr).into()],
-                    "add_string_ref"
+                    self.runtime.string_copy,
+                    &[ptr.into()],
+                    "copy_string"
                 )?;
             }
-            GenValue::Array { value: array_ptr, ownership: Ownership::Borrowed, .. } => {
+            SemanticTypeKind::Array(_) => {
                 self.builder.build_call(
-                    self.runtime.add_array_ref,
-                    &[(*array_ptr).into()],
-                    "add_array_ref"
+                    self.runtime.array_copy,
+                    &[ptr.into()],
+                    "copy_array"
                 )?;
             }
-            GenValue::Struct { value: struct_value, struct_id, ownership: Ownership::Borrowed } => {
-                if let Some(copy_fn) = self.struct_info[&struct_id].copy_fn {
+            SemanticTypeKind::NamedStruct(struct_id, _) => {
+                let sem_struct = &self.program.structs[&struct_id];
+                let struct_info = &self.struct_info[&struct_id];
+                if let Some(copy_fn) = struct_info.copy_fn {
                     self.builder.build_call(
                         copy_fn,
-                        &[(*struct_value).into()],
-                        "struct_copy"
+                        &[ptr.into()],
+                        &format!("copy_struct_{}", sem_struct.name)
                     )?;
                 }
             }
-            GenValue::Callable { value: callable_ptr, ownership: Ownership::Borrowed } => {
+            SemanticTypeKind::Callable(_, _) => {
                 self.builder.build_call(
-                    self.runtime.callable_add_ref,
-                    &[(*callable_ptr).into()],
-                    "callable_add_ref"
+                    self.runtime.callable_copy,
+                    &[ptr.into()],
+                    "copy_callable"
                 )?;
             }
             _ => { }
@@ -118,36 +120,38 @@ impl<'ctxt> CodeGen<'ctxt> {
         Ok(())
     }
 
-    pub(super) fn remove_ref(&self, val: GenValue<'ctxt>) -> Result<(), CodeGenError> {
-        match val {
-            GenValue::String { value: str_ptr, .. } => {
+    pub(super) fn drop_value(&self, ptr: PointerValue, ptr_type: &SemanticType) -> Result<(), CodeGenError> {
+        match ptr_type.kind() {
+            SemanticTypeKind::String => {
                 self.builder.build_call(
-                    self.runtime.remove_string_ref,
-                    &[str_ptr.into()],
-                    "remove_string_ref"
+                    self.runtime.string_drop,
+                    &[ptr.into()],
+                    "drop_string"
                 )?;
             }
-            GenValue::Array { value: array_ptr, .. } => {
+            SemanticTypeKind::Array(_) => {
                 self.builder.build_call(
-                    self.runtime.remove_array_ref,
-                    &[array_ptr.into()],
-                    "remove_array_ref"
+                    self.runtime.array_drop,
+                    &[ptr.into()],
+                    "drop_array"
                 )?;
             }
-            GenValue::Struct { value: struct_value, struct_id, .. } => {
-                if let Some(drop_fn) = self.struct_info[&struct_id].drop_fn {
+            SemanticTypeKind::NamedStruct(struct_id, _) => {
+                let sem_struct = &self.program.structs[&struct_id];
+                let struct_info = &self.struct_info[&struct_id];
+                if let Some(drop_fn) = struct_info.drop_fn {
                     self.builder.build_call(
                         drop_fn,
-                        &[struct_value.into()],
-                        "struct_drop"
+                        &[ptr.into()],
+                        &format!("drop_struct_{}", sem_struct.name)
                     )?;
                 }
             }
-            GenValue::Callable { value: callable_ptr, .. } => {
+            SemanticTypeKind::Callable(_, _) => {
                 self.builder.build_call(
-                    self.runtime.callable_remove_ref,
-                    &[callable_ptr.into()],
-                    "callable_remove_ref"
+                    self.runtime.callable_drop,
+                    &[ptr.into()],
+                    "drop_callable"
                 )?;
             }
             _ => { }
@@ -155,9 +159,17 @@ impl<'ctxt> CodeGen<'ctxt> {
         Ok(())
     }
 
-    pub(super) fn remove_if_owned(&self, val: GenValue<'ctxt>) -> Result<(), CodeGenError> {
+    pub(super) fn put_on_stack(&self, val: &GenValue<'ctxt>, name: &str) -> Result<PointerValue<'ctxt>, CodeGenError> {
+        let llvm_type = val.as_llvm_basic_value().get_type();
+        let ptr = self.builder.build_alloca(llvm_type, name)?;
+        self.builder.build_store(ptr, val.as_llvm_basic_value())?;
+        Ok(ptr)
+    }
+
+    pub(super) fn remove_if_owned(&self, val: GenValue<'ctxt>, ptr_type: &SemanticType) -> Result<(), CodeGenError> {
         if val.ownership() == Ownership::Owned {
-            self.remove_ref(val)?;
+            let value_ptr = self.put_on_stack(&val, "owned_val_ptr")?;
+            self.drop_value(value_ptr, ptr_type)?;
         }
         Ok(())
     }

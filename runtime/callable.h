@@ -23,11 +23,10 @@ extern const QLTypeInfo __ql__QLCallable_type_info;
 
 QLCallable* __ql__QLCallable_new(void* invoke_fn, CallableType type, struct QLTypeInfo* captured_info);
 void __ql__QLCallable_set_stmt(QLCallable* callable, void* prepared_stmt);
-void __ql__QLCallable_capture(QLCallable* callable, unsigned int index, void* value_ptr);
 void* __ql__QLCallable_get_fn(QLCallable* callable);
 void* __ql__QLCallable_get_context(QLCallable* callable);
 void* __ql__QLCallable_get_stmt(QLCallable* callable);
-void __ql__QLCallable_add_ref(QLCallable* callable);
-void __ql__QLCallable_remove_ref(QLCallable* callable);
+void __ql__QLCallable_copy(QLCallable** callable_ptr);
+void __ql__QLCallable_drop(QLCallable** callable_ptr);
 
 #endif

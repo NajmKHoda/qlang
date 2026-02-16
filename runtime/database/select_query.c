@@ -38,19 +38,16 @@ PreparedSelect* __ql__SelectPlan_prepare(sqlite3* db, SelectPlan* plan) {
     return prepared_select;
 }
 
-void __ql__PreparedSelect_bind_where(PreparedSelect* prepared_select, QLType value_type, void* value) {
+void __ql__PreparedSelect_bind_where(PreparedSelect* prepared_select, ColumnType value_type, void* value) {
     __ql__bind_value(prepared_select->stmt, 1, value_type, value);
 }
 
 QLArray* __ql__PreparedSelect_execute(PreparedSelect* prepared_select) {
     QLArray* results = __ql__QLArray_new(NULL, 0, prepared_select->struct_type_info);
-
     int n_cols = prepared_select->struct_type_info->num_fields;
     void* struct_ptr = malloc(prepared_select->struct_type_info->size);
     while (sqlite3_step(prepared_select->stmt) == SQLITE_ROW) {
         for (int i = 0; i < n_cols; i++) {
-            StructField field = prepared_select->struct_type_info->fields[i];
-            void* field_ptr = (char*)struct_ptr + field.offset;
             int column_type = sqlite3_column_type(prepared_select->stmt, i);
             switch (column_type) {
                 case SQLITE_TEXT: {
@@ -58,12 +55,12 @@ QLArray* __ql__PreparedSelect_execute(PreparedSelect* prepared_select) {
                     unsigned int length = sqlite3_column_bytes(prepared_select->stmt, i);
                     QLString* val = __ql__QLString_new(malloc(length), length, false);
                     memcpy(val->raw_string, text, length);
-                    *(QLString**)field_ptr = val;
+                    prepared_select->struct_type_info->set_nth(struct_ptr, i, &val);
                     break;
                 }
                 case SQLITE_INTEGER: {
                     int val = sqlite3_column_int(prepared_select->stmt, i);
-                    *(int*)field_ptr = val;
+                    prepared_select->struct_type_info->set_nth(struct_ptr, i, &val);
                     break;
                 }
             }

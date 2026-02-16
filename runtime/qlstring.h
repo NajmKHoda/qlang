@@ -17,9 +17,8 @@ typedef struct {
 QLString* __ql__QLString_new(char* raw_string, int length, bool is_global);
 QLString* __ql__QLString_concat(QLString* a, QLString* b);
 int __ql__QLString_compare(QLString* a, QLString* b);
-void __ql__QLString_add_ref(QLString* str);
-void __ql__QLString_remove_ref(QLString* str);
-void __ql__QLString_elem_drop(void* str);
+void __ql__QLString_copy(QLString** str_ptr);
+void __ql__QLString_drop(QLString** str_ptr);
 void prints(QLString* str);
 QLString* inputs();
 

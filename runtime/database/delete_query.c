@@ -35,7 +35,11 @@ PreparedDelete* __ql__DeletePlan_prepare(sqlite3* db, DeletePlan* plan) {
 }
 
 
-void __ql__PreparedDelete_bind_where(PreparedDelete* prepared_delete, QLType value_type, void* value) {
+void __ql__PreparedDelete_bind_where(
+    PreparedDelete* prepared_delete,
+    ColumnType value_type,
+    void* value
+) {
     __ql__bind_value(prepared_delete->stmt, 1, value_type, value);
 }
 
