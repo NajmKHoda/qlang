@@ -33,6 +33,11 @@ pub(super) struct Runtime<'ctxt> {
     pub(super) append_array: FunctionValue<'ctxt>,
     pub(super) array_length: FunctionValue<'ctxt>,
     pub(super) pop_array: FunctionValue<'ctxt>,
+    pub(super) array_iter: FunctionValue<'ctxt>,
+    pub(super) iterator_next: FunctionValue<'ctxt>,
+    pub(super) iterator_has_next: FunctionValue<'ctxt>,
+    pub(super) iterator_copy: FunctionValue<'ctxt>,
+    pub(super) iterator_drop: FunctionValue<'ctxt>,
 
     pub(super) init_dbs: FunctionValue<'ctxt>,
     pub(super) close_dbs: FunctionValue<'ctxt>,
@@ -56,6 +61,7 @@ pub(super) struct Runtime<'ctxt> {
     pub(super) select_plan_new: FunctionValue<'ctxt>,
     pub(super) select_plan_set_where: FunctionValue<'ctxt>,
     pub(super) select_plan_prepare: FunctionValue<'ctxt>,
+    pub(super) prepared_select_copy_if_needed: FunctionValue<'ctxt>,
     pub(super) prepared_select_bind_where: FunctionValue<'ctxt>,
     pub(super) prepared_select_execute: FunctionValue<'ctxt>,
     pub(super) prepared_select_finalize: FunctionValue<'ctxt>,
@@ -189,6 +195,36 @@ impl<'ctxt> Runtime<'ctxt> {
             Some(Linkage::External),
         );
 
+        let array_iter = module.add_function(
+            "__ql__QLArray_iter",
+            ptr_type.fn_type(&[ptr_type.into()], false),
+            Some(Linkage::External),
+        );
+
+        let iterator_next = module.add_function(
+            "__ql__QLIterator_next",
+            ptr_type.fn_type(&[ptr_type.into()], false),
+            Some(Linkage::External),
+        );
+
+        let iterator_has_next = module.add_function(
+            "__ql__QLIterator_has_next",
+            bool_type.fn_type(&[ptr_type.into()], false),
+            Some(Linkage::External),
+        );
+
+        let iterator_copy = module.add_function(
+            "__ql__QLIterator_copy",
+            void_type.fn_type(&[ptr_type.into()], false),
+            Some(Linkage::External),
+        );
+
+        let iterator_drop = module.add_function(
+            "__ql__QLIterator_drop",
+            void_type.fn_type(&[ptr_type.into()], false),
+            Some(Linkage::External),
+        );
+
         let init_dbs = module.add_function(
             "__ql__init_dbs_from_args",
             void_type.fn_type(&[
@@ -290,6 +326,12 @@ impl<'ctxt> Runtime<'ctxt> {
         let select_plan_prepare = module.add_function(
             "__ql__SelectPlan_prepare",
             ptr_type.fn_type(&[ptr_type.into(), ptr_type.into()], false),
+            Some(Linkage::External),
+        );
+
+        let prepared_select_copy_if_needed = module.add_function(
+            "__ql__PreparedSelect_copy_if_needed",
+            ptr_type.fn_type(&[ptr_type.into()], false),
             Some(Linkage::External),
         );
 
@@ -471,6 +513,11 @@ impl<'ctxt> Runtime<'ctxt> {
             append_array,
             pop_array,
             array_length,
+            array_iter,
+            iterator_next,
+            iterator_has_next,
+            iterator_copy,
+            iterator_drop,
 
             init_dbs,
             close_dbs,
@@ -491,6 +538,7 @@ impl<'ctxt> Runtime<'ctxt> {
             select_plan_new,
             select_plan_set_where,
             select_plan_prepare,
+            prepared_select_copy_if_needed,
             prepared_select_bind_where,
             prepared_select_execute,
             prepared_select_finalize,

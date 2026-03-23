@@ -6,7 +6,7 @@
 
 extern QLTypeInfo __ql__QLString_type_info;
 
-typedef struct {
+typedef struct QLString {
     char* raw_string;
     unsigned int length;
     unsigned int ref_count;

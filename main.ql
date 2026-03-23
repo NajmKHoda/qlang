@@ -6,24 +6,15 @@ table Person from data {
   occupation: str
 }
 
-function get_query_fn() -> () -> Person[] {
-  prints("Enter occupation of interest:");
-  let _occupation: str = inputs();
-  return query() {
-    select from Person
-    where occupation == _occupation
-  };
-}
-
 function main() -> int {
-  let get_by_age = get_query_fn();
-  let people: Person[] = get_by_age();
+  let getAllPeople = query() { select from Person };
+  let people1 = getAllPeople();
+  let people2 = getAllPeople();
   
-  let i = 0;
-  while i < people.length() {
-    let person = people[i];
-    prints(person.name);
-    i = i + 1;
+  while people1.has_next() {
+    let person1 = people1.next();
+    let person2 = people2.next();
+    prints(person1.name);
+    prints(person2.name);
   }
 }
-

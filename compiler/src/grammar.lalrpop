@@ -32,6 +32,9 @@ Statement: StatementNode = {
     <ConditionalStatement>,
     "while" <condition:Expression> "{" <body:Statement*> "}" <label:("as" <QName> ";")?>
         => StatementNode::ConditionalLoop { <> },
+    "for" <variable_name:QName> "in" <iterable_expr:Expression>
+        "{" <body:Statement*> "}" <label:("as" <QName> ";")?>
+        => StatementNode::ForLoop { <> },
     "return" <Expression?> ";" => StatementNode::Return(<>),
     "break" <QName?> ";" => StatementNode::Break(<>),
     "continue" <QName?> ";" => StatementNode::Continue(<>),
@@ -144,6 +147,7 @@ TypeName: TypeNode = {
     ProperQName => TypeNode::Struct(<>),
     #[precedence(level="1")]
     <TypeName> "[" "]" => TypeNode::Array(Box::new(<>)),
+    "iter<" <TypeName> ">" => TypeNode::Iterator(Box::new(<>)),
     #[precedence(level="2")]
     "(" <params:Comma<TypeName>> ")" "->" <ret:TypeName> => TypeNode::Callable(params, Box::new(ret)),
 }

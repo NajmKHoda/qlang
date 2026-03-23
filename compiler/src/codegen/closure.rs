@@ -95,7 +95,16 @@ impl<'ctxt> CodeGen<'ctxt> {
 					.get_nth_param(1)
 					.unwrap()
 					.into_pointer_value();
-                let result = self.execute_query(prepared_stmt, query)?;
+				let stmt_to_use = if matches!(query, SemanticQuery::Select { .. }) {
+					self.builder.build_call(
+						self.runtime.prepared_select_copy_if_needed,
+						&[prepared_stmt.into()],
+						"fresh_stmt"
+					)?.as_any_value_enum().into_pointer_value()
+				} else {
+					prepared_stmt
+				};
+				let result = self.execute_query(stmt_to_use, query)?;
                 let return_value = match result {
                     GenValue::Void => None,
                     _ => Some(&result.as_llvm_basic_value() as &dyn BasicValue),

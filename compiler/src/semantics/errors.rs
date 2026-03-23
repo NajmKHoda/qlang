@@ -145,6 +145,9 @@ pub enum SemanticError {
     },
     BreakOutsideLoop,
     ContinueOutsideLoop,
+    NonIterableExpression {
+        found_type: SemanticType,
+    }
 }
 
 impl Display for SemanticError {
@@ -275,6 +278,9 @@ impl Display for SemanticError {
             }
             SemanticError::ContinueOutsideLoop => {
                 write!(f, "continue statement used outside of a loop")
+            }
+            SemanticError::NonIterableExpression { found_type } => {
+                write!(f, "Expression of type {} cannot be iterated over", found_type)
             }
         }
     }

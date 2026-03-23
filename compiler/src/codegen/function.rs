@@ -157,6 +157,15 @@ impl<'ctxt> CodeGen<'ctxt> {
 			BuiltinMethod::ArrayPop => {
 				self.gen_array_pop(object)
 			}
+			BuiltinMethod::ArrayIter => {
+				self.gen_array_iter(object)
+			}
+			BuiltinMethod::IteratorNext => {
+				self.gen_iterator_next(object)
+			}
+			BuiltinMethod::IteratorHasNext => {
+				self.gen_iterator_has_next(object)
+			}
 		}
 	}
 }

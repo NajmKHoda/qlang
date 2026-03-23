@@ -17,6 +17,11 @@ pub enum GenValue<'a> {
         elem_type: SemanticType,
         ownership: Ownership
     },
+    Iterator {
+        value: PointerValue<'a>,
+        elem_type: SemanticType,
+        ownership: Ownership
+    },
     Struct {
         value: StructValue<'a>,
         struct_id: u32,
@@ -43,6 +48,11 @@ impl<'a> GenValue<'a> {
                 elem_type: elem_type,
                 ownership: ownership
             },
+            SemanticTypeKind::Iterator(elem_type) => GenValue::Iterator {
+                value: llvm_value.into_pointer_value(),
+                elem_type: elem_type,
+                ownership: ownership
+            },
             SemanticTypeKind::NamedStruct(struct_id, _) => GenValue::Struct {
                 value: llvm_value.into_struct_value(),
                 struct_id,
@@ -61,6 +71,7 @@ impl<'a> GenValue<'a> {
         match self {
             GenValue::String { ownership, .. }
             | GenValue::Array { ownership, .. }
+            | GenValue::Iterator { ownership, .. }
             | GenValue::Struct { ownership, .. }
             | GenValue::Callable { ownership, .. } => *ownership,
             _ => Ownership::Trivial,
@@ -73,6 +84,7 @@ impl<'a> GenValue<'a> {
             GenValue::Bool(int_val) => BasicValueEnum::IntValue(*int_val),
             GenValue::String { value: str_val, .. } => BasicValueEnum::PointerValue(*str_val),
             GenValue::Array { value: arr_val, .. } => BasicValueEnum::PointerValue(*arr_val),
+            GenValue::Iterator { value: iter_val, .. } => BasicValueEnum::PointerValue(*iter_val),
             GenValue::Struct { value: struct_val, .. } => BasicValueEnum::StructValue(*struct_val),
             GenValue::Callable { value: callable_val, .. } => BasicValueEnum::PointerValue(*callable_val),
             GenValue::Void => panic!("Unexpected void value"),
@@ -95,6 +107,13 @@ impl<'ctxt> CodeGen<'ctxt> {
                     self.runtime.array_copy,
                     &[ptr.into()],
                     "copy_array"
+                )?;
+            }
+            SemanticTypeKind::Iterator(_) => {
+                self.builder.build_call(
+                    self.runtime.iterator_copy,
+                    &[ptr.into()],
+                    "copy_iterator"
                 )?;
             }
             SemanticTypeKind::NamedStruct(struct_id, _) => {
@@ -134,6 +153,13 @@ impl<'ctxt> CodeGen<'ctxt> {
                     self.runtime.array_drop,
                     &[ptr.into()],
                     "drop_array"
+                )?;
+            }
+            SemanticTypeKind::Iterator(_) => {
+                self.builder.build_call(
+                    self.runtime.iterator_drop,
+                    &[ptr.into()],
+                    "drop_iterator"
                 )?;
             }
             SemanticTypeKind::NamedStruct(struct_id, _) => {
@@ -180,6 +206,7 @@ impl<'ctxt> CodeGen<'ctxt> {
             SemanticTypeKind::Bool => self.bool_type().into(),
             SemanticTypeKind::String => self.ptr_type().into(),
             SemanticTypeKind::Array(_) => self.ptr_type().into(),
+            SemanticTypeKind::Iterator(_) => self.ptr_type().into(),
             SemanticTypeKind::NamedStruct(id, _) => self.struct_info[&id].struct_type.into(),
             SemanticTypeKind::Callable(_, _) => self.ptr_type().into(),
             _ => panic!("Incomplete type found in semantic IR"),

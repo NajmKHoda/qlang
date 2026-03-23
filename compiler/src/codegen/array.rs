@@ -146,4 +146,62 @@ impl<'ctxt> CodeGen<'ctxt> {
 
         Ok(GenValue::new(&elem_type, loaded_elem, Ownership::Owned))
     }
+
+    pub fn gen_array_iter(&self, array: GenValue<'ctxt>) -> Result<GenValue<'ctxt>, CodeGenError> {
+        let GenValue::Array { value: array_ptr, elem_type, .. } = array else {
+            panic!("Expected array value");
+        };
+
+        let iter_ptr = self.builder.build_call(
+            self.runtime.array_iter,
+            &[array_ptr.into()],
+            "array_iter"
+        )?.as_any_value_enum().into_pointer_value();
+
+        Ok(GenValue::Iterator {
+            value: iter_ptr,
+            elem_type,
+            ownership: Ownership::Owned,
+        })
+    }
+
+    pub fn gen_iterator_next(&self, iterator: GenValue<'ctxt>) -> Result<GenValue<'ctxt>, CodeGenError> {
+        let GenValue::Iterator { value: iter_ptr, elem_type, .. } = iterator else {
+            panic!("Expected iterator value");
+        };
+
+        let elem_ptr = self.builder.build_call(
+            self.runtime.iterator_next,
+            &[iter_ptr.into()],
+            "iterator_next"
+        )?.as_any_value_enum().into_pointer_value();
+
+        let loaded_elem = self.builder.build_load(
+            self.llvm_basic_type(&elem_type),
+            elem_ptr,
+            "iter_elem_load"
+        )?;
+
+        let ownership = if elem_type.can_be_owned() {
+            Ownership::Borrowed
+        } else {
+            Ownership::Trivial
+        };
+
+        Ok(GenValue::new(&elem_type, loaded_elem, ownership))
+    }
+
+    pub fn gen_iterator_has_next(&self, iterator: GenValue<'ctxt>) -> Result<GenValue<'ctxt>, CodeGenError> {
+        let GenValue::Iterator { value: iter_ptr, .. } = iterator else {
+            panic!("Expected iterator value");
+        };
+
+        let has_next = self.builder.build_call(
+            self.runtime.iterator_has_next,
+            &[iter_ptr.into()],
+            "iterator_has_next"
+        )?.as_any_value_enum().into_int_value();
+
+        Ok(GenValue::Bool(has_next))
+    }
 }

@@ -95,6 +95,9 @@ impl SemanticGen {
             StatementNode::ConditionalLoop { condition, body, label } => {
                 self.eval_conditional_loop(condition, body, label).map(|s| vec![s])
             },
+            StatementNode::ForLoop { variable_name, iterable_expr, body, label } => {
+                self.eval_for_loop(variable_name, iterable_expr, body, label)
+            },
             StatementNode::Return(expr) => {
                 self.eval_return(expr.as_deref())
             },

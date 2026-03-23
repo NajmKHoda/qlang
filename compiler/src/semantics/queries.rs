@@ -286,7 +286,7 @@ impl SemanticGen {
                     table.struct_id,
                     table_struct.name.clone(),
                 ));
-                SemanticType::new(SemanticTypeKind::Array(struct_type))
+                SemanticType::new(SemanticTypeKind::Iterator(struct_type))
             },
             _ => SemanticType::new(SemanticTypeKind::Void),
         }

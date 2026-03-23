@@ -42,6 +42,12 @@ pub enum StatementNode {
         body: Vec<StatementNode>,
         label: Option<String>,
     },
+    ForLoop {
+        variable_name: String,
+        iterable_expr: Box<ExpressionNode>,
+        body: Vec<StatementNode>,
+        label: Option<String>,
+    },
     LoneExpression(Box<ExpressionNode>),
     Return(Option<Box<ExpressionNode>>),
     Break(Option<String>),
@@ -58,6 +64,7 @@ pub enum TypeNode {
     Bool,
     String,
     Array(Box<TypeNode>),
+    Iterator(Box<TypeNode>),
     Struct(String),
     Callable(Vec<TypeNode>, Box<TypeNode>),
     Void

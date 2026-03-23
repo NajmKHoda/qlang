@@ -3,7 +3,7 @@
 
 #include "../metadata.h"
 
-#define MAX_SQL_LENGTH 1024
+#define MAX_SQL_LENGTH 512
 
 void __ql__bind_value(sqlite3_stmt* stmt, unsigned int index, ColumnType value_type, void* value);
 

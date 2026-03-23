@@ -40,11 +40,8 @@ impl SemanticGen {
 
     pub(super) fn eval_block(
         &mut self,
-        statements: &[StatementNode],
-        scope_type: SemanticScopeType
+        statements: &[StatementNode]
     ) -> Result<SemanticBlock, SemanticError> {
-        self.enter_scope(scope_type);
-
         // Evaluate statements in this block
         let mut sem_stmts: Vec<SemanticStatement> = vec![];
         let mut terminates = false;
@@ -84,7 +81,9 @@ impl SemanticGen {
                     found_type: sem_condition.sem_type.clone(),
                 });
             }
-            let sem_block = self.eval_block(&branch.body, SemanticScopeType::Block)?;
+
+            self.enter_scope(SemanticScopeType::Block);
+            let sem_block = self.eval_block(&branch.body)?;
             sem_branches.push(SemanticConditionalBranch {
                 condition: sem_condition,
                 body: sem_block,
@@ -93,7 +92,8 @@ impl SemanticGen {
 
         let else_body = match else_branch {
             Some(else_statements) => {
-                let sem_else_block = self.eval_block(else_statements, SemanticScopeType::Block)?;
+                self.enter_scope(SemanticScopeType::Block);
+                let sem_else_block = self.eval_block(else_statements)?;
                 Some(sem_else_block)
             },
             None => None,
@@ -121,7 +121,8 @@ impl SemanticGen {
         let loop_id = self.loop_id_gen.next_id();
 
         self.loops.push((label.clone(), loop_id));
-        let sem_body = self.eval_block(body, SemanticScopeType::Loop(loop_id))?;
+        self.enter_scope(SemanticScopeType::Loop(loop_id));
+        let sem_body = self.eval_block(body)?;
         self.loops.pop();
 
         Ok(SemanticStatement::ConditionalLoop {
@@ -129,6 +130,102 @@ impl SemanticGen {
             body: sem_body,
             id: loop_id,
         })
+    }
+
+    pub(super) fn eval_for_loop(
+        &mut self,
+        loop_var_name: &str,
+        iterable_expr: &ExpressionNode,
+        body: &[StatementNode],
+        label: &Option<String>,
+    ) -> Result<Vec<SemanticStatement>, SemanticError> {
+        let mut stmts: Vec<SemanticStatement> = vec![];
+
+        let sem_iterable = self.eval_expr(iterable_expr)?;
+        let (iterator, loop_var_type) = match sem_iterable.sem_type.kind() {
+            SemanticTypeKind::Iterator(elem_type) => (sem_iterable, elem_type.clone()),
+            SemanticTypeKind::Array(elem_type) => {
+                (SemanticExpression {
+                    kind: SemanticExpressionKind::BuiltinMethodCall {
+                        receiver: Box::new(sem_iterable),
+                        method: BuiltinMethod::ArrayIter,
+                        args: Vec::new()
+                    },
+                    sem_type: SemanticType::new(SemanticTypeKind::Iterator(elem_type.clone())),
+                    ownership: Ownership::Owned,
+                }, elem_type.clone())
+            }
+            _ => return Err(SemanticError::NonIterableExpression {
+                found_type: sem_iterable.sem_type.clone(),
+            }),
+        };
+
+        // Create loop variable
+        let iterator_type = SemanticType::new(SemanticTypeKind::Iterator(loop_var_type.clone()));
+        let iterator_var_id = self.variable_id_gen.next_id();
+        self.variables.insert(iterator_var_id, SemanticVariable {
+            name: format!("__ql__iterator_{}", iterator_var_id),
+            id: iterator_var_id,
+            sem_type: iterator_type.clone(),
+        });
+        stmts.push(SemanticStatement::VariableDeclaration {
+            variable_id: iterator_var_id,
+            init_expr: iterator,
+        });
+
+        let loop_id = self.loop_id_gen.next_id();
+        self.loops.push((label.clone(), loop_id));
+        self.enter_scope(SemanticScopeType::Loop(loop_id));
+
+        let loop_var_id = self.variable_id_gen.next_id();
+        self.scopes.last_mut().unwrap().variables.insert(loop_var_name.to_string(), loop_var_id);
+        self.variables.insert(loop_var_id, SemanticVariable {
+            name: loop_var_name.to_string(),
+            id: loop_var_id,
+            sem_type: loop_var_type.clone(),
+        });
+
+        let mut sem_body = self.eval_block(body)?;
+        sem_body.statements.insert(0, SemanticStatement::VariableDeclaration {
+            variable_id: loop_var_id,
+            init_expr: SemanticExpression {
+                kind: SemanticExpressionKind::BuiltinMethodCall {
+                    receiver: Box::new(SemanticExpression {
+                        kind: SemanticExpressionKind::Variable(iterator_var_id),
+                        sem_type: iterator_type.clone(),
+                        ownership: Ownership::Borrowed,
+                    }),
+                    method: BuiltinMethod::IteratorNext,
+                    args: Vec::new()
+                },
+                sem_type: loop_var_type.clone(),
+                ownership: Ownership::Borrowed,
+            },
+        });
+        self.loops.pop();
+
+        let condition = SemanticExpression {
+            kind: SemanticExpressionKind::BuiltinMethodCall {
+                receiver: Box::new(SemanticExpression {
+                    kind: SemanticExpressionKind::Variable(iterator_var_id),
+                    sem_type: iterator_type.clone(),
+                    ownership: Ownership::Borrowed,
+                }),
+                method: BuiltinMethod::IteratorHasNext,
+                args: Vec::new()
+            },
+            sem_type: SemanticType::new(SemanticTypeKind::Bool),
+            ownership: Ownership::Trivial,
+        };
+        
+        stmts.push(SemanticStatement::ConditionalLoop {
+            condition,
+            body: sem_body,
+            id: loop_id,
+        });
+        stmts.push(SemanticStatement::DropVariable(iterator_var_id));
+
+        Ok(stmts)
     }
 
     pub(super) fn eval_return(

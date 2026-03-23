@@ -151,7 +151,8 @@ impl SemanticGen {
 
         // Evaluate function body
         self.cur_return_type = self.functions[id].return_type.clone();
-        let mut body_block = self.eval_block(body, SemanticScopeType::Block)?;
+        self.enter_scope(SemanticScopeType::Function);
+        let mut body_block = self.eval_block(body)?;
         if !body_block.terminates {
             if self.cur_return_type == SemanticTypeKind::Void {
                 let ret_stmt = SemanticStatement::Return(None);
@@ -304,6 +305,46 @@ impl SemanticGen {
                     kind: SemanticExpressionKind::BuiltinMethodCall {
                         receiver: Box::new(sem_receiver),
                         method: BuiltinMethod::ArrayPop,
+                        args: vec![]
+                    },
+                })
+            }
+            (SemanticTypeKind::Array(elem_type), "iter") => {
+                self.check_args("Array.iter", &sem_args, &[])?;
+                Ok(SemanticExpression {
+                    ownership: Ownership::Owned,
+                    sem_type: SemanticType::new(SemanticTypeKind::Iterator(elem_type.clone())),
+                    kind: SemanticExpressionKind::BuiltinMethodCall {
+                        receiver: Box::new(sem_receiver),
+                        method: BuiltinMethod::ArrayIter,
+                        args: vec![]
+                    },
+                })
+            }
+             (SemanticTypeKind::Iterator(elem_type), "next") => {
+                self.check_args("Iterator.next", &sem_args, &[])?;
+                Ok(SemanticExpression {
+                    ownership: if elem_type.can_be_owned() {
+                        Ownership::Borrowed
+                    } else {
+                        Ownership::Trivial
+                    },
+                    sem_type: elem_type.clone(),
+                    kind: SemanticExpressionKind::BuiltinMethodCall {
+                        receiver: Box::new(sem_receiver),
+                        method: BuiltinMethod::IteratorNext,
+                        args: vec![]
+                    },
+                })
+            }
+            (SemanticTypeKind::Iterator(_), "has_next") => {
+                self.check_args("Iterator.has_next", &sem_args, &[])?;
+                Ok(SemanticExpression {
+                    ownership: Ownership::Trivial,
+                    sem_type: SemanticType::new(SemanticTypeKind::Bool),
+                    kind: SemanticExpressionKind::BuiltinMethodCall {
+                        receiver: Box::new(sem_receiver),
+                        method: BuiltinMethod::IteratorHasNext,
                         args: vec![]
                     },
                 })

@@ -81,7 +81,8 @@ impl SemanticGen {
             ClosureBodyNode::Statements(stmts) => {
                 let prev_return_type = self.cur_return_type.clone();
                 self.cur_return_type = sem_ret_type.clone();
-                let mut body_block = self.eval_block(stmts, SemanticScopeType::Block)?;
+                self.enter_scope(SemanticScopeType::Block);
+                let mut body_block = self.eval_block(stmts)?;
                 self.cur_return_type = prev_return_type;
 
                 if !body_block.terminates {

@@ -294,7 +294,7 @@ impl<'ctxt> CodeGen<'ctxt> {
                 let elem_type = SemanticType::new(
                     SemanticTypeKind::NamedStruct(table.struct_id, table.name.clone())
                 );
-                Ok(GenValue::Array {
+                Ok(GenValue::Iterator {
                     value: result,
                     elem_type,
                     ownership: Ownership::Owned,

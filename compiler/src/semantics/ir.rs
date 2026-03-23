@@ -104,7 +104,10 @@ pub enum BuiltinFunction {
 pub enum BuiltinMethod {
     ArrayLength,
     ArrayAppend,
-    ArrayPop
+    ArrayPop,
+    ArrayIter,
+    IteratorNext,
+    IteratorHasNext
 }
 
 pub enum SemanticQuery {

@@ -9,7 +9,6 @@ void __ql__bind_value(sqlite3_stmt* stmt, unsigned int index, ColumnType value_t
     switch (value_type) {
         case COLUMN_STRING: {
             QLString* str = *(QLString**)value;
-            fprintf(stderr, "bind string \"%.*s\" at index %d\n", str->length, str->raw_string, index);
             sqlite3_bind_text(stmt, index, str->raw_string, str->length, SQLITE_TRANSIENT);
             break;
         }

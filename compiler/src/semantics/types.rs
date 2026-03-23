@@ -9,6 +9,7 @@ pub enum SemanticTypeKind {
     Bool,
     String,
     Array(SemanticType),
+    Iterator(SemanticType),
     NamedStruct(u32, String),
     AnonymousStruct(HashMap<String, SemanticType>),
     Callable(Vec<SemanticType>, SemanticType),
@@ -23,6 +24,7 @@ impl PartialEq for SemanticTypeKind {
             (SemanticTypeKind::Bool, SemanticTypeKind::Bool) => true,
             (SemanticTypeKind::String, SemanticTypeKind::String) => true,
             (SemanticTypeKind::Array(elem_a), SemanticTypeKind::Array(elem_b)) => elem_a == elem_b,
+            (SemanticTypeKind::Iterator(elem_a), SemanticTypeKind::Iterator(elem_b)) => elem_a == elem_b,
             (SemanticTypeKind::NamedStruct(id_a, _), SemanticTypeKind::NamedStruct(id_b, _)) => id_a == id_b,
             (SemanticTypeKind::AnonymousStruct(fields_a), SemanticTypeKind::AnonymousStruct(fields_b)) => fields_a == fields_b,
             (SemanticTypeKind::Callable(params_a, ret_a), SemanticTypeKind::Callable(params_b, ret_b)) =>
@@ -38,6 +40,7 @@ impl SemanticTypeKind {
         match self {
             SemanticTypeKind::Any => false,
             SemanticTypeKind::Array(elem_type) => elem_type.is_concrete(),
+            SemanticTypeKind::Iterator(elem_type) => elem_type.is_concrete(),
             SemanticTypeKind::AnonymousStruct(_) => false,
             _ => true
         }
@@ -47,6 +50,7 @@ impl SemanticTypeKind {
         match self {
             SemanticTypeKind::String => true,
             SemanticTypeKind::Array(_) => true,
+            SemanticTypeKind::Iterator(_) => true,
             SemanticTypeKind::NamedStruct(_, _) => true,
             SemanticTypeKind::Callable(_,_) => true,
             _ => false
@@ -62,6 +66,7 @@ impl Display for SemanticTypeKind {
             SemanticTypeKind::Bool => write!(f, "bool"),
             SemanticTypeKind::String => write!(f, "str"),
             SemanticTypeKind::Array(elem_type) => write!(f, "{}[]", elem_type),
+            SemanticTypeKind::Iterator(elem_type) => write!(f, "iter<{}>", elem_type),
             SemanticTypeKind::NamedStruct(_, name) => write!(f, "{}", name),
             SemanticTypeKind::AnonymousStruct(fields) => {
                 write!(f, "{{")?;
@@ -149,6 +154,10 @@ impl SemanticGen {
                 let elem_type = self.try_get_semantic_type(elem_type_node)?;
                 Ok(SemanticType::new(SemanticTypeKind::Array(elem_type)))
             },
+            TypeNode::Iterator(elem_type_node) => {
+                let elem_type = self.try_get_semantic_type(elem_type_node)?;
+                Ok(SemanticType::new(SemanticTypeKind::Iterator(elem_type)))
+            },
             TypeNode::Struct(struct_name) => {
                 if let Some(named_struct) = self.structs.get_by_name(struct_name) {
                     Ok(SemanticType::new(SemanticTypeKind::NamedStruct(named_struct.id, struct_name.clone())))
@@ -180,6 +189,7 @@ impl SemanticGen {
                 true
             },
             (SemanticTypeKind::Array(elem_a), SemanticTypeKind::Array(elem_b)) => self.try_downcast(&elem_a, &elem_b),
+            (SemanticTypeKind::Iterator(elem_a), SemanticTypeKind::Iterator(elem_b)) => self.try_downcast(&elem_a, &elem_b),
             (SemanticTypeKind::NamedStruct(struct_a, _), SemanticTypeKind::NamedStruct(struct_b, _))
                 => struct_a == struct_b,
             (SemanticTypeKind::NamedStruct(struct_id, struct_name), SemanticTypeKind::AnonymousStruct(ref mut fields)) => {

@@ -2,6 +2,7 @@
 #include <string.h>
 #include <stdio.h>
 #include "metadata.h"
+#include "iterator.h"
 #include "array.h"
 
 QLTypeInfo __ql__QLArray_type_info = {
@@ -93,4 +94,32 @@ void* __ql__QLArray_pop(QLArray* array) {
     void* elem_ptr = __ql__QLArray_get_nth_elem(array, index);
     array->num_elems--;
     return elem_ptr;
+}
+
+static void* __ql__QLArray_iter_next(QLIterator* iter) {
+    QLArray* arr = (QLArray*)(iter->iterable);
+    if (iter->index >= arr->num_elems) {
+        fprintf(stderr, "next() called on exhausted iterator\n");
+        exit(1);
+    }
+
+    void* next_elem = __ql__QLArray_get_nth_elem(arr, iter->index);
+    iter->index++;
+    return next_elem;
+}
+
+static bool __ql__QLArray_iter_has_next(QLIterator* iter) {
+    QLArray* arr = (QLArray*)(iter->iterable);
+    return iter->index < arr->num_elems;
+}
+
+QLIterator* __ql__QLArray_iter(QLArray* array) {
+    QLIterator* iter = __ql__QLIterator_new(
+        array,
+        __ql__QLArray_iter_next,
+        __ql__QLArray_iter_has_next,
+        &__ql__QLArray_type_info,
+        array->type_info
+    );
+    return iter;
 }
