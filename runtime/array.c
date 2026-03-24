@@ -97,29 +97,37 @@ void* __ql__QLArray_pop(QLArray* array) {
 }
 
 static void* __ql__QLArray_iter_next(QLIterator* iter) {
-    QLArray* arr = (QLArray*)(iter->iterable);
-    if (iter->index >= arr->num_elems) {
-        fprintf(stderr, "next() called on exhausted iterator\n");
-        exit(1);
+    ArrayIteratorState* state = (ArrayIteratorState*)(iter->state);
+    if (state->index >= state->array->num_elems) {
+        return NULL;
     }
 
-    void* next_elem = __ql__QLArray_get_nth_elem(arr, iter->index);
-    iter->index++;
+    void* next_elem = __ql__QLArray_get_nth_elem(state->array, state->index);
+    state->index++;
     return next_elem;
 }
 
 static bool __ql__QLArray_iter_has_next(QLIterator* iter) {
-    QLArray* arr = (QLArray*)(iter->iterable);
-    return iter->index < arr->num_elems;
+    ArrayIteratorState* state = (ArrayIteratorState*)(iter->state);
+    return state->index < state->array->num_elems;
+}
+
+static void __ql__QLArray_iter_drop(QLIterator* iter) {
+    ArrayIteratorState* state = (ArrayIteratorState*)(iter->state);
+    __ql__QLArray_drop(&state->array);
+    free(iter);
 }
 
 QLIterator* __ql__QLArray_iter(QLArray* array) {
     QLIterator* iter = __ql__QLIterator_new(
-        array,
         __ql__QLArray_iter_next,
         __ql__QLArray_iter_has_next,
-        &__ql__QLArray_type_info,
+        __ql__QLArray_iter_drop,
+        sizeof(ArrayIteratorState),
         array->type_info
     );
+    ArrayIteratorState* state = (ArrayIteratorState*)(iter->state);
+    state->array = array;
+    state->index = 0;
     return iter;
 }

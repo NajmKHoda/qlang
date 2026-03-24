@@ -294,11 +294,16 @@ impl SemanticGen {
 
     pub(super) fn eval_immediate_query(&mut self, query: &QueryNode) -> Result<SemanticExpression, SemanticError> {
         let sem_query = self.eval_query(query)?;
+        let return_type = self.return_type_of_query(&sem_query);
 
         Ok(SemanticExpression {
-            sem_type: self.return_type_of_query(&sem_query),
+            ownership: if return_type.can_be_owned() {
+                Ownership::Trivial
+            } else {
+                Ownership::Owned
+            },
+            sem_type: return_type,
             kind: SemanticExpressionKind::ImmediateQuery(sem_query),
-            ownership: Ownership::Trivial,
         })
     }
 

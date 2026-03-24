@@ -127,13 +127,13 @@ impl<'ctxt> CodeGen<'ctxt> {
                     database_global,
                     "load_database_ptr"
                 )?.into_pointer_value();
-                let prepared_select = self.builder.build_call(
+                let select_iterator = self.builder.build_call(
                     self.runtime.select_plan_prepare,
                     &[database_ptr.into(), select_plan_ptr.into()],
-                    "prepared_select"
+                    "prepare_select"
                 )?.as_any_value_enum().into_pointer_value();
 
-                Ok(prepared_select)
+                Ok(select_iterator)
             },
             SemanticQuery::Insert { table_id, .. } => {
                 let table = &self.program.tables[table_id];
@@ -269,35 +269,36 @@ impl<'ctxt> CodeGen<'ctxt> {
     ) -> Result<GenValue<'ctxt>, CodeGenError> {
         match query {
             SemanticQuery::Select { where_clause, table_id } => {
+                let select_iterator = self.builder.build_call(
+                    self.runtime.select_iterator_activate,
+                    &[statement.into()],
+                    "activate_select_iterator"
+                )?.as_any_value_enum().into_pointer_value();
+
                 if let Some(WhereClause { value, .. }) = where_clause {
                     let gen_value = self.gen_eval(value)?;
                     let value_ptr = self.put_on_stack(&gen_value, "select_where")?;
                     let column_type: ColumnType = (&value.sem_type).into();
                     let column_type_int = self.context.i32_type().const_int(column_type as u64, false);
                     self.builder.build_call(
-                        self.runtime.prepared_select_bind_where,
+                        self.runtime.select_iterator_bind_where,
                         &[
-                            statement.into(),
+                            select_iterator.into(),
                             column_type_int.into(),
                             value_ptr.into(),
                         ],
                         "select_bind_where"
                     )?;
                 }
-                let result = self.builder.build_call(
-                    self.runtime.prepared_select_execute.into(),
-                    &[statement.into()],
-                    "execute_select"
-                )?.as_any_value_enum().into_pointer_value();
 
                 let table = &self.program.tables[table_id];
                 let elem_type = SemanticType::new(
                     SemanticTypeKind::NamedStruct(table.struct_id, table.name.clone())
                 );
                 Ok(GenValue::Iterator {
-                    value: result,
+                    value: select_iterator,
                     elem_type,
-                    ownership: Ownership::Owned,
+                    ownership: Ownership::Borrowed,
                 })
             },
             SemanticQuery::Insert { value: insert_value, .. } => {
@@ -397,13 +398,6 @@ impl<'ctxt> CodeGen<'ctxt> {
         query: &SemanticQuery
     ) -> Result<(), CodeGenError> {
         match query {
-            SemanticQuery::Select { .. } => {
-                self.builder.build_call(
-                    self.runtime.prepared_select_finalize.into(),
-                    &[statement.into()],
-                    "finalize_select"
-                )?;
-            },
             SemanticQuery::Insert { .. } => {
                 self.builder.build_call(
                     self.runtime.prepared_insert_finalize.into(),
@@ -425,6 +419,9 @@ impl<'ctxt> CodeGen<'ctxt> {
                     "finalize_delete"
                 )?;
             }
+
+            // Iterators have their own management
+            SemanticQuery::Select { .. } => {},
         }
         Ok(())
     }

@@ -144,8 +144,7 @@ impl<'ctxt> CodeGen<'ctxt> {
                 self.gen_continue(*loop_id)
             }
             SemanticStatement::DropVariable(variable_id) => {
-                self.vars_to_drop.push(*variable_id);
-                Ok(())
+                self.drop_var(*variable_id)
             }
         }
     }

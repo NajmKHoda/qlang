@@ -61,10 +61,8 @@ pub(super) struct Runtime<'ctxt> {
     pub(super) select_plan_new: FunctionValue<'ctxt>,
     pub(super) select_plan_set_where: FunctionValue<'ctxt>,
     pub(super) select_plan_prepare: FunctionValue<'ctxt>,
-    pub(super) prepared_select_copy_if_needed: FunctionValue<'ctxt>,
-    pub(super) prepared_select_bind_where: FunctionValue<'ctxt>,
-    pub(super) prepared_select_execute: FunctionValue<'ctxt>,
-    pub(super) prepared_select_finalize: FunctionValue<'ctxt>,
+    pub(super) select_iterator_activate: FunctionValue<'ctxt>,
+    pub(super) select_iterator_bind_where: FunctionValue<'ctxt>,
 
     // Update query functions
     pub(super) update_plan_new: FunctionValue<'ctxt>,
@@ -329,27 +327,15 @@ impl<'ctxt> Runtime<'ctxt> {
             Some(Linkage::External),
         );
 
-        let prepared_select_copy_if_needed = module.add_function(
-            "__ql__PreparedSelect_copy_if_needed",
+        let select_iterator_activate = module.add_function(
+            "__ql__SelectIterator_activate",
             ptr_type.fn_type(&[ptr_type.into()], false),
             Some(Linkage::External),
         );
 
-        let prepared_select_bind_where = module.add_function(
-            "__ql__PreparedSelect_bind_where",
+        let select_iterator_bind_where = module.add_function(
+            "__ql__SelectIterator_bind_where",
             void_type.fn_type(&[ptr_type.into(), int_type.into(), ptr_type.into()], false),
-            Some(Linkage::External),
-        );
-
-        let prepared_select_execute = module.add_function(
-            "__ql__PreparedSelect_execute",
-            ptr_type.fn_type(&[ptr_type.into()], false),
-            Some(Linkage::External),
-        );
-
-        let prepared_select_finalize = module.add_function(
-            "__ql__PreparedSelect_finalize",
-            void_type.fn_type(&[ptr_type.into()], false),
             Some(Linkage::External),
         );
 
@@ -538,10 +524,8 @@ impl<'ctxt> Runtime<'ctxt> {
             select_plan_new,
             select_plan_set_where,
             select_plan_prepare,
-            prepared_select_copy_if_needed,
-            prepared_select_bind_where,
-            prepared_select_execute,
-            prepared_select_finalize,
+            select_iterator_activate,
+            select_iterator_bind_where,
 
             update_plan_new,
             update_plan_set_where,

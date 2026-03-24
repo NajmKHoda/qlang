@@ -1,7 +1,7 @@
 use inkwell::{basic_block::BasicBlock, values::{BasicValue, IntValue}};
 
 use super::{CodeGen, CodeGenError};
-use crate::semantics::{Ownership, SemanticBlock, SemanticConditionalBranch, SemanticExpression, SemanticTypeKind};
+use crate::{semantics::{SemanticBlock, SemanticConditionalBranch, SemanticExpression}};
 
 pub(super) struct GenLoopInfo<'a> {
     cond_block: BasicBlock<'a>,
@@ -150,28 +150,14 @@ impl<'ctxt> CodeGen<'ctxt> {
         Ok(())
     }
 
-    pub fn gen_return(&mut self, value: &Option<SemanticExpression>) -> Result<(), CodeGenError> {
-		let return_value: Option<&dyn BasicValue> = match value {
-			Some(val) => {
-				let return_val = self.gen_eval(val)?;
-				if val.sem_type.kind() != SemanticTypeKind::Void {
-                    if return_val.ownership() == Ownership::Borrowed {
-                        let value_ptr = self.put_on_stack(&return_val, "return_val_ptr")?;
-                        self.copy_value(value_ptr, &val.sem_type)?;
-                    }
-					Some(&return_val.as_llvm_basic_value())
-				} else {
-					None
-				}
-			}
-			None => None
-		};
-
-		for var_id in &self.vars_to_drop {
-			self.drop_var(*var_id)?;
-		}
-        self.vars_to_drop.clear();
-		self.builder.build_return(return_value)?;
+    pub fn gen_return(&mut self, value: &Option<u32>) -> Result<(), CodeGenError> {
+        let return_val: Option<&dyn BasicValue> = if let Some(var_id) = value {
+            let ret_val = self.load_var(*var_id)?;
+            Some(&ret_val.as_llvm_basic_value())
+        } else {
+            None
+        };
+        self.builder.build_return(return_val)?;
 		Ok(())
 	}
 

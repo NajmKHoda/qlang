@@ -72,9 +72,22 @@ impl SemanticGen {
                         found: ret_expr.sem_type,
                     })
                 }
+                let return_var_id = self.variable_id_gen.next_id();
+                self.variables.insert(return_var_id, SemanticVariable {
+                    name: format!("__ql__ret_{}", return_var_id),
+                    id: return_var_id,
+                    sem_type: ret_expr.sem_type.clone(),
+                });
+
                 let closure = self.closures.get_mut(&id).unwrap();
                 closure.body = SemanticClosureBody::Procedural(SemanticBlock {
-                    statements: vec![SemanticStatement::Return(Some(ret_expr))],
+                    statements: vec![
+                        SemanticStatement::VariableDeclaration {
+                            variable_id: return_var_id,
+                            init_expr: ret_expr,
+                        },
+                        SemanticStatement::Return(Some(return_var_id))
+                    ],
                     terminates: true
                 });
             },

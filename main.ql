@@ -7,14 +7,18 @@ table Person from data {
 }
 
 function main() -> int {
-  let getAllPeople = query() { select from Person };
-  let people1 = getAllPeople();
-  let people2 = getAllPeople();
+  let getProfessionals = query(occ: str) {
+    select from Person
+    where occupation == occ
+  };
+  let teachers = getProfessionals("education");
+  let professors = getProfessionals("research");
   
-  while people1.has_next() {
-    let person1 = people1.next();
-    let person2 = people2.next();
-    prints(person1.name);
-    prints(person2.name);
+  for professor in professors {
+    prints("Professor " + professor.name);
+  }
+
+  for teacher in teachers {
+    prints("Teacher " + teacher.name);
   }
 }

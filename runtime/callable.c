@@ -8,6 +8,7 @@
 #include "database/insert_query.h"
 #include "database/update_query.h"
 #include "database/delete_query.h"
+#include "iterator.h"
 #include "callable.h"
 
 const QLTypeInfo __ql__QLCallable_type_info = {
@@ -60,11 +61,9 @@ void __ql__QLCallable_drop(QLCallable** callable_ptr) {
     if (callable->ref_count == 0) {
         fprintf(stderr, "free(callable %d)\n", callable->type);
         switch (callable->type) {
-            case CALLABLE_SELECT: {
-                PreparedSelect* prepared_select = (PreparedSelect*)callable->prepared_stmt;
-                __ql__PreparedSelect_finalize(prepared_select);
+            case CALLABLE_SELECT: 
+                __ql__QLIterator_drop((QLIterator**)&callable->prepared_stmt);
                 break;
-            }
             case CALLABLE_INSERT: {
                 PreparedInsert* prepared_insert = (PreparedInsert*)callable->prepared_stmt;
                 __ql__PreparedInsert_finalize(prepared_insert);

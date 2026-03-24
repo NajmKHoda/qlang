@@ -25,10 +25,10 @@ pub enum SemanticStatement {
         body: SemanticBlock,
         id: u32,
     },
-    Return(Option<SemanticExpression>),
+    Return(Option<u32>),
     Break(u32),
     Continue(u32),
-    DropVariable(u32),
+    DropVariable(u32)
 }
 
 pub struct SemanticConditionalBranch {

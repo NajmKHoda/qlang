@@ -1,35 +1,36 @@
 #include <stdbool.h>
 #include <stdlib.h>
+#include <stddef.h>
+#include <stdio.h>
 #include "metadata.h"
 #include "array.h"
 #include "iterator.h"
 
 QLIterator* __ql__QLIterator_new(
-    void* iterable,
     void* (*next_func)(QLIterator*),
     bool (*has_next_func)(QLIterator*),
-    QLTypeInfo* iterable_type_info,
+    void (*drop_func)(QLIterator*),
+    size_t state_size,
     QLTypeInfo* elem_type_info
 ) {
-    QLIterator* iter = malloc(sizeof(QLIterator));
-    iter->iterable = iterable;
+    QLIterator* iter = malloc(sizeof(QLIterator) + state_size);
     iter->next = next_func;
     iter->has_next = has_next_func;
-    iter->iterable_type_info = iterable_type_info;
+    iter->drop = drop_func;
     iter->elem_type_info = elem_type_info;
-    iter->index = 0;
     iter->ref_count = 1;
-
-    // Ensures that the iterable remains valid for the iterator lifetime
-    if (iterable_type_info->copy != NULL) {
-        iterable_type_info->copy(&iter->iterable);
-    }
+    iter->state_size = state_size;
 
     return iter;
 }
 
 void* __ql__QLIterator_next(QLIterator* iterator) {
-    return iterator->next(iterator);
+    void* next = iterator->next(iterator);
+    if (next == NULL) {
+        fprintf(stderr, "next() called on exhausted iterator\n");
+        exit(1);
+    }
+    return next;
 }
 
 bool __ql__QLIterator_has_next(QLIterator* iterator) {
@@ -59,11 +60,10 @@ void __ql__QLIterator_drop(QLIterator** iter_ptr) {
     QLIterator* iter = *iter_ptr;
     iter->ref_count--;
     if (iter->ref_count == 0) {
-        if (iter->iterable_type_info->drop != NULL) {
-            iter->iterable_type_info->drop(&iter->iterable);
+        if (iter->drop != NULL) {
+            iter->drop(iter);
+        } else {
+            free(iter);
         }
-        free(iter);
     }
 }
-
-

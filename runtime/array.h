@@ -14,6 +14,11 @@ typedef struct QLArray {
     void* elems;
 } QLArray;
 
+typedef struct ArrayIteratorState {
+    QLArray* array;
+    unsigned int index;
+} ArrayIteratorState;
+
 extern QLTypeInfo __ql__QLArray_type_info;
 
 QLArray* __ql__QLArray_new(void* elems, unsigned int num_elems, QLTypeInfo* type_info);

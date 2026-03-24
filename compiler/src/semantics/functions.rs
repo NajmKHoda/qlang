@@ -158,13 +158,21 @@ impl SemanticGen {
                 let ret_stmt = SemanticStatement::Return(None);
                 body_block.statements.push(ret_stmt);
             } else if self.functions[id].name == "main" {
-                let literal_zero = SemanticExpression {
-                    kind: SemanticExpressionKind::IntegerLiteral(0),
+                let return_var_id = self.variable_id_gen.next_id();
+                self.variables.insert(return_var_id, SemanticVariable {
+                    name: format!("__ql__ret_{}", return_var_id),
+                    id: return_var_id,
                     sem_type: SemanticType::new(SemanticTypeKind::Integer),
-                    ownership: Ownership::Trivial,
-                };
-                let ret_stmt = SemanticStatement::Return(Some(literal_zero));
-                body_block.statements.push(ret_stmt);
+                });
+                body_block.statements.push(SemanticStatement::VariableDeclaration {
+                    variable_id: return_var_id,
+                    init_expr: SemanticExpression {
+                        kind: SemanticExpressionKind::IntegerLiteral(0),
+                        sem_type: SemanticType::new(SemanticTypeKind::Integer),
+                        ownership: Ownership::Trivial,
+                    },
+                });
+                body_block.statements.push(SemanticStatement::Return(Some(return_var_id)));
             } else {
                 return Err(SemanticError::InexhaustiveReturnPaths {
                     function_name: self.functions[id].name.clone(),

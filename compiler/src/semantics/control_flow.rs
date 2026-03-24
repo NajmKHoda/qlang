@@ -232,7 +232,7 @@ impl SemanticGen {
         &mut self,
         expr: Option<&ExpressionNode>,
     ) -> Result<Vec<SemanticStatement>, SemanticError> {
-        let sem_expr = match expr {
+        let sem_expr_op = match expr {
             Some(expr_node) => {
                 let sem_expr = self.eval_expr(expr_node)?;
                 if !self.try_unify(&self.cur_return_type, &sem_expr.sem_type) {
@@ -254,9 +254,29 @@ impl SemanticGen {
             }
         };
 
+        let mut stmts: Vec<SemanticStatement> = vec![];
+        let return_var_id = if let Some(sem_expr) = sem_expr_op {
+            if sem_expr.sem_type == SemanticTypeKind::Void {
+                stmts.push(SemanticStatement::LoneExpression(sem_expr));
+                None
+            } else {
+                let return_var_id = self.variable_id_gen.next_id();
+                self.variables.insert(return_var_id, SemanticVariable {
+                    name: format!("__ql__ret_{}", return_var_id),
+                    id: return_var_id,
+                    sem_type: sem_expr.sem_type.clone(),
+                });
+                stmts.push(SemanticStatement::VariableDeclaration {
+                    variable_id: return_var_id,
+                    init_expr: sem_expr,
+                });
+                Some(return_var_id)
+            }
+        } else {
+            None
+        };
 
         // Drop variables up to (but not including) functional scope
-        let mut stmts: Vec<SemanticStatement> = vec![];
         for scope in self.scopes.iter().rev() {
             match scope.scope_type {
                 SemanticScopeType::Function
@@ -268,7 +288,7 @@ impl SemanticGen {
                 stmts.push(drop_stmt);
             }
         }
-        let return_stmt = SemanticStatement::Return(sem_expr);
+        let return_stmt = SemanticStatement::Return(return_var_id);
         stmts.push(return_stmt);
 
         Ok(stmts)
