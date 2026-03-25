@@ -13,7 +13,7 @@ impl<'ctxt> CodeGen<'ctxt> {
     pub(super) fn define_var(&mut self, variable_id: u32, value: GenValue<'ctxt>) -> Result<(), CodeGenError> {
         let variable = &self.program.variables[&variable_id];
         let llvm_type = self.llvm_basic_type(&variable.sem_type);
-        let variable_ptr = self.builder.build_alloca(llvm_type, &variable.name)?;
+        let variable_ptr = self.build_alloca(llvm_type, &variable.name)?;
 
         self.builder.build_store(variable_ptr, value.as_llvm_basic_value())?;
         self.llvm_variables.insert(variable.id, variable_ptr); 

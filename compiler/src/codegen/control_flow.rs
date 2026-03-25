@@ -139,14 +139,6 @@ impl<'ctxt> CodeGen<'ctxt> {
         for stmt in &block.statements {
             self.gen_stmt(stmt)?;
         }
-
-        if !block.terminates {
-            for var_id in &self.vars_to_drop {
-                self.drop_var(*var_id)?;
-            }
-            self.vars_to_drop.clear();
-        } 
-        
         Ok(())
     }
 
@@ -163,20 +155,12 @@ impl<'ctxt> CodeGen<'ctxt> {
 
     pub fn gen_break(&mut self, loop_id: u32) -> Result<(), CodeGenError> {
         let GenLoopInfo { after_block, .. } = self.loop_info[&loop_id];
-        for var_id in &self.vars_to_drop {
-            self.drop_var(*var_id)?;
-        }
-        self.vars_to_drop.clear();
         self.builder.build_unconditional_branch(after_block)?;
         Ok(())
     }
 
     pub fn gen_continue(&mut self, loop_id: u32) -> Result<(), CodeGenError> {
         let GenLoopInfo { cond_block, .. } = self.loop_info[&loop_id];
-        for var_id in &self.vars_to_drop {
-            self.drop_var(*var_id)?;
-        }
-        self.vars_to_drop.clear();
         self.builder.build_unconditional_branch(cond_block)?;
         Ok(())
     }

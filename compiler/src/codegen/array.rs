@@ -35,7 +35,7 @@ impl<'ctxt> CodeGen<'ctxt> {
 
         // Allocate memory for the elements array
         let array_type = llvm_elem_type.array_type(num_elems as u32);
-        let array_alloca = self.builder.build_alloca(array_type, "array_elems")?;
+        let array_alloca = self.build_alloca(array_type.into(), "array_elems")?;
 
         // Store each element in the array
         for (i, elem) in elems.into_iter().enumerate() {
@@ -109,7 +109,7 @@ impl<'ctxt> CodeGen<'ctxt> {
             panic!("Expected array value");
         };
 
-        let elem_ptr = self.builder.build_alloca(
+        let elem_ptr = self.build_alloca(
             self.llvm_basic_type(&elem_type),
             "append_elem_ptr"
         )?;

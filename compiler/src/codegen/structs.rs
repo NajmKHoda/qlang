@@ -272,7 +272,7 @@ impl<'ctxt> CodeGen<'ctxt> {
             .collect::<Result<Vec<GenValue<'ctxt>>, CodeGenError>>()?;
 
         let struct_info = &self.struct_info[&struct_id];
-        let struct_ptr = self.builder.build_alloca(struct_info.struct_type, &format!("{}_store", sem_struct.name))?;
+        let struct_ptr = self.build_alloca(struct_info.struct_type.into(), &format!("{}_store", sem_struct.name))?;
         for (column_name, column_value) in sem_struct.field_order.iter().zip(column_values) {
             let column_type = &sem_struct.fields[column_name];
             let column_index = sem_struct.field_order.iter()

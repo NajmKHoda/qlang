@@ -79,7 +79,7 @@ impl<'ctxt> CodeGen<'ctxt> {
 		for (i, param_id) in closure.param_ids.iter().enumerate() {
 			let param_var = &self.program.variables[param_id];
 			let llvm_param_val = closure_info.llvm_fn.get_nth_param((i + 2) as u32).unwrap();
-			let llvm_param_var = self.builder.build_alloca(
+			let llvm_param_var = self.build_alloca(
 				self.llvm_basic_type(&param_var.sem_type),
 				&param_var.name
 			)?;

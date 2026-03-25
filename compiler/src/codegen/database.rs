@@ -167,7 +167,7 @@ impl<'ctxt> CodeGen<'ctxt> {
                 let table_info = &self.table_info[table_id];
 
                 let col_name_arr_type = self.ptr_type().array_type(assignments.len() as u32);
-                let col_name_arr = self.builder.build_alloca(col_name_arr_type, "col_name_arr")?;
+                let col_name_arr = self.build_alloca(col_name_arr_type.into(), "col_name_arr")?;
                 for (i, assignment) in assignments.iter().enumerate() {
                     let col_index = assignment.column_index as usize;
                     let column_name_str = table_info.column_name_strs[col_index]

@@ -200,6 +200,21 @@ impl<'ctxt> CodeGen<'ctxt> {
         Ok(())
     }
 
+    // Builds an alloca at the beginning of the function (to prevent dynamic stack growth)
+    pub(super) fn build_alloca(&self, llvm_type: BasicTypeEnum<'ctxt>, name: &str) -> Result<PointerValue<'ctxt>, CodeGenError> {
+        let cur_block = self.builder.get_insert_block().unwrap();
+        let function = self.cur_fn.unwrap();
+        let first_block = function.get_first_basic_block().unwrap();
+        match first_block.get_first_instruction() {
+            Some(instr) => self.builder.position_before(&instr),
+            None => self.builder.position_at_end(first_block),
+        }
+
+        let alloca_ptr = self.builder.build_alloca(llvm_type, name)?;
+        self.builder.position_at_end(cur_block);
+        Ok(alloca_ptr)
+    }
+
     pub fn llvm_basic_type(&self, sem_type: &SemanticType) -> BasicTypeEnum<'ctxt> {
         match sem_type.kind() {
             SemanticTypeKind::Integer => self.int_type().into(),

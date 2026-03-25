@@ -7,7 +7,5 @@ table Person from data {
 }
 
 function main() -> int {
-  for i in irange(..) {
-    printi(i);
-  }
+  irange(..).collect();
 }

@@ -45,7 +45,6 @@ pub struct CodeGen<'ctxt> {
     strings: HashMap<String, GlobalValue<'ctxt>>,
 
     cur_fn: Option<FunctionValue<'ctxt>>,
-    vars_to_drop: Vec<u32>,
 
     context: &'ctxt Context,
     builder: Builder<'ctxt>,
@@ -77,7 +76,7 @@ impl<'ctxt> CodeGen<'ctxt> {
         for function in self.program.functions.values() {
             self.define_function(&function)?;
         }
-        
+
         let main_fn_type = self.int_type().fn_type(
             &[self.int_type().into(), self.ptr_type().into()],
             false
@@ -252,7 +251,6 @@ impl<'ctxt> CodeGen<'ctxt> {
             runtime: Runtime::new(&context, &module),
             strings: HashMap::new(),
             cur_fn: None,
-            vars_to_drop: vec![],
             context: &context,
             builder,
             module,
