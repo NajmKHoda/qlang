@@ -59,8 +59,9 @@ Expression: Box<ExpressionNode> = {
     Int => Box::new(ExpressionNode::IntegerLiteral(<>)),
     Bool => Box::new(ExpressionNode::BoolLiteral(<>)),
     QLString => Box::new(ExpressionNode::StringLiteral(<>)),
+    "irange" "(" <range:RangeSpec> ")" => Box::new(range),
     QName => Box::new(ExpressionNode::QName(<>)),
-    "(" <Expression> ")",
+    "(" <Expression> ")" => <>,
 
     #[precedence(level="1")]
     <name:ProperQName?> "{" <fields:Comma<ColumnValue>> "}" => Box::new(ExpressionNode::Struct(<>)),
@@ -90,6 +91,17 @@ Expression: Box<ExpressionNode> = {
 }
 
 ColumnValue: ColumnValueNode = <name:QName> ":" <value:Expression> => ColumnValueNode { <> };
+
+RangeSpec: ExpressionNode = {
+    <start:Expression> ".." <end:Expression> <step:RangeStep?> => ExpressionNode::Range { start: Some(start), end: Some(end), inclusive: false, step },
+    <start:Expression> "..=" <end:Expression> <step:RangeStep?> => ExpressionNode::Range { start: Some(start), end: Some(end), inclusive: true, step },
+    ".." <end:Expression> <step:RangeStep?> => ExpressionNode::Range { start: None, end: Some(end), inclusive: false, step },
+    "..=" <end:Expression> <step:RangeStep?> => ExpressionNode::Range { start: None, end: Some(end), inclusive: true, step },
+    <start:Expression> ".." <step:RangeStep?> => ExpressionNode::Range { start: Some(start), end: None, inclusive: false, step },
+    ".." <step:RangeStep?> => ExpressionNode::Range { start: None, end: None, inclusive: false, step }
+};
+
+RangeStep: Box<ExpressionNode> = ":" <Expression> => <>;
 
 ClosureBody: ClosureBodyNode = {
     <Expression> => ClosureBodyNode::Expression(<>),

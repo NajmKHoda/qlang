@@ -81,6 +81,12 @@ pub enum ExpressionNode {
     IntegerLiteral(i32),
     BoolLiteral(bool),
     StringLiteral(String),
+    Range {
+        start: Option<Box<ExpressionNode>>,
+        end: Option<Box<ExpressionNode>>,
+        inclusive: bool,
+        step: Option<Box<ExpressionNode>>,
+    },
     Closure(Vec<TypedQNameNode>, Option<TypeNode>, ClosureBodyNode),
     Add(Box<ExpressionNode>, Box<ExpressionNode>),
     Subtract(Box<ExpressionNode>, Box<ExpressionNode>),

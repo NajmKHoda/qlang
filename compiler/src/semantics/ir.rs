@@ -58,6 +58,12 @@ pub enum SemanticExpressionKind {
         array_expr: Box<SemanticExpression>,
         index_expr: Box<SemanticExpression>,
     },
+    Range {
+        start: Option<Box<SemanticExpression>>,
+        end: Option<Box<SemanticExpression>>,
+        inclusive: bool,
+        step: Option<Box<SemanticExpression>>,
+    },
     Add {
         left: Box<SemanticExpression>,
         right: Box<SemanticExpression>

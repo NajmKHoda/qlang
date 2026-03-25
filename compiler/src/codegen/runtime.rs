@@ -41,6 +41,7 @@ pub(super) struct Runtime<'ctxt> {
     pub(super) iterator_zip: FunctionValue<'ctxt>,
     pub(super) iterator_collect: FunctionValue<'ctxt>,
     pub(super) iterator_concat: FunctionValue<'ctxt>,
+    pub(super) iterator_range: FunctionValue<'ctxt>,
 
     pub(super) init_dbs: FunctionValue<'ctxt>,
     pub(super) close_dbs: FunctionValue<'ctxt>,
@@ -241,6 +242,12 @@ impl<'ctxt> Runtime<'ctxt> {
         let iterator_concat = module.add_function(
             "__ql__QLIterator_concat",
             ptr_type.fn_type(&[ptr_type.into(), ptr_type.into()], false),
+            Some(Linkage::External),
+        );
+
+        let iterator_range = module.add_function(
+            "__ql__QLIterator_range",
+            ptr_type.fn_type(&[int_type.into(), int_type.into(), int_type.into()], false),
             Some(Linkage::External),
         );
 
@@ -528,6 +535,7 @@ impl<'ctxt> Runtime<'ctxt> {
             iterator_zip,
             iterator_collect,
             iterator_concat,
+            iterator_range,
 
             init_dbs,
             close_dbs,

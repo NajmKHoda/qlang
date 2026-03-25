@@ -1,8 +1,8 @@
 use core::panic;
 
-use inkwell::{types::BasicType, values::{AnyValue}};
+use inkwell::{types::BasicType, values::{AnyValue}, IntPredicate};
 
-use crate::semantics::{Ownership, SemanticType};
+use crate::semantics::{Ownership, SemanticType, SemanticTypeKind};
 
 use super::*;
 
@@ -203,6 +203,78 @@ impl<'ctxt> CodeGen<'ctxt> {
         )?.as_any_value_enum().into_int_value();
 
         Ok(GenValue::Bool(has_next))
+    }
+
+    pub fn gen_range(
+        &mut self,
+        start: Option<&SemanticExpression>,
+        end: Option<&SemanticExpression>,
+        inclusive: bool,
+        step: Option<&SemanticExpression>
+    ) -> Result<GenValue<'ctxt>, CodeGenError> {
+        let zero = self.int_type().const_zero();
+        let one = self.int_type().const_int(1, false);
+        let neg_one = self.int_type().const_int((-1i64) as u64, true);
+        let int_max = self.int_type().const_int(i32::MAX as u64, false);
+
+        let start_val = match start {
+            Some(expr) => {
+                let val = self.gen_eval(expr)?;
+                let GenValue::Integer(int_val) = val else {
+                    panic!("Expected integer range start");
+                };
+                int_val
+            }
+            None => zero,
+        };
+
+        let end_val = match end {
+            Some(expr) => {
+                let val = self.gen_eval(expr)?;
+                let GenValue::Integer(int_val) = val else {
+                    panic!("Expected integer range end");
+                };
+                int_val
+            }
+            None => int_max,
+        };
+
+        let step_val = match step {
+            Some(expr) => {
+                let val = self.gen_eval(expr)?;
+                let GenValue::Integer(int_val) = val else {
+                    panic!("Expected integer range step");
+                };
+                int_val
+            }
+            None => one,
+        };
+
+        let end_val = if inclusive && end.is_some() {
+            let is_pos = self.builder.build_int_compare(
+                IntPredicate::SGT,
+                step_val,
+                zero,
+                "range_step_pos"
+            )?;
+            let delta = self.builder.build_select(is_pos, one, neg_one, "range_delta")?
+                .into_int_value();
+            self.builder.build_int_add(end_val, delta, "range_end_adj")?
+        } else {
+            end_val
+        };
+
+        let iter_ptr = self.builder.build_call(
+            self.runtime.iterator_range,
+            &[start_val.into(), end_val.into(), step_val.into()],
+            "iterator_range"
+        )?.as_any_value_enum().into_pointer_value();
+
+        Ok(GenValue::Iterator {
+            value: iter_ptr,
+            elem_type: SemanticType::new(SemanticTypeKind::Integer),
+            ownership: Ownership::Owned,
+        })
     }
 
     pub fn gen_iterator_collect(&self, iterator: GenValue<'ctxt>) -> Result<GenValue<'ctxt>, CodeGenError> {

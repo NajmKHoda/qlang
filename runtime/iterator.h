@@ -20,6 +20,13 @@ typedef struct ConcatIteratorState {
     bool using_a;
 } ConcatIteratorState;
 
+typedef struct RangeIteratorState {
+    int current;
+    int end;
+    int step;
+    int value;
+} RangeIteratorState;
+
 struct QLIterator {
     void* (*next)(QLIterator* iterator); 
     bool (*has_next)(QLIterator* iterator);
@@ -44,6 +51,7 @@ bool __ql__QLIterator_has_next(QLIterator* iter);
 QLArray* __ql__QLIterator_collect(QLIterator* iter);
 QLIterator* __ql__QLIterator_zip(QLIterator* iter_a, QLIterator* iter_b);
 QLIterator* __ql__QLIterator_concat(QLIterator* iter_a, QLIterator* iter_b);
+QLIterator* __ql__QLIterator_range(int a, int b, int c);
 
 void __ql__QLIterator_copy(QLIterator** iter_ptr);
 void __ql__QLIterator_drop(QLIterator** iter_ptr);

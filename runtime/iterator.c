@@ -2,7 +2,9 @@
 #include <stdlib.h>
 #include <stddef.h>
 #include <stdio.h>
+#include <limits.h>
 #include "metadata.h"
+#include "primitives.h"
 #include "array.h"
 #include "iterator.h"
 
@@ -168,6 +170,56 @@ QLIterator* __ql__QLIterator_concat(QLIterator* iter_a, QLIterator* iter_b) {
     state->using_a = true;
     __ql__QLIterator_copy(&state->iter_a);
     __ql__QLIterator_copy(&state->iter_b);
+
+    return iter;
+}
+
+static void* __ql__QLIterator_range_next(QLIterator* iter) {
+    RangeIteratorState* state = (RangeIteratorState*)(iter->state);
+    if ((state->step > 0 && state->current >= state->end) ||
+        (state->step < 0 && state->current <= state->end)) {
+        return NULL;
+    }
+
+    state->value = state->current;
+    state->current += state->step;
+    return &state->value;
+}
+
+static bool __ql__QLIterator_range_has_next(QLIterator* iter) {
+    RangeIteratorState* state = (RangeIteratorState*)(iter->state);
+    if (state->step > 0) {
+        return state->current < state->end;
+    }
+    if (state->step < 0) {
+        return state->current > state->end;
+    }
+    return false;
+}
+
+static void __ql__QLIterator_range_drop(QLIterator* iter) {
+    free(iter);
+}
+
+QLIterator* __ql__QLIterator_range(int a, int b, int c) {
+    if (c == 0) {
+        fprintf(stderr, "range step cannot be 0\n");
+        exit(1);
+    }
+
+    QLIterator* iter = __ql__QLIterator_new(
+        __ql__QLIterator_range_next,
+        __ql__QLIterator_range_has_next,
+        __ql__QLIterator_range_drop,
+        sizeof(RangeIteratorState),
+        &__ql__int_type_info
+    );
+
+    RangeIteratorState* state = (RangeIteratorState*)(iter->state);
+    state->current = a;
+    state->end = b;
+    state->step = c;
+    state->value = 0;
 
     return iter;
 }

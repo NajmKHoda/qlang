@@ -188,6 +188,9 @@ impl<'ctxt> CodeGen<'ctxt> {
                 let index_value = self.gen_eval(index_expr)?;
                 self.gen_array_index(array_value, index_value)
             }
+            SemanticExpressionKind::Range { start, end, inclusive, step } => {
+                self.gen_range(start.as_deref(), end.as_deref(), *inclusive, step.as_deref())
+            }
             SemanticExpressionKind::Add { left, right } => {
                 self.gen_add(left, right)
             }

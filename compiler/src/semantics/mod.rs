@@ -157,6 +157,68 @@ impl SemanticGen {
             ExpressionNode::ArrayIndex(array_expr, index_expr) => {
                 self.eval_array_index(array_expr, index_expr)
             },
+            ExpressionNode::Range { start, end, inclusive, step } => {
+                let sem_start = match start {
+                    Some(expr) => Some(Box::new(self.eval_expr(expr)?)),
+                    None => None,
+                };
+                let sem_end = match end {
+                    Some(expr) => Some(Box::new(self.eval_expr(expr)?)),
+                    None => None,
+                };
+                let sem_step = match step {
+                    Some(expr) => Some(Box::new(self.eval_expr(expr)?)),
+                    None => None,
+                };
+
+                if *inclusive && sem_end.is_none() {
+                    return Err(SemanticError::IncompatibleOperands {
+                        operation: "range".to_string(),
+                        left_type: SemanticType::new(SemanticTypeKind::Void),
+                        right_type: SemanticType::new(SemanticTypeKind::Void),
+                    });
+                }
+
+                let int_type = SemanticType::new(SemanticTypeKind::Integer);
+                if let Some(ref expr) = sem_start {
+                    if !self.try_downcast(&int_type, &expr.sem_type) {
+                        return Err(SemanticError::IncompatibleOperands {
+                            operation: "range".to_string(),
+                            left_type: expr.sem_type.clone(),
+                            right_type: int_type.clone(),
+                        });
+                    }
+                }
+                if let Some(ref expr) = sem_end {
+                    if !self.try_downcast(&int_type, &expr.sem_type) {
+                        return Err(SemanticError::IncompatibleOperands {
+                            operation: "range".to_string(),
+                            left_type: expr.sem_type.clone(),
+                            right_type: int_type.clone(),
+                        });
+                    }
+                }
+                if let Some(ref expr) = sem_step {
+                    if !self.try_downcast(&int_type, &expr.sem_type) {
+                        return Err(SemanticError::IncompatibleOperands {
+                            operation: "range".to_string(),
+                            left_type: expr.sem_type.clone(),
+                            right_type: int_type.clone(),
+                        });
+                    }
+                }
+
+                Ok(SemanticExpression {
+                    kind: SemanticExpressionKind::Range {
+                        start: sem_start,
+                        end: sem_end,
+                        inclusive: *inclusive,
+                        step: sem_step,
+                    },
+                    sem_type: SemanticType::new(SemanticTypeKind::Iterator(int_type.clone())),
+                    ownership: Ownership::Owned,
+                })
+            }
             ExpressionNode::Add(left, right) => {
                 self.eval_add(left, right)
             }
