@@ -98,6 +98,8 @@ pub enum BuiltinFunction {
     PrintBool,
     InputInteger,
     InputString,
+    Zip,
+    Concat,
 }
 
 #[derive(Clone, Copy)]
@@ -107,7 +109,8 @@ pub enum BuiltinMethod {
     ArrayPop,
     ArrayIter,
     IteratorNext,
-    IteratorHasNext
+    IteratorHasNext,
+    IteratorCollect,
 }
 
 pub enum SemanticQuery {

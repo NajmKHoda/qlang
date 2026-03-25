@@ -204,4 +204,22 @@ impl<'ctxt> CodeGen<'ctxt> {
 
         Ok(GenValue::Bool(has_next))
     }
+
+    pub fn gen_iterator_collect(&self, iterator: GenValue<'ctxt>) -> Result<GenValue<'ctxt>, CodeGenError> {
+        let GenValue::Iterator { value: iter_ptr, elem_type, .. } = iterator else {
+            panic!("Expected iterator value");
+        };
+
+        let array_ptr = self.builder.build_call(
+            self.runtime.iterator_collect,
+            &[iter_ptr.into()],
+            "iterator_collect"
+        )?.as_any_value_enum().into_pointer_value();
+
+        Ok(GenValue::Array {
+            value: array_ptr,
+            elem_type,
+            ownership: Ownership::Owned,
+        })
+    }
 }

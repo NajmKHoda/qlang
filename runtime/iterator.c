@@ -65,5 +65,109 @@ void __ql__QLIterator_drop(QLIterator** iter_ptr) {
         } else {
             free(iter);
         }
+        fprintf(stderr, "free(QLIterator)\n");
     }
+}
+
+static void* __ql__QLIterator_zip_next(QLIterator* iter) {
+    ZipIteratorState* state = (ZipIteratorState*)(iter->state);
+
+    if (state->next_from_a) {
+        if (__ql__QLIterator_has_next(state->iter_a)) {
+            state->next_from_a = false;
+            return __ql__QLIterator_next(state->iter_a);
+        }
+        if (__ql__QLIterator_has_next(state->iter_b)) {
+            return __ql__QLIterator_next(state->iter_b);
+        }
+        return NULL;
+    }
+
+    if (__ql__QLIterator_has_next(state->iter_b)) {
+        state->next_from_a = true;
+        return __ql__QLIterator_next(state->iter_b);
+    }
+    if (__ql__QLIterator_has_next(state->iter_a)) {
+        return __ql__QLIterator_next(state->iter_a);
+    }
+    return NULL;
+}
+
+static bool __ql__QLIterator_zip_has_next(QLIterator* iter) {
+    ZipIteratorState* state = (ZipIteratorState*)(iter->state);
+    return __ql__QLIterator_has_next(state->iter_a) || __ql__QLIterator_has_next(state->iter_b);
+}
+
+static void __ql__QLIterator_zip_drop(QLIterator* iter) {
+    ZipIteratorState* state = (ZipIteratorState*)(iter->state);
+    __ql__QLIterator_drop(&state->iter_a);
+    __ql__QLIterator_drop(&state->iter_b);
+    free(iter);
+}
+
+QLIterator* __ql__QLIterator_zip(QLIterator* iter_a, QLIterator* iter_b) {
+    QLIterator* iter = __ql__QLIterator_new(
+        __ql__QLIterator_zip_next,
+        __ql__QLIterator_zip_has_next,
+        __ql__QLIterator_zip_drop,
+        sizeof(ZipIteratorState),
+        iter_a->elem_type_info
+    );
+
+    ZipIteratorState* state = (ZipIteratorState*)(iter->state);
+    state->iter_a = iter_a;
+    state->iter_b = iter_b;
+    state->next_from_a = true;
+    __ql__QLIterator_copy(&state->iter_a);
+    __ql__QLIterator_copy(&state->iter_b);
+
+    return iter;
+}
+
+static void* __ql__QLIterator_concat_next(QLIterator* iter) {
+    ConcatIteratorState* state = (ConcatIteratorState*)(iter->state);
+
+    if (state->using_a) {
+        if (__ql__QLIterator_has_next(state->iter_a)) {
+            return __ql__QLIterator_next(state->iter_a);
+        }
+        state->using_a = false;
+    }
+
+    if (__ql__QLIterator_has_next(state->iter_b)) {
+        return __ql__QLIterator_next(state->iter_b);
+    }
+
+    return NULL;
+}
+
+static bool __ql__QLIterator_concat_has_next(QLIterator* iter) {
+    ConcatIteratorState* state = (ConcatIteratorState*)(iter->state);
+    return __ql__QLIterator_has_next(state->iter_a) || __ql__QLIterator_has_next(state->iter_b);
+}
+
+static void __ql__QLIterator_concat_drop(QLIterator* iter) {
+    ConcatIteratorState* state = (ConcatIteratorState*)(iter->state);
+    __ql__QLIterator_drop(&state->iter_a);
+    __ql__QLIterator_drop(&state->iter_b);
+    free(iter);
+}
+
+QLIterator* __ql__QLIterator_concat(QLIterator* iter_a, QLIterator* iter_b) {
+    QLIterator* iter = __ql__QLIterator_new(
+        __ql__QLIterator_concat_next,
+        __ql__QLIterator_concat_has_next,
+        __ql__QLIterator_concat_drop,
+        sizeof(ConcatIteratorState),
+        iter_a->elem_type_info
+    );
+
+    ConcatIteratorState* state = (ConcatIteratorState*)(iter->state);
+    state->iter_a = iter_a;
+    state->iter_b = iter_b;
+    state->using_a = true;
+    __ql__QLIterator_copy(&state->iter_a);
+    __ql__QLIterator_copy(&state->iter_b);
+
+    return iter;
 }

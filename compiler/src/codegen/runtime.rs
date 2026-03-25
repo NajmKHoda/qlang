@@ -38,6 +38,9 @@ pub(super) struct Runtime<'ctxt> {
     pub(super) iterator_has_next: FunctionValue<'ctxt>,
     pub(super) iterator_copy: FunctionValue<'ctxt>,
     pub(super) iterator_drop: FunctionValue<'ctxt>,
+    pub(super) iterator_zip: FunctionValue<'ctxt>,
+    pub(super) iterator_collect: FunctionValue<'ctxt>,
+    pub(super) iterator_concat: FunctionValue<'ctxt>,
 
     pub(super) init_dbs: FunctionValue<'ctxt>,
     pub(super) close_dbs: FunctionValue<'ctxt>,
@@ -220,6 +223,24 @@ impl<'ctxt> Runtime<'ctxt> {
         let iterator_drop = module.add_function(
             "__ql__QLIterator_drop",
             void_type.fn_type(&[ptr_type.into()], false),
+            Some(Linkage::External),
+        );
+
+        let iterator_zip = module.add_function(
+            "__ql__QLIterator_zip",
+            ptr_type.fn_type(&[ptr_type.into(), ptr_type.into()], false),
+            Some(Linkage::External),
+        );
+
+        let iterator_collect = module.add_function(
+            "__ql__QLIterator_collect",
+            ptr_type.fn_type(&[ptr_type.into()], false),
+            Some(Linkage::External),
+        );
+
+        let iterator_concat = module.add_function(
+            "__ql__QLIterator_concat",
+            ptr_type.fn_type(&[ptr_type.into(), ptr_type.into()], false),
             Some(Linkage::External),
         );
 
@@ -504,6 +525,9 @@ impl<'ctxt> Runtime<'ctxt> {
             iterator_has_next,
             iterator_copy,
             iterator_drop,
+            iterator_zip,
+            iterator_collect,
+            iterator_concat,
 
             init_dbs,
             close_dbs,

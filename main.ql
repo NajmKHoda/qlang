@@ -7,18 +7,10 @@ table Person from data {
 }
 
 function main() -> int {
-  let getProfessionals = query(occ: str) {
-    select from Person
-    where occupation == occ
-  };
-  let teachers = getProfessionals("education");
-  let professors = getProfessionals("research");
-  
-  for professor in professors {
-    prints("Professor " + professor.name);
-  }
-
-  for teacher in teachers {
-    prints("Teacher " + teacher.name);
+  let odds = [1, 3, 5, 7, 9].iter();
+  let evens = [0, 2, 4, 6, 8].iter();
+  let concat_iter = concat(evens, odds);
+  for x in concat_iter {
+    printi(x);
   }
 }

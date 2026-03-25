@@ -8,6 +8,18 @@ typedef struct QLTypeInfo QLTypeInfo;
 typedef struct QLArray QLArray;
 typedef struct QLIterator QLIterator;
 
+typedef struct ZipIteratorState {
+    QLIterator* iter_a;
+    QLIterator* iter_b;
+    bool next_from_a;
+} ZipIteratorState;
+
+typedef struct ConcatIteratorState {
+    QLIterator* iter_a;
+    QLIterator* iter_b;
+    bool using_a;
+} ConcatIteratorState;
+
 struct QLIterator {
     void* (*next)(QLIterator* iterator); 
     bool (*has_next)(QLIterator* iterator);
@@ -30,6 +42,8 @@ QLIterator* __ql__QLIterator_new(
 void* __ql__QLIterator_next(QLIterator* iter);
 bool __ql__QLIterator_has_next(QLIterator* iter);
 QLArray* __ql__QLIterator_collect(QLIterator* iter);
+QLIterator* __ql__QLIterator_zip(QLIterator* iter_a, QLIterator* iter_b);
+QLIterator* __ql__QLIterator_concat(QLIterator* iter_a, QLIterator* iter_b);
 
 void __ql__QLIterator_copy(QLIterator** iter_ptr);
 void __ql__QLIterator_drop(QLIterator** iter_ptr);

@@ -86,7 +86,6 @@ static void __ql__SelectIterator_drop(QLIterator* iter) {
         free(state->sql);
     }
     free(iter);
-    fprintf(stderr, "finalize SelectIterator\n");
 }
 
 QLIterator* __ql__SelectPlan_prepare(sqlite3* db, SelectPlan* plan) {

@@ -14,6 +14,8 @@ const BUILTIN_FNS: &[&str] = &[
     "printb",
     "inputs",
     "inputi",
+    "zip",
+    "concat",
 ];
 
 impl SemanticGen {
@@ -100,6 +102,116 @@ impl SemanticGen {
                         args: arg_exprs,
                     },
                     ownership: Ownership::Trivial,
+                })
+            }
+            "zip" => {
+                if arg_exprs.len() != 2 {
+                    return Err(SemanticError::MismatchingCallArity {
+                        function_name: "zip".to_string(),
+                        expected: 2,
+                        found: arg_exprs.len(),
+                    });
+                }
+
+                let iter_any = SemanticType::new(SemanticTypeKind::Iterator(
+                    SemanticType::new(SemanticTypeKind::Any)
+                ));
+
+                let iter_a_type = match arg_exprs[0].sem_type.kind() {
+                    SemanticTypeKind::Iterator(elem_type) => elem_type,
+                    _ => {
+                        return Err(SemanticError::IncompatibleArgumentType {
+                            function_name: "zip".to_string(),
+                            position: 0,
+                            expected: iter_any.clone(),
+                            found: arg_exprs[0].sem_type.clone(),
+                        });
+                    }
+                };
+
+                let iter_b_type = match arg_exprs[1].sem_type.kind() {
+                    SemanticTypeKind::Iterator(elem_type) => elem_type,
+                    _ => {
+                        return Err(SemanticError::IncompatibleArgumentType {
+                            function_name: "zip".to_string(),
+                            position: 1,
+                            expected: SemanticType::new(SemanticTypeKind::Iterator(iter_a_type.clone())),
+                            found: arg_exprs[1].sem_type.clone(),
+                        });
+                    }
+                };
+
+                if !self.try_unify(&iter_a_type, &iter_b_type) {
+                    return Err(SemanticError::IncompatibleArgumentType {
+                        function_name: "zip".to_string(),
+                        position: 1,
+                        expected: SemanticType::new(SemanticTypeKind::Iterator(iter_a_type.clone())),
+                        found: arg_exprs[1].sem_type.clone(),
+                    });
+                }
+
+                Ok(SemanticExpression {
+                    sem_type: SemanticType::new(SemanticTypeKind::Iterator(iter_a_type.clone())),
+                    kind: SemanticExpressionKind::BuiltinFunctionCall {
+                        function: BuiltinFunction::Zip,
+                        args: arg_exprs,
+                    },
+                    ownership: Ownership::Owned,
+                })
+            }
+            "concat" => {
+                if arg_exprs.len() != 2 {
+                    return Err(SemanticError::MismatchingCallArity {
+                        function_name: "concat".to_string(),
+                        expected: 2,
+                        found: arg_exprs.len(),
+                    });
+                }
+
+                let iter_any = SemanticType::new(SemanticTypeKind::Iterator(
+                    SemanticType::new(SemanticTypeKind::Any)
+                ));
+
+                let iter_a_type = match arg_exprs[0].sem_type.kind() {
+                    SemanticTypeKind::Iterator(elem_type) => elem_type,
+                    _ => {
+                        return Err(SemanticError::IncompatibleArgumentType {
+                            function_name: "concat".to_string(),
+                            position: 0,
+                            expected: iter_any.clone(),
+                            found: arg_exprs[0].sem_type.clone(),
+                        });
+                    }
+                };
+
+                let iter_b_type = match arg_exprs[1].sem_type.kind() {
+                    SemanticTypeKind::Iterator(elem_type) => elem_type,
+                    _ => {
+                        return Err(SemanticError::IncompatibleArgumentType {
+                            function_name: "concat".to_string(),
+                            position: 1,
+                            expected: SemanticType::new(SemanticTypeKind::Iterator(iter_a_type.clone())),
+                            found: arg_exprs[1].sem_type.clone(),
+                        });
+                    }
+                };
+
+                if !self.try_unify(&iter_a_type, &iter_b_type) {
+                    return Err(SemanticError::IncompatibleArgumentType {
+                        function_name: "concat".to_string(),
+                        position: 1,
+                        expected: SemanticType::new(SemanticTypeKind::Iterator(iter_a_type.clone())),
+                        found: arg_exprs[1].sem_type.clone(),
+                    });
+                }
+
+                Ok(SemanticExpression {
+                    sem_type: SemanticType::new(SemanticTypeKind::Iterator(iter_a_type.clone())),
+                    kind: SemanticExpressionKind::BuiltinFunctionCall {
+                        function: BuiltinFunction::Concat,
+                        args: arg_exprs,
+                    },
+                    ownership: Ownership::Owned,
                 })
             }
             _ => Err(SemanticError::UndefinedFunction { name: name.to_string() }),
@@ -353,6 +465,18 @@ impl SemanticGen {
                     kind: SemanticExpressionKind::BuiltinMethodCall {
                         receiver: Box::new(sem_receiver),
                         method: BuiltinMethod::IteratorHasNext,
+                        args: vec![]
+                    },
+                })
+            }
+            (SemanticTypeKind::Iterator(elem_type), "collect") => {
+                self.check_args("Iterator.collect", &sem_args, &[])?;
+                Ok(SemanticExpression {
+                    ownership: Ownership::Owned,
+                    sem_type: SemanticType::new(SemanticTypeKind::Array(elem_type.clone())),
+                    kind: SemanticExpressionKind::BuiltinMethodCall {
+                        receiver: Box::new(sem_receiver),
+                        method: BuiltinMethod::IteratorCollect,
                         args: vec![]
                     },
                 })

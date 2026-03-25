@@ -134,6 +134,46 @@ impl<'ctxt> CodeGen<'ctxt> {
 				)?.as_any_value_enum().into_int_value();
 				Ok(GenValue::Integer(input))
 			}
+			BuiltinFunction::Zip => {
+				let GenValue::Iterator { value: iter_a_ptr, elem_type, .. } = &arg_values[0] else {
+					panic!("Expected iterator value");
+				};
+				let GenValue::Iterator { value: iter_b_ptr, .. } = &arg_values[1] else {
+					panic!("Expected iterator value");
+				};
+
+				let iter_ptr = self.builder.build_call(
+					self.runtime.iterator_zip,
+					&[(*iter_a_ptr).into(), (*iter_b_ptr).into()],
+					"iterator_zip"
+				)?.as_any_value_enum().into_pointer_value();
+
+				Ok(GenValue::Iterator {
+					value: iter_ptr,
+					elem_type: elem_type.clone(),
+					ownership: Ownership::Owned,
+				})
+			}
+			BuiltinFunction::Concat => {
+				let GenValue::Iterator { value: iter_a_ptr, elem_type, .. } = &arg_values[0] else {
+					panic!("Expected iterator value");
+				};
+				let GenValue::Iterator { value: iter_b_ptr, .. } = &arg_values[1] else {
+					panic!("Expected iterator value");
+				};
+
+				let iter_ptr = self.builder.build_call(
+					self.runtime.iterator_concat,
+					&[(*iter_a_ptr).into(), (*iter_b_ptr).into()],
+					"iterator_concat"
+				)?.as_any_value_enum().into_pointer_value();
+
+				Ok(GenValue::Iterator {
+					value: iter_ptr,
+					elem_type: elem_type.clone(),
+					ownership: Ownership::Owned,
+				})
+			}
 		}
 	}
 
@@ -165,6 +205,9 @@ impl<'ctxt> CodeGen<'ctxt> {
 			}
 			BuiltinMethod::IteratorHasNext => {
 				self.gen_iterator_has_next(object)
+			}
+			BuiltinMethod::IteratorCollect => {
+				self.gen_iterator_collect(object)
 			}
 		}
 	}
