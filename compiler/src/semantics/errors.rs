@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fmt::{Display, Formatter}};
+use std::fmt::{Display, Formatter};
 use super::{SemanticType};
 
 pub enum SemanticError {
@@ -49,9 +49,7 @@ pub enum SemanticError {
         name: String,
     },
     IncompatibleStructInitialization {
-        name: String,
-        expected_fields: HashMap<String, SemanticType>,
-        found_fields: HashMap<String, SemanticType>,
+        struct_name: String,
     },
     UndefinedStructFieldAccess {
         struct_type: SemanticType,
@@ -194,9 +192,8 @@ impl Display for SemanticError {
             SemanticError::DuplicateFieldInitialization { name } => {
                 write!(f, "Struct field {} is initialized multiple times", name)
             }
-            SemanticError::IncompatibleStructInitialization { name, .. } => {
-                write!(f, "Incompatible initialization of struct {}:\n", name)?;
-                self.write_struct_diff(f)
+            SemanticError::IncompatibleStructInitialization { struct_name } => {
+                write!(f, "Incompatible initialization of struct {}\n", struct_name)
             }
             SemanticError::UndefinedStructFieldAccess { struct_type, field_name } => {
                 write!(f, "Struct type {} has no field named {}", struct_type, field_name)
@@ -283,30 +280,5 @@ impl Display for SemanticError {
                 write!(f, "Expression of type {} cannot be iterated over", found_type)
             }
         }
-    }
-}
-
-impl SemanticError {
-    fn write_struct_diff(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
-        if let SemanticError::IncompatibleStructInitialization { expected_fields, found_fields, .. } = self {
-            for (field, expected_type) in expected_fields {
-                match found_fields.get(field) {
-                    Some(found_type) if found_type != expected_type => {
-                        write!(f, "  Field \"{}\" has type {} where {} was expected\n", field, expected_type, found_type)?;
-                    },
-                    None => {
-                        write!(f, "  Missing field \"{}\" of type {}\n", field, expected_type)?;
-                    },
-                    _ => {}
-                }
-            }
-            for (field, found_type) in found_fields {
-                if !expected_fields.contains_key(field) {
-                    write!(f, "  Unexpected field \"{}\" of type {}\n", field, found_type)?;
-                }
-            }
-            return Ok(());
-        }
-        write!(f, "{}", self)
     }
 }

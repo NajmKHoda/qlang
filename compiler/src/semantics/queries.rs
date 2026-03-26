@@ -1,5 +1,3 @@
-use std::{collections::HashMap};
-
 use super::*;
 
 pub struct SemanticDatasource {
@@ -19,34 +17,31 @@ pub struct SemanticTable {
 impl SemanticGen {
     fn eval_where_clause(&self, table: &SemanticTable, column_name: &str, sem_expr: SemanticExpression) -> Result<WhereClause, SemanticError> {
         let table_struct = &self.structs[table.struct_id];
-        let column_type = table_struct.fields.get(column_name);
-        match column_type {
-            Some(col_type) => {
+        let column = table_struct.field_index_type(column_name);
+        match column {
+            Some((col_index, col_type)) => {
                 let compatible = self.try_downcast(col_type, &sem_expr.sem_type);
-                if !compatible {
-                    return Err(SemanticError::IncompatibleColumnValue {
+                if compatible {
+                    Ok(WhereClause {
+                        column_index: col_index as u32,
+                        value: Box::new(sem_expr),
+                    })
+                } else {
+                    Err(SemanticError::IncompatibleColumnValue {
                         table_name: table.name.clone(),
                         column_name: column_name.to_string(),
                         expected: col_type.clone(),
                         found: sem_expr.sem_type.clone(),
-                    });
+                    })
                 }
             },
             None => {
-                return Err(SemanticError::UndefinedColumn {
+                Err(SemanticError::UndefinedColumn {
                     table_name: table.name.clone(),
                     column_name: column_name.to_string(),
-                });
+                })
             }
-        }
-
-        let column_index = table_struct.field_order.iter()
-            .position(|name| name == column_name)
-            .unwrap() as u32;
-        Ok(WhereClause {
-            column_index,
-            value: Box::new(sem_expr),
-        })
+        }        
     }
 
     pub(super) fn declare_datasource(&mut self, name: &str, is_readonly: bool) -> Result<(), SemanticError> {
@@ -86,7 +81,7 @@ impl SemanticGen {
             });
         }
 
-        let mut struct_fields = HashMap::new();
+        let mut struct_fields = Vec::new();
         for field in fields {
             let is_primitive = match field.type_node {
                 TypeNode::Integer | TypeNode::Bool | TypeNode::String => true,
@@ -98,10 +93,10 @@ impl SemanticGen {
                     column_name: field.name.clone()
                 });
             }
-            struct_fields.insert(
+            struct_fields.push((
                 field.name.clone(),
-                self.try_get_semantic_type(&field.type_node)?,
-            );
+                self.try_get_semantic_type(&field.type_node)?
+            ));
         }
 
         let struct_id = self.struct_id_gen.next_id();
@@ -109,7 +104,6 @@ impl SemanticGen {
             name: name.to_string(),
             id: struct_id,
             fields: struct_fields,
-            field_order: fields.iter().map(|f| f.name.clone()).collect(),
         });
 
         let table_id = self.table_id_gen.next_id();
@@ -205,11 +199,16 @@ impl SemanticGen {
 
         let table_struct = &self.structs[table.struct_id];
         let sem_assignments = assignments.into_iter().map(|(col_name, sem_expr)| {
-            let column_type = table_struct.fields.get(col_name);
-            match column_type {
-                Some(col_type) => {
+            let column = table_struct.field_index_type(col_name);
+            match column {
+                Some((col_index, col_type)) => {
                     let compatible = self.try_downcast(col_type, &sem_expr.sem_type);
-                    if !compatible {
+                    if compatible {
+                        Ok(UpdateAssignment {
+                            column_index: col_index as u32,
+                            value: sem_expr,
+                        })
+                    } else {
                         return Err(SemanticError::IncompatibleColumnValue {
                             table_name: table.name.clone(),
                             column_name: col_name.to_string(),
@@ -219,20 +218,12 @@ impl SemanticGen {
                     }
                 },
                 None => {
-                    return Err(SemanticError::UndefinedColumn {
+                    Err(SemanticError::UndefinedColumn {
                         table_name: table.name.clone(),
                         column_name: col_name.to_string(),
-                    });
+                    })
                 }
             }
-
-            let column_index = table_struct.field_order.iter()
-                .position(|name| name == col_name)
-                .unwrap() as u32;
-            Ok(UpdateAssignment {
-                column_index,
-                value: sem_expr,
-            })
         }).collect::<Result<Vec<_>, SemanticError>>()?;
 
         Ok(SemanticQuery::Update {

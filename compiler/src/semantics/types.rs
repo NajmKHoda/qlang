@@ -145,6 +145,27 @@ impl PartialEq<SemanticTypeKind> for SemanticType {
 }
 
 impl SemanticGen {
+    fn try_downcast_struct(
+        &self,
+        target_fields: &HashMap<String, SemanticType>,
+        struct_fields: &mut HashMap<String, SemanticType>
+    ) -> bool {
+        if target_fields.len() != struct_fields.len() {
+            return false;
+        }
+        for (field_name, field_type) in struct_fields {
+            match target_fields.get(field_name) {
+                Some(target_type) => {
+                    if !self.try_downcast(target_type, field_type) {
+                        return false;
+                    }
+                },
+                None => return false
+            }
+        }
+        true
+    }
+
     pub fn try_get_semantic_type(&self, type_node: &TypeNode) -> Result<SemanticType, SemanticError> {
         match type_node {
             TypeNode::Integer => Ok(SemanticType::new(SemanticTypeKind::Integer)),
@@ -192,9 +213,8 @@ impl SemanticGen {
             (SemanticTypeKind::Iterator(elem_a), SemanticTypeKind::Iterator(elem_b)) => self.try_downcast(&elem_a, &elem_b),
             (SemanticTypeKind::NamedStruct(struct_a, _), SemanticTypeKind::NamedStruct(struct_b, _))
                 => struct_a == struct_b,
-            (SemanticTypeKind::NamedStruct(struct_id, struct_name), SemanticTypeKind::AnonymousStruct(ref mut fields)) => {
-                let target_fields = &self.structs[struct_id].fields;
-                if self.try_downcast_struct(target_fields, fields) {
+            (SemanticTypeKind::NamedStruct(struct_id, struct_name), SemanticTypeKind::AnonymousStruct(ref fields)) => {
+                if self.is_compatible_with_struct(struct_id, fields) {
                     *(sem_type.borrow_mut()) = SemanticTypeKind::NamedStruct(struct_id, struct_name);
                     true
                 } else {
@@ -210,18 +230,20 @@ impl SemanticGen {
         }
     }
 
-    pub(super) fn try_downcast_struct(
+    pub(super) fn is_compatible_with_struct(
         &self,
-        target_fields: &HashMap<String, SemanticType>,
-        struct_fields: &mut HashMap<String, SemanticType>
+        target_id: u32,
+        fields: &HashMap<String, SemanticType>
     ) -> bool {
-        if target_fields.len() != struct_fields.len() {
+        let target_fields = &self.structs[target_id].fields;
+        if target_fields.len() != fields.len() {
             return false;
         }
-        for (field_name, field_type) in struct_fields {
-            match target_fields.get(field_name) {
-                Some(target_type) => {
-                    if !self.try_downcast(target_type, field_type) {
+
+        for (field_name, field_type) in target_fields {
+            match fields.get(field_name) {
+                Some(other_type) => {
+                    if !self.try_downcast(field_type, other_type) {
                         return false;
                     }
                 },

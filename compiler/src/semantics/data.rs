@@ -12,8 +12,15 @@ pub enum Ownership {
 pub struct SemanticStruct {
     pub name: String,
     pub id: u32,
-    pub fields: HashMap<String, SemanticType>,
-    pub field_order: Vec<String>,
+    pub fields: Vec<(String, SemanticType)>,
+}
+
+impl SemanticStruct {
+    pub fn field_index_type(&self, field_name: &str) -> Option<(usize, &SemanticType)> {
+        self.fields.iter()
+            .position(|(name, _)| field_name == name)
+            .map(|i| (i, &self.fields[i].1))
+    }
 }
 
 impl SemanticGen {
@@ -35,16 +42,14 @@ impl SemanticGen {
         let struct_type = match name {
             Some(struct_name) => {
                 if let Some(named_struct) = self.structs.get_by_name(struct_name) {
-                    if self.try_downcast_struct(&named_struct.fields, &mut field_types) {
+                    if self.is_compatible_with_struct(named_struct.id, &field_types) {
                         SemanticType::new(SemanticTypeKind::NamedStruct(
                             named_struct.id,
                             named_struct.name.clone()
                         ))
                     } else {
                         return Err(SemanticError::IncompatibleStructInitialization {
-                            name: struct_name.to_string(),
-                            expected_fields: named_struct.fields.clone(),
-                            found_fields: field_types,
+                            struct_name: struct_name.to_string()
                         });
                     }
                 } else {
@@ -68,8 +73,8 @@ impl SemanticGen {
         match &sem_struct.sem_type.kind() {
             SemanticTypeKind::NamedStruct(struct_id, _) => {
                 let named_struct = &self.structs[*struct_id];
-                if let Some(position) = named_struct.field_order.iter().position(|f| f == field_name) {
-                    let field_type = named_struct.fields[field_name].clone();
+                let field_info = named_struct.field_index_type(field_name);
+                if let Some((position, field_type)) = field_info {
                     Ok(SemanticExpression {
                         kind: SemanticExpressionKind::StructField {
                             struct_expr: Box::new(sem_struct),
@@ -80,7 +85,7 @@ impl SemanticGen {
                         } else {
                             Ownership::Trivial
                         },
-                        sem_type: field_type,
+                        sem_type: field_type.clone(),
                     })
                 } else {
                     Err(SemanticError::UndefinedStructFieldAccess {

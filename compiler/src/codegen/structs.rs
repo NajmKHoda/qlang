@@ -253,8 +253,8 @@ impl<'ctxt> CodeGen<'ctxt> {
     }
 
     pub fn gen_struct(&mut self, sem_struct: &SemanticStruct) -> Result<(), CodeGenError> {  
-        let field_types = sem_struct.field_order.iter()
-            .map(|field_name| sem_struct.fields[field_name].clone())
+        let field_types = sem_struct.fields.iter()
+            .map(|(_, field_type)| field_type.clone())
             .collect::<Vec<SemanticType>>();
         let struct_info = self.gen_struct_info(&sem_struct.name, &field_types, true)?;
         self.struct_info.insert(sem_struct.id, struct_info);
@@ -267,20 +267,18 @@ impl<'ctxt> CodeGen<'ctxt> {
         columns: &HashMap<String, SemanticExpression>
     ) -> Result<GenValue<'ctxt>, CodeGenError> {
         let sem_struct = &self.program.structs[&struct_id];
-        let column_values = sem_struct.field_order.iter()
-            .map(|col_name| self.gen_eval(&columns[col_name]))
+        let column_values = sem_struct.fields.iter()
+            .map(|(col_name, _)| self.gen_eval(&columns[col_name]))
             .collect::<Result<Vec<GenValue<'ctxt>>, CodeGenError>>()?;
 
         let struct_info = &self.struct_info[&struct_id];
         let struct_ptr = self.build_alloca(struct_info.struct_type.into(), &format!("{}_store", sem_struct.name))?;
-        for (column_name, column_value) in sem_struct.field_order.iter().zip(column_values) {
-            let column_type = &sem_struct.fields[column_name];
-            let column_index = sem_struct.field_order.iter()
-                .position(|x| x == column_name).unwrap() as u32;
+        for (column_index, column_value) in column_values.into_iter().enumerate() {
+            let (column_name, column_type) = &sem_struct.fields[column_index];
             let column_ptr = self.builder.build_struct_gep(
                 struct_info.struct_type,
                 struct_ptr, 
-                column_index,
+                column_index as u32,
                 &format!("{}.{}", sem_struct.name, column_name)
             )?;
 
@@ -309,8 +307,7 @@ impl<'ctxt> CodeGen<'ctxt> {
         };
     
         let sem_struct = &self.program.structs[&struct_id];
-        let field_name = &sem_struct.field_order[index as usize];
-        let field_type = &sem_struct.fields[field_name];
+        let (field_name, field_type) = &sem_struct.fields[index as usize];
         let loaded_val = self.builder.build_extract_value(
             llvm_value,
             index,

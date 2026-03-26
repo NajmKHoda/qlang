@@ -14,9 +14,9 @@ impl<'ctxt> CodeGen<'ctxt> {
         self.gen_struct(table_struct)?;
 
         let name_str = self.builder.build_global_string_ptr(&table.name, &format!("{}_name", table.name))?;
-        let column_name_strs = table_struct.field_order
+        let column_name_strs = table_struct.fields
             .iter().enumerate()
-            .map(|(i, field_name)| {
+            .map(|(i, (field_name, _))| {
                 self.builder.build_global_string_ptr(
                     field_name,
                     &format!("{}_col_{}", table.name, i)
