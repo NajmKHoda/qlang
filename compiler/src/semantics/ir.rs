@@ -122,8 +122,9 @@ pub enum BuiltinMethod {
 pub enum SemanticQuery {
     Select {
         capturing_struct_id: u32,
-        captured_columns: Vec<(u32, u32)>,
-        table_id: u32,
+        captured_columns: Vec<SemanticColumn>,
+        root_table_id: u32,
+        join_clauses: Vec<(SemanticColumn, SemanticColumn)>,
         where_clause: Option<WhereClause>,
     },
     Insert {
@@ -149,4 +150,9 @@ pub struct UpdateAssignment {
 pub struct WhereClause {
     pub column_index: u32,
     pub value: Box<SemanticExpression>,
+}
+
+pub struct SemanticColumn {
+    pub table_id: u32,
+    pub column_index: u32,
 }

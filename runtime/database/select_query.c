@@ -8,27 +8,48 @@
 #include "definitions.h"
 #include "select_query.h"
 
-SelectPlan* __ql__SelectPlan_new(char* table_name, unsigned int num_columns, QLTypeInfo* struct_type_info) {
+SelectPlan* __ql__SelectPlan_new(
+    char* table_name,
+    unsigned int num_columns,
+    unsigned int num_joins,
+    QLTypeInfo* struct_type_info
+) {
     SelectPlan* plan = malloc(sizeof(SelectPlan));
     plan->table_name = table_name;
     plan->struct_type_info = struct_type_info;
     plan->num_columns = num_columns;
     plan->columns = malloc(num_columns * sizeof(QColumn));
+    plan->num_joins = num_joins;
+    plan->join_clauses = malloc(num_joins * sizeof(JoinClause));
     plan->has_where_clause = false;
     return plan;
 }
 
 void __ql__SelectPlan_set_column(SelectPlan* plan, unsigned int index, char* table_name, char* column_name) {
-    plan->columns[index].table_name = table_name;
-    plan->columns[index].column_name = column_name;
+    QColumn* col = &plan->columns[index];
+    col->table_name = table_name;
+    col->column_name = column_name;
+}
+
+void __ql__SelectPlan_set_join(
+    SelectPlan* plan,
+    unsigned int index,
+    char* left_table_name,
+    char* left_column_name,
+    char* right_table_name,
+    char* right_column_name
+) {
+    JoinClause* join_clause = &plan->join_clauses[index];
+    join_clause->left_column.table_name = left_table_name;
+    join_clause->left_column.column_name = left_column_name;
+    join_clause->right_column.table_name = right_table_name;
+    join_clause->right_column.column_name = right_column_name;
 }
 
 void __ql__SelectPlan_set_where(SelectPlan* plan, char* column_name){
     plan->has_where_clause = true;
     plan->where_column = column_name;
 }
-
-
 
 static void* __ql__SelectIterator_next(QLIterator* iter) {
     SelectIteratorState* state = (SelectIteratorState*)iter->state;
@@ -121,7 +142,17 @@ QLIterator* __ql__SelectPlan_prepare(sqlite3* db, SelectPlan* plan) {
             write_ptr += sprintf(write_ptr, ", ");
         }
     }
-    write_ptr += sprintf(write_ptr, " FROM %s;", plan->table_name);
+    write_ptr += sprintf(write_ptr, " FROM %s", plan->table_name);
+
+    for (unsigned int i = 0; i < plan->num_joins; i++) {
+        JoinClause join = plan->join_clauses[i];
+        write_ptr += sprintf(write_ptr, " JOIN %s ON %s.%s = %s.%s",
+            join.right_column.table_name,
+            join.left_column.table_name, join.left_column.column_name,
+            join.right_column.table_name, join.right_column.column_name
+        );
+    }
+    write_ptr += sprintf(write_ptr, ";");
 
     /*
     if (plan->has_where_clause) {

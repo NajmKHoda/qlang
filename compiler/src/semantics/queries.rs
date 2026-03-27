@@ -15,7 +15,7 @@ pub struct SemanticTable {
 }
 
 impl SemanticGen {
-    fn eval_qcolumn(&self, qcol: &QColumnNode) -> Result<(u32, u32), SemanticError> {
+    fn eval_qcolumn(&self, qcol: &QColumnNode) -> Result<SemanticColumn, SemanticError> {
         let table = self.tables.get_by_name(&qcol.table_name)
             .ok_or_else(|| SemanticError::UndefinedTable {
                 name: qcol.table_name.clone()
@@ -23,7 +23,10 @@ impl SemanticGen {
         let table_struct = &self.structs[table.struct_id];
         let column = table_struct.field_index_type(&qcol.column_name);
         match column {
-            Some((col_id, _)) => Ok((table.id, col_id as u32)),
+            Some((col_id, _)) => Ok(SemanticColumn {
+                table_id: table.id,
+                column_index: col_id as u32,
+            }),
             None => Err(SemanticError::UndefinedColumn {
                 table_name: qcol.table_name.clone(),
                 column_name: qcol.column_name.clone(),
@@ -144,6 +147,39 @@ impl SemanticGen {
                 name: query.capturing_struct_name.clone()
             })?;
 
+        let mut table_ids = vec![table.id];
+        let mut join_clauses = vec![];
+        for join in &query.join_clauses {
+            let left_column = self.eval_qcolumn(&join.left_column)?;
+            let right_column = self.eval_qcolumn(&join.right_column)?;
+
+            let left_table = &self.tables[left_column.table_id];
+            let right_table = &self.tables[right_column.table_id];
+            if !table_ids.contains(&left_column.table_id) {
+                return Err(SemanticError::InvalidLeftTable {
+                    left_table_name: left_table.name.clone()
+                });
+            }
+
+            let left_struct = &self.structs[left_table.struct_id];
+            let right_struct = &self.structs[right_table.struct_id];
+            let left_type = &left_struct.fields[left_column.column_index as usize].1;
+            let right_type = &right_struct.fields[right_column.column_index as usize].1;
+            if !self.try_unify(left_type, right_type) {
+                return Err(SemanticError::MismatchingJoinColumnTypes {
+                    left_table_name: join.left_column.table_name.clone(),
+                    left_column_name: join.left_column.column_name.clone(),
+                    left_column_type: left_type.clone(),
+                    right_table_name: join.right_column.table_name.clone(),
+                    right_column_name: join.right_column.column_name.clone(),
+                    right_column_type: right_type.clone(),
+                });
+            }
+
+            table_ids.push(right_column.table_id);
+            join_clauses.push((left_column, right_column));
+        }
+
         // Check compatibility between capturing struct and captured columns
         let mut captured_columns_map = HashMap::new();
         for (alias, qcol) in &query.captured_columns {
@@ -152,8 +188,14 @@ impl SemanticGen {
                     alias: alias.clone()
                 });
             }
-            let (table_id, column_index) = self.eval_qcolumn(qcol)?;
-            captured_columns_map.insert(alias.clone(), (table_id, column_index));
+
+            let column = self.eval_qcolumn(qcol)?;
+            if !table_ids.contains(&column.table_id) {
+                return Err(SemanticError::ExcludedTableInSelect {
+                    table_name: self.tables[column.table_id].name.clone()
+                });
+            }
+            captured_columns_map.insert(alias.clone(), column);
         }
 
         if captured_columns_map.len() != capturing_struct.fields.len() {
@@ -165,7 +207,7 @@ impl SemanticGen {
         let mut captured_columns = vec![];
         for (field_name, field_type) in &capturing_struct.fields {
             match captured_columns_map.get(field_name) {
-                Some((table_id, column_index)) => {
+                Some(SemanticColumn { table_id, column_index }) => {
                     let table = &self.tables[*table_id];
                     let table_struct = &self.structs[table.struct_id];
                     let (_, col_type) = &table_struct.fields[*column_index as usize];
@@ -175,7 +217,10 @@ impl SemanticGen {
                             capturing_struct: capturing_struct.name.clone(),
                         });
                     }
-                    captured_columns.push((*table_id, *column_index));
+                    captured_columns.push(SemanticColumn {
+                        table_id: *table_id,
+                        column_index: *column_index,
+                    });
                 },
                 None => {
                     return Err(SemanticError::SelectIncompatibleCapture {
@@ -201,7 +246,8 @@ impl SemanticGen {
         Ok(SemanticQuery::Select {
             capturing_struct_id: capturing_struct.id,
             captured_columns,
-            table_id: table.id,
+            root_table_id: table.id,
+            join_clauses,
             where_clause: None,
         })
     }

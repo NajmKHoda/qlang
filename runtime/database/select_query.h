@@ -12,11 +12,18 @@ typedef struct {
     char* column_name;
 } QColumn;
 
+typedef struct {
+    QColumn left_column;
+    QColumn right_column;
+} JoinClause;
+
 typedef struct SelectPlan {
     QLTypeInfo* struct_type_info;
     char* table_name;
     unsigned int num_columns;
     QColumn* columns;
+    unsigned int num_joins;
+    JoinClause* join_clauses;
     bool has_where_clause;
     char* where_column;
 } SelectPlan;
@@ -32,8 +39,16 @@ typedef struct SelectIteratorState {
     } state;
 } SelectIteratorState;
 
-SelectPlan* __ql__SelectPlan_new(char* table_name, unsigned int num_columns, QLTypeInfo* struct_type_info);
+SelectPlan* __ql__SelectPlan_new(char* table_name, unsigned int num_columns, unsigned int num_joins, QLTypeInfo* struct_type_info);
 void __ql__SelectPlan_set_column(SelectPlan* plan, unsigned int index, char* table_name, char* column_name);
+void __ql__SelectPlan_set_join(
+    SelectPlan* plan,
+    unsigned int index,
+    char* left_table_name,
+    char* left_column_name,
+    char* right_table_name,
+    char* right_column_name
+);
 void __ql__SelectPlan_set_where(SelectPlan* plan, char* column_name);
 QLIterator* __ql__SelectPlan_prepare(sqlite3* db, SelectPlan* plan);
 QLIterator* __ql__SelectIterator_activate(QLIterator* select_iterator);
