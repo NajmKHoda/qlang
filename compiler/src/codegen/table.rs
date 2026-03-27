@@ -11,8 +11,6 @@ pub(super) struct GenTableInfo<'a> {
 impl<'ctxt> CodeGen<'ctxt> {
     pub fn gen_table(&mut self, table: &SemanticTable) -> Result<(), CodeGenError> {
         let table_struct = &self.program.structs[&table.struct_id];
-        self.gen_struct(table_struct)?;
-
         let name_str = self.builder.build_global_string_ptr(&table.name, &format!("{}_name", table.name))?;
         let column_name_strs = table_struct.fields
             .iter().enumerate()

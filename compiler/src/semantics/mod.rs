@@ -254,6 +254,9 @@ impl SemanticGen {
         for table in &program.tables {
             self.define_table(&table.name, &table.columns, table.is_readonly, &table.datasource_name)?;
         }
+        for _struct in &program.structs {
+            self.define_struct_type(&_struct.name, &_struct.fields)?;
+        }
 
         for function in &program.functions {
             self.declare_function(&function.name, &function.params, &function.return_type)?;

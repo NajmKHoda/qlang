@@ -1,6 +1,7 @@
 pub struct ProgramNode {
     pub datasources: Vec<DatasourceNode>,
     pub tables: Vec<TableNode>,
+    pub structs: Vec<StructNode>,
     pub functions: Vec<FunctionNode>,
 }
 
@@ -14,6 +15,11 @@ pub struct TableNode {
     pub datasource_name: String,
     pub columns: Vec<TypedQNameNode>,
     pub is_readonly: bool,
+}
+
+pub struct StructNode {
+    pub name: String,
+    pub fields: Vec<TypedQNameNode>,
 }
 
 pub struct FunctionNode {
@@ -133,7 +139,9 @@ pub enum QueryNode {
 }
 
 pub struct SelectQueryNode {
-    pub table_name: String,
+    pub capturing_struct_name: String,
+    pub captured_columns: Vec<(String, QColumnNode)>,
+    pub root_table_name: String,
     pub where_clause: Option<WhereNode>,
 }
 
@@ -161,4 +169,9 @@ pub struct UpdateQueryNode {
 pub struct UpdateAssignmentNode {
     pub column_name: String,
     pub value_expr: Box<ExpressionNode>,
+}
+
+pub struct QColumnNode {
+    pub table_name: String,
+    pub column_name: String
 }

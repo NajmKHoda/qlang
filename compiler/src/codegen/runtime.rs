@@ -63,6 +63,7 @@ pub(super) struct Runtime<'ctxt> {
 
     // Select query functions
     pub(super) select_plan_new: FunctionValue<'ctxt>,
+    pub(super) select_plan_set_column: FunctionValue<'ctxt>,
     pub(super) select_plan_set_where: FunctionValue<'ctxt>,
     pub(super) select_plan_prepare: FunctionValue<'ctxt>,
     pub(super) select_iterator_activate: FunctionValue<'ctxt>,
@@ -339,7 +340,18 @@ impl<'ctxt> Runtime<'ctxt> {
         // Select query functions
         let select_plan_new = module.add_function(
             "__ql__SelectPlan_new",
-            ptr_type.fn_type(&[ptr_type.into(), ptr_type.into()], false),
+            ptr_type.fn_type(&[ptr_type.into(), int_type.into(), ptr_type.into()], false),
+            Some(Linkage::External),
+        );
+
+        let select_plan_set_column = module.add_function(
+            "__ql__SelectPlan_set_column",
+            void_type.fn_type(&[
+                ptr_type.into(), // SelectPlan pointer
+                int_type.into(), // column index
+                ptr_type.into(), // table name
+                ptr_type.into() // column name
+            ], false),
             Some(Linkage::External),
         );
 
@@ -554,6 +566,7 @@ impl<'ctxt> Runtime<'ctxt> {
             prepared_insert_finalize,
 
             select_plan_new,
+            select_plan_set_column,
             select_plan_set_where,
             select_plan_prepare,
             select_iterator_activate,

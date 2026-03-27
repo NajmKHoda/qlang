@@ -121,6 +121,8 @@ pub enum BuiltinMethod {
 
 pub enum SemanticQuery {
     Select {
+        capturing_struct_id: u32,
+        captured_columns: Vec<(u32, u32)>,
         table_id: u32,
         where_clause: Option<WhereClause>,
     },

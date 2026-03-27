@@ -96,19 +96,37 @@ impl<'ctxt> CodeGen<'ctxt> {
 
     pub(super) fn prepare_query(&mut self, query: &SemanticQuery) -> Result<PointerValue<'ctxt>, CodeGenError> {
         match query {
-            SemanticQuery::Select { table_id, where_clause } => {
+            SemanticQuery::Select { table_id, capturing_struct_id, captured_columns, .. } => {
                 let table = &self.program.tables[table_id];
                 let table_info = &self.table_info[table_id];
-                let struct_info = &self.struct_info[&table.struct_id];
+                let struct_info = &self.struct_info[&capturing_struct_id];
                 let select_plan_ptr = self.builder.build_call(
                     self.runtime.select_plan_new,
                     &[
                         table_info.name_str.as_pointer_value().into(),
+                        self.int_type().const_int(captured_columns.len() as u64, false).into(),
                         struct_info.type_info.as_pointer_value().into(),
                     ],
                     "select_plan"
                 )?.as_any_value_enum().into_pointer_value();
 
+                for (i, (table_id, col_index)) in captured_columns.iter().enumerate() {
+                    let table_info = &self.table_info[table_id];
+                    let table_name_str = table_info.name_str;
+                    let column_name_str = table_info.column_name_strs[*col_index as usize];
+                    self.builder.build_call(
+                        self.runtime.select_plan_set_column,
+                        &[
+                            select_plan_ptr.into(),
+                            self.context.i32_type().const_int(i as u64, false).into(),
+                            table_name_str.as_pointer_value().into(),
+                            column_name_str.as_pointer_value().into(),
+                        ],
+                        &format!("select_plan_set_column_{}", i)
+                    )?;
+                }
+
+                /*
                 if let Some(WhereClause { column_index, .. }) = where_clause {
                     let column_name_str = table_info.column_name_strs[*column_index as usize];
                     self.builder.build_call(
@@ -120,6 +138,7 @@ impl<'ctxt> CodeGen<'ctxt> {
                         "select_plan_set_where"
                     )?;
                 }
+                */
 
                 let database_global = self.datasource_ptrs[&table.datasource_id];
                 let database_ptr = self.builder.build_load(
@@ -268,7 +287,7 @@ impl<'ctxt> CodeGen<'ctxt> {
         query: &SemanticQuery
     ) -> Result<GenValue<'ctxt>, CodeGenError> {
         match query {
-            SemanticQuery::Select { where_clause, table_id } => {
+            SemanticQuery::Select { where_clause, table_id, .. } => {
                 let select_iterator = self.builder.build_call(
                     self.runtime.select_iterator_activate,
                     &[statement.into()],

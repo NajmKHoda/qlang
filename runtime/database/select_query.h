@@ -7,9 +7,16 @@
 typedef struct sqlite3 sqlite3;
 typedef struct sqlite3_stmt sqlite3_stmt;
 
+typedef struct {
+    char* table_name;
+    char* column_name;
+} QColumn;
+
 typedef struct SelectPlan {
     QLTypeInfo* struct_type_info;
     char* table_name;
+    unsigned int num_columns;
+    QColumn* columns;
     bool has_where_clause;
     char* where_column;
 } SelectPlan;
@@ -25,7 +32,8 @@ typedef struct SelectIteratorState {
     } state;
 } SelectIteratorState;
 
-SelectPlan* __ql__SelectPlan_new(char* table_name, QLTypeInfo* struct_type_info);
+SelectPlan* __ql__SelectPlan_new(char* table_name, unsigned int num_columns, QLTypeInfo* struct_type_info);
+void __ql__SelectPlan_set_column(SelectPlan* plan, unsigned int index, char* table_name, char* column_name);
 void __ql__SelectPlan_set_where(SelectPlan* plan, char* column_name);
 QLIterator* __ql__SelectPlan_prepare(sqlite3* db, SelectPlan* plan);
 QLIterator* __ql__SelectIterator_activate(QLIterator* select_iterator);

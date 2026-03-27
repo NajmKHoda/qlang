@@ -57,6 +57,9 @@ impl<'ctxt> CodeGen<'ctxt> {
             self.gen_database_ptr(&datasource);
         }
 
+        for _struct in self.program.structs.values() {
+            self.gen_struct(_struct)?;
+        }
         for table in self.program.tables.values() {
             self.gen_table(&table)?;
         }

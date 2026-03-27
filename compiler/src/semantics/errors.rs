@@ -118,11 +118,18 @@ pub enum SemanticError {
         table_name: String,
         operation: &'static str,
     },
+    // SELECT
+    SelectDuplicateAlias {
+        alias: String,
+    },
+    SelectIncompatibleCapture {
+        capturing_struct: String,
+    },
+    // INSERT
     IncompatibleInsertData {
         table_name: String,
         found_type: SemanticType,
     },
-
     NonBoolCondition {
         found_type: SemanticType,
     },
@@ -245,6 +252,12 @@ impl Display for SemanticError {
             }
             SemanticError::ReadonlyTableMutation { table_name, operation } => {
                 write!(f, "Cannot perform {} on read-only table {}", operation, table_name)
+            }
+            SemanticError::SelectDuplicateAlias { alias } => {
+                write!(f, "Duplicate alias {} in SELECT query", alias)
+            }
+            SemanticError::SelectIncompatibleCapture { capturing_struct } => {
+                write!(f, "Capturing struct {} is incompatible with columns in SELECT query", capturing_struct)
             }
             SemanticError::IncompatibleInsertData { table_name, found_type } => {
                 write!(f, "Expected {} row in INSERT, got {} instead", table_name, found_type)

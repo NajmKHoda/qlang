@@ -24,6 +24,22 @@ impl SemanticStruct {
 }
 
 impl SemanticGen {
+    pub fn define_struct_type(&mut self, name: &str, fields: &[TypedQNameNode]) -> Result<(), SemanticError> {
+        let mut sem_fields = vec![];
+        for field in fields {
+            let sem_type = self.try_get_semantic_type(&field.type_node)?;
+            sem_fields.push((field.name.clone(), sem_type));
+        }
+
+        let struct_id = self.struct_id_gen.next_id();
+        self.structs.insert(name.to_string(), struct_id, SemanticStruct {
+            name: name.to_string(),
+            id: struct_id,
+            fields: sem_fields
+        });
+        Ok(())
+    }
+
     pub fn eval_struct(&mut self, name: Option<&str>, column_values: &[ColumnValueNode]) -> Result<SemanticExpression, SemanticError> {
         let mut fields = HashMap::new();
         for col_val in column_values {

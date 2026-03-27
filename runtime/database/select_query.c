@@ -8,18 +8,27 @@
 #include "definitions.h"
 #include "select_query.h"
 
-SelectPlan* __ql__SelectPlan_new(char* table_name, QLTypeInfo* struct_type_info) {
+SelectPlan* __ql__SelectPlan_new(char* table_name, unsigned int num_columns, QLTypeInfo* struct_type_info) {
     SelectPlan* plan = malloc(sizeof(SelectPlan));
     plan->table_name = table_name;
     plan->struct_type_info = struct_type_info;
+    plan->num_columns = num_columns;
+    plan->columns = malloc(num_columns * sizeof(QColumn));
     plan->has_where_clause = false;
     return plan;
+}
+
+void __ql__SelectPlan_set_column(SelectPlan* plan, unsigned int index, char* table_name, char* column_name) {
+    plan->columns[index].table_name = table_name;
+    plan->columns[index].column_name = column_name;
 }
 
 void __ql__SelectPlan_set_where(SelectPlan* plan, char* column_name){
     plan->has_where_clause = true;
     plan->where_column = column_name;
 }
+
+
 
 static void* __ql__SelectIterator_next(QLIterator* iter) {
     SelectIteratorState* state = (SelectIteratorState*)iter->state;
@@ -102,6 +111,19 @@ QLIterator* __ql__SelectPlan_prepare(sqlite3* db, SelectPlan* plan) {
     state->state = SELECT_ITERATOR_EXHAUSTED;
 
     char* sql = malloc(MAX_SQL_LENGTH);
+    char* write_ptr = sql;
+
+    write_ptr += sprintf(write_ptr, "SELECT ");
+    for (unsigned int i = 0; i < plan->num_columns; i++) {
+        QColumn col = plan->columns[i];
+        write_ptr += sprintf(write_ptr, "%s.%s", col.table_name, col.column_name);
+        if (i < plan->num_columns - 1) {
+            write_ptr += sprintf(write_ptr, ", ");
+        }
+    }
+    write_ptr += sprintf(write_ptr, " FROM %s;", plan->table_name);
+
+    /*
     if (plan->has_where_clause) {
         sprintf(sql, "SELECT * FROM %s WHERE %s = ?1;", plan->table_name, plan->where_column);
         sqlite3_prepare_v2(db, sql, -1, &state->stmt, NULL);
@@ -109,6 +131,9 @@ QLIterator* __ql__SelectPlan_prepare(sqlite3* db, SelectPlan* plan) {
         sprintf(sql, "SELECT * FROM %s;", plan->table_name);
         sqlite3_prepare_v2(db, sql, -1, &state->stmt, NULL);
     }
+    */
+
+    sqlite3_prepare_v2(db, sql, -1, &state->stmt, NULL);
     state->sql = sql;
 
     free(plan);

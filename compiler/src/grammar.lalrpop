@@ -6,6 +6,7 @@ grammar;
 pub Program: ProgramNode =
     <datasources:Datasource*>
     <tables:Table*>
+    <structs:Struct*>
     <functions:Function*> => ProgramNode { <> };
 
 Datasource: DatasourceNode =
@@ -17,6 +18,10 @@ Table: TableNode =
     <is_readonly:Present<"readonly">>
     "table" <name:ProperQName> "from" <datasource_name:QName>
     "{" <columns:Comma<TypedQName>> "}" => TableNode { <> };
+
+Struct: StructNode =
+    "struct" <name:ProperQName> "{" <fields:Comma<TypedQName>> "}"
+    => StructNode { <> };
 
 Function: FunctionNode =
     "function" <name:QName>
@@ -118,7 +123,9 @@ Query: QueryNode = {
 }
 
 SelectQuery: SelectQueryNode =
-    "select" "from" <table_name:ProperQName>
+    "select" <capturing_struct_name:ProperQName> 
+    "{" <captured_columns:Comma<(<QName> ":" <QColumn>)>> "}"
+    "from" <root_table_name:ProperQName>
     <where_clause:WhereClause?> => SelectQueryNode { <> };
 
 WhereClause: WhereNode = "where" <column_name:QName> "==" <value:Expression> => WhereNode { <> };
@@ -139,6 +146,9 @@ UpdateQuery: UpdateQueryNode =
 UpdateAssignment: UpdateAssignmentNode =
     <column_name:QName> "=" <value_expr:Expression>
     => UpdateAssignmentNode { <> };
+
+QColumn: QColumnNode =
+    <table_name:ProperQName> "." <column_name:QName> => QColumnNode { <> };
 
 // --- MISCELLANEOUS ---
 
