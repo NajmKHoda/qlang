@@ -1,6 +1,7 @@
 use super::*;
 
 pub struct SemanticDatasource {
+    #[allow(dead_code)]
     pub name: String,
     pub id: u32,
     pub is_readonly: bool,
@@ -11,6 +12,7 @@ pub struct SemanticTable {
     pub id: u32,
     pub is_readonly: bool,
     pub struct_id: u32,
+    #[allow(dead_code)]
     pub datasource_id: u32,
 }
 

@@ -5,7 +5,7 @@
 #include "../metadata.h"
 #include "../qlstring.h"
 #include "../array.h"
-#include "definitions.h"
+#include "database.h"
 #include "insert_query.h"
 
 InsertPlan* __ql__InsertPlan_new(char* table_name, QLTypeInfo* struct_type_info) {
@@ -15,7 +15,7 @@ InsertPlan* __ql__InsertPlan_new(char* table_name, QLTypeInfo* struct_type_info)
     return plan;
 }
 
-PreparedInsert* __ql__InsertPlan_prepare(sqlite3* db, InsertPlan* plan) {
+PreparedInsert* __ql__InsertPlan_prepare(InsertPlan* plan) {
     PreparedInsert* prepared_insert = malloc(sizeof(PreparedInsert));
     prepared_insert->struct_type_info = plan->struct_type_info;
 
@@ -29,7 +29,7 @@ PreparedInsert* __ql__InsertPlan_prepare(sqlite3* db, InsertPlan* plan) {
     }
     writer += sprintf(writer, ");");
 
-    sqlite3_prepare_v2(db, sql, -1, &prepared_insert->stmt, NULL);
+    sqlite3_prepare_v2(__ql__sqlite, sql, -1, &prepared_insert->stmt, NULL);
     free(plan);
     return prepared_insert;
 }

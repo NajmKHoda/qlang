@@ -4,7 +4,7 @@
 #include <sqlite3.h>
 #include "../metadata.h"
 #include "../qlstring.h"
-#include "definitions.h"
+#include "database.h"
 #include "delete_query.h"
 
 DeletePlan* __ql__DeletePlan_new(char* table_name) {
@@ -19,7 +19,7 @@ void __ql__DeletePlan_set_where(DeletePlan* plan, char* column_name) {
     plan->where_column = column_name;
 }
 
-PreparedDelete* __ql__DeletePlan_prepare(sqlite3* db, DeletePlan* plan) {
+PreparedDelete* __ql__DeletePlan_prepare(DeletePlan* plan) {
     PreparedDelete* prepared_delete = malloc(sizeof(PreparedDelete));
     
     char sql[MAX_SQL_LENGTH];
@@ -29,7 +29,7 @@ PreparedDelete* __ql__DeletePlan_prepare(sqlite3* db, DeletePlan* plan) {
         sprintf(sql, "DELETE FROM %s;", plan->table_name);
     }
 
-    sqlite3_prepare_v2(db, sql, -1, &prepared_delete->stmt, NULL);
+    sqlite3_prepare_v2(__ql__sqlite, sql, -1, &prepared_delete->stmt, NULL);
     free(plan);
     return prepared_delete;
 }

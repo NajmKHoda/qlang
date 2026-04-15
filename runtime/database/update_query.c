@@ -3,7 +3,7 @@
 #include <stdbool.h>
 #include <sqlite3.h>
 #include "../metadata.h"
-#include "definitions.h"
+#include "database.h"
 #include "update_query.h"
 
 UpdatePlan* __ql__UpdatePlan_new(
@@ -24,7 +24,7 @@ void __ql__UpdatePlan_set_where(UpdatePlan* plan, char* column_name) {
     plan->where_column = column_name;
 }
 
-PreparedUpdate* __ql__UpdatePlan_prepare(sqlite3* db, UpdatePlan* plan) {
+PreparedUpdate* __ql__UpdatePlan_prepare(UpdatePlan* plan) {
     PreparedUpdate* prepared_update = malloc(sizeof(PreparedUpdate));
 
     char sql[MAX_SQL_LENGTH];
@@ -44,7 +44,7 @@ PreparedUpdate* __ql__UpdatePlan_prepare(sqlite3* db, UpdatePlan* plan) {
         writer += sprintf(writer, ";");
     }
     
-    sqlite3_prepare_v2(db, sql, -1, &prepared_update->stmt, NULL);
+    sqlite3_prepare_v2(__ql__sqlite, sql, -1, &prepared_update->stmt, NULL);
     free(plan);
     return prepared_update;
 }

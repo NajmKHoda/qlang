@@ -34,7 +34,6 @@ pub use error::CodeGenError;
 pub struct CodeGen<'ctxt> {
     program: &'ctxt SemanticProgram,
 
-    datasource_ptrs: HashMap<u32, PointerValue<'ctxt>>,
     llvm_functions: HashMap<u32, FunctionValue<'ctxt>>,
     llvm_variables: HashMap<u32, PointerValue<'ctxt>>,
     table_info: HashMap<u32, GenTableInfo<'ctxt>>,
@@ -53,10 +52,6 @@ pub struct CodeGen<'ctxt> {
 
 impl<'ctxt> CodeGen<'ctxt> {
     fn _gen_code(mut self) -> Result<Module<'ctxt>, CodeGenError> {
-        for datasource in self.program.datasources.values() {
-            self.gen_database_ptr(&datasource);
-        }
-
         for _struct in self.program.structs.values() {
             self.gen_struct(_struct)?;
         }
@@ -80,6 +75,7 @@ impl<'ctxt> CodeGen<'ctxt> {
             self.define_function(&function)?;
         }
 
+        // Generate main function that calls user_main
         let main_fn_type = self.int_type().fn_type(
             &[self.int_type().into(), self.ptr_type().into()],
             false
@@ -88,9 +84,17 @@ impl<'ctxt> CodeGen<'ctxt> {
         let main_entry_block = self.context.append_basic_block(main_fn, "main_entry");
         self.builder.position_at_end(main_entry_block);
 
-        let db_ptr_arr = self.init_databases(main_fn)?;
+        // Setup (initialize databases and constant strings)
+        let argc = main_fn.get_nth_param(0).unwrap().into_int_value();
+        let argv = main_fn.get_nth_param(1).unwrap().into_pointer_value();
+        self.builder.build_call(self.runtime.init_dbs, &[
+            argc.into(),
+            argv.into(),
+            self.int_type().const_int(self.program.datasources.len() as u64, false).into()
+        ], "init_dbs")?;
         self.gen_const_strs()?;
 
+        // Call user_main
         let user_main_llvm_fn = self.module.get_function("__ql__user_main").unwrap();
         let call_site = self.builder.build_call(
             user_main_llvm_fn,
@@ -98,9 +102,9 @@ impl<'ctxt> CodeGen<'ctxt> {
             "call_user_main"
         )?.as_any_value_enum().into_int_value();
 
+        // Teardown (drop constant strings and close databases)
         self.drop_const_strs()?;
-        self.close_databases(db_ptr_arr)?;
-
+        self.builder.build_call(self.runtime.close_dbs, &[], "close_dbs")?;
         self.builder.build_return(Some(&call_site))?;
 
         if let Err(msg) = self.module.print_to_file("out/main.debug") {
@@ -244,7 +248,6 @@ impl<'ctxt> CodeGen<'ctxt> {
 
         let codegen = CodeGen {
             program,
-            datasource_ptrs: HashMap::new(),
             llvm_variables: HashMap::new(),
             llvm_functions: HashMap::new(),
             table_info: HashMap::new(),

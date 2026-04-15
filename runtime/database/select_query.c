@@ -5,7 +5,7 @@
 #include "../metadata.h"
 #include "../qlstring.h"
 #include "../iterator.h"
-#include "definitions.h"
+#include "database.h"
 #include "select_query.h"
 
 SelectPlan* __ql__SelectPlan_new(
@@ -131,7 +131,7 @@ static void __ql__SelectIterator_drop(QLIterator* iter) {
     free(iter);
 }
 
-QLIterator* __ql__SelectPlan_prepare(sqlite3* db, SelectPlan* plan) {
+QLIterator* __ql__SelectPlan_prepare(SelectPlan* plan) {
     QLIterator* select_iterator = __ql__QLIterator_new(
         __ql__SelectIterator_next,
         __ql__SelectIterator_has_next,
@@ -204,7 +204,7 @@ QLIterator* __ql__SelectPlan_prepare(sqlite3* db, SelectPlan* plan) {
         sqlite3_prepare_v2(db, sql, -1, &state->stmt, NULL);
     }
     */
-    sqlite3_prepare_v2(db, sql, -1, &state->stmt, NULL);
+    sqlite3_prepare_v2(__ql__sqlite, sql, -1, &state->stmt, NULL);
     state->sql = sql;
 
     free(plan);
@@ -230,8 +230,7 @@ QLIterator* __ql__SelectIterator_activate(QLIterator* select_iterator) {
         );
         SelectIteratorState* new_state = (SelectIteratorState*)new_iterator->state;
 
-        sqlite3* db = sqlite3_db_handle(state->stmt);
-        sqlite3_prepare_v2(db, state->sql, -1, &new_state->stmt, NULL);
+        sqlite3_prepare_v2(__ql__sqlite, state->sql, -1, &new_state->stmt, NULL);
         new_state->row_ptr = malloc(select_iterator->elem_type_info->size);
         new_state->where_bind_index = state->where_bind_index;
         new_state->limit_bind_index = state->limit_bind_index;

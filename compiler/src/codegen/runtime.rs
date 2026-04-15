@@ -258,19 +258,18 @@ impl<'ctxt> Runtime<'ctxt> {
         );
 
         let init_dbs = module.add_function(
-            "__ql__init_dbs_from_args",
+            "__ql__init_dbs",
             void_type.fn_type(&[
                 int_type.into(),
                 ptr_type.into(),
                 int_type.into(),
-                ptr_type.into(),
             ], false),
             Some(Linkage::External),
         );
 
         let close_dbs = module.add_function(
             "__ql__close_dbs",
-            void_type.fn_type(&[int_type.into(), ptr_type.into()], false),
+            void_type.fn_type(&[], false),
             Some(Linkage::External),
         );
 
@@ -289,7 +288,7 @@ impl<'ctxt> Runtime<'ctxt> {
 
         let delete_plan_prepare = module.add_function(
             "__ql__DeletePlan_prepare",
-            ptr_type.fn_type(&[ptr_type.into(), ptr_type.into()], false),
+            ptr_type.fn_type(&[ptr_type.into()], false),
             Some(Linkage::External),
         );
 
@@ -320,7 +319,7 @@ impl<'ctxt> Runtime<'ctxt> {
 
         let insert_plan_prepare = module.add_function(
             "__ql__InsertPlan_prepare",
-            ptr_type.fn_type(&[ptr_type.into(), ptr_type.into()], false),
+            ptr_type.fn_type(&[ptr_type.into()], false),
             Some(Linkage::External),
         );
 
@@ -399,7 +398,7 @@ impl<'ctxt> Runtime<'ctxt> {
 
         let select_plan_prepare = module.add_function(
             "__ql__SelectPlan_prepare",
-            ptr_type.fn_type(&[ptr_type.into(), ptr_type.into()], false),
+            ptr_type.fn_type(&[ptr_type.into()], false),
             Some(Linkage::External),
         );
 
@@ -442,7 +441,7 @@ impl<'ctxt> Runtime<'ctxt> {
 
         let update_plan_prepare = module.add_function(
             "__ql__UpdatePlan_prepare",
-            ptr_type.fn_type(&[ptr_type.into(), ptr_type.into()], false),
+            ptr_type.fn_type(&[ptr_type.into()], false),
             Some(Linkage::External),
         );
 
