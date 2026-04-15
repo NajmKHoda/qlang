@@ -126,6 +126,8 @@ pub enum SemanticQuery {
         select_table_ids: Vec<u32>,
         join_clauses: Vec<(SemanticColumn, SemanticColumn)>,
         where_clause: Option<SelectWhereClause>,
+        limit_clause: Option<SelectCountClause>,
+        offset_clause: Option<SelectCountClause>,
     },
     Insert {
         table_id: u32,
@@ -154,6 +156,10 @@ pub struct WhereClause {
 
 pub struct SelectWhereClause {
     pub column: SemanticColumn,
+    pub value: Box<SemanticExpression>,
+}
+
+pub struct SelectCountClause {
     pub value: Box<SemanticExpression>,
 }
 

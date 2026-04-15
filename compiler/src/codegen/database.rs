@@ -1,6 +1,6 @@
 use inkwell::{AddressSpace, values::{AnyValue, BasicValue, FunctionValue, PointerValue}};
 
-use crate::{codegen::{data::GenValue}, semantics::{Ownership, SemanticDatasource, SemanticQuery, SemanticType, SemanticTypeKind, SelectWhereClause, WhereClause}};
+use crate::{codegen::{data::GenValue}, semantics::{Ownership, SelectCountClause, SemanticDatasource, SemanticQuery, SemanticType, SemanticTypeKind, SelectWhereClause, WhereClause}};
 
 use super::{CodeGen, CodeGenError};
 
@@ -96,7 +96,7 @@ impl<'ctxt> CodeGen<'ctxt> {
 
     pub(super) fn prepare_query(&mut self, query: &SemanticQuery) -> Result<PointerValue<'ctxt>, CodeGenError> {
         match query {
-            SemanticQuery::Select { select_table_ids, capturing_struct_id, captured_columns, join_clauses, where_clause } => {
+            SemanticQuery::Select { select_table_ids, capturing_struct_id, captured_columns, join_clauses, where_clause, limit_clause, offset_clause } => {
                 let root_table_id = select_table_ids[0];
                 let table = &self.program.tables[&root_table_id];
                 let table_info = &self.table_info[&root_table_id];
@@ -163,6 +163,22 @@ impl<'ctxt> CodeGen<'ctxt> {
                             column_name_str.as_pointer_value().into(),
                         ],
                         "select_plan_set_where"
+                    )?;
+                }
+
+                if limit_clause.is_some() {
+                    self.builder.build_call(
+                        self.runtime.select_plan_set_limit,
+                        &[select_plan_ptr.into()],
+                        "select_plan_set_limit"
+                    )?;
+                }
+
+                if offset_clause.is_some() {
+                    self.builder.build_call(
+                        self.runtime.select_plan_set_offset,
+                        &[select_plan_ptr.into()],
+                        "select_plan_set_offset"
                     )?;
                 }
 
@@ -313,7 +329,7 @@ impl<'ctxt> CodeGen<'ctxt> {
         query: &SemanticQuery
     ) -> Result<GenValue<'ctxt>, CodeGenError> {
         match query {
-            SemanticQuery::Select { where_clause, select_table_ids, .. } => {
+            SemanticQuery::Select { where_clause, limit_clause, offset_clause, select_table_ids, .. } => {
                 let select_iterator = self.builder.build_call(
                     self.runtime.select_iterator_activate,
                     &[statement.into()],
@@ -333,6 +349,26 @@ impl<'ctxt> CodeGen<'ctxt> {
                             value_ptr.into(),
                         ],
                         "select_bind_where"
+                    )?;
+                }
+
+                if let Some(SelectCountClause { value }) = limit_clause {
+                    let gen_value = self.gen_eval(value)?;
+                    let value_ptr = self.put_on_stack(&gen_value, "select_limit")?;
+                    self.builder.build_call(
+                        self.runtime.select_iterator_bind_limit,
+                        &[select_iterator.into(), value_ptr.into()],
+                        "select_bind_limit"
+                    )?;
+                }
+
+                if let Some(SelectCountClause { value }) = offset_clause {
+                    let gen_value = self.gen_eval(value)?;
+                    let value_ptr = self.put_on_stack(&gen_value, "select_offset")?;
+                    self.builder.build_call(
+                        self.runtime.select_iterator_bind_offset,
+                        &[select_iterator.into(), value_ptr.into()],
+                        "select_bind_offset"
                     )?;
                 }
 

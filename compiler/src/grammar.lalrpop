@@ -127,7 +127,9 @@ SelectQuery: SelectQueryNode =
     "{" <captured_columns:Comma<(<QName> ":" <QColumn>)>> "}"
     "from" <root_table_name:ProperQName> <root_table_alias:TableAlias?>
     <join_clauses:JoinClause*>
-    <where_clause:SelectWhereClause?> => SelectQueryNode { <> };
+    <where_clause:SelectWhereClause?>
+    <limit_clause:SelectLimitClause?>
+    <offset_clause:SelectOffsetClause?> => SelectQueryNode { <> };
 
 JoinClause: JoinNode =
     "join" <right_table_name:ProperQName> <right_table_alias:TableAlias?> "on"
@@ -137,6 +139,8 @@ JoinClause: JoinNode =
 TableAlias: String = "as" <alias:ProperQName> => alias;
 
 SelectWhereClause: SelectWhereNode = "where" <column:QColumn> "==" <value:Expression> => SelectWhereNode { <> };
+SelectLimitClause: SelectLimitNode = "limit" <value:Expression> => SelectLimitNode { <> };
+SelectOffsetClause: SelectOffsetNode = "offset" <value:Expression> => SelectOffsetNode { <> };
 
 WhereClause: WhereNode = "where" <column_name:QName> "==" <value:Expression> => WhereNode { <> };
 

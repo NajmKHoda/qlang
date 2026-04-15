@@ -9,30 +9,33 @@ table Student from data {
   friend_id: int
 }
 
-struct FriendPair {
-  id: int,
-  friend1_first: str,
-  friend1_last: str,
-  friend2_first: str,
-  friend2_last: str
+struct NameOnly {
+  first: str
 }
 
 function main() -> int {
-  let friend_pairs = query {
-    select FriendPair {
-      id: Student1.id,
-      friend1_first: Student1.first_name,
-      friend1_last: Student1.last_name,
-      friend2_first: Student2.first_name,
-      friend2_last: Student2.last_name
-    } from Student as Student1
-    join Student as Student2 on Student1.friend_id == id
-    where Student1.id == 1
+  let no_rows = query(max_rows: int) {
+    select NameOnly {
+      first: S.first_name
+    } from Student as S
+    limit max_rows
   };
 
-  for pair in friend_pairs {
-    let friend1_name = pair.friend1_first + " " + pair.friend1_last;
-    let friend2_name = pair.friend2_first + " " + pair.friend2_last;
-    prints(friend1_name + ", " + friend2_name);
+  for row in no_rows(-3) {
+    prints(row.first);
   }
+
+  let one_row = query(rows_to_skip: int) {
+    select NameOnly {
+      first: S.first_name
+    } from Student as S
+    limit 1
+    offset rows_to_skip
+  };
+
+  for row in one_row(1) {
+    prints(row.first);
+  }
+
+  return 0;
 }

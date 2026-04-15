@@ -27,12 +27,17 @@ typedef struct SelectPlan {
     JoinClause* join_clauses;
     bool has_where_clause;
     QColumn where_column;
+    bool has_limit_clause;
+    bool has_offset_clause;
 } SelectPlan;
 
 typedef struct SelectIteratorState {
     char* sql; // Only set in master statements
     sqlite3_stmt* stmt;
     void* row_ptr;
+    unsigned int where_bind_index;
+    unsigned int limit_bind_index;
+    unsigned int offset_bind_index;
     enum {
         SELECT_ITERATOR_NEXT,
         SELECT_ITERATOR_READY,
@@ -52,10 +57,14 @@ void __ql__SelectPlan_set_join(
     char* right_column_name
 );
 void __ql__SelectPlan_set_where(SelectPlan* plan, unsigned int table_index, char* column_name);
+void __ql__SelectPlan_set_limit(SelectPlan* plan);
+void __ql__SelectPlan_set_offset(SelectPlan* plan);
 QLIterator* __ql__SelectPlan_prepare(sqlite3* db, SelectPlan* plan);
 QLIterator* __ql__SelectIterator_activate(QLIterator* select_iterator);
 
 void __ql__SelectIterator_bind_where(QLIterator* select_iterator, ColumnType value_type, void* value);
+void __ql__SelectIterator_bind_limit(QLIterator* select_iterator, void* value);
+void __ql__SelectIterator_bind_offset(QLIterator* select_iterator, void* value);
 void __ql__SelectIterator_finalize(QLIterator* select_iterator);
 
 #endif

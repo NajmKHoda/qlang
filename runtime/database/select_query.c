@@ -22,6 +22,8 @@ SelectPlan* __ql__SelectPlan_new(
     plan->num_joins = num_joins;
     plan->join_clauses = malloc(num_joins * sizeof(JoinClause));
     plan->has_where_clause = false;
+    plan->has_limit_clause = false;
+    plan->has_offset_clause = false;
     return plan;
 }
 
@@ -52,6 +54,14 @@ void __ql__SelectPlan_set_where(SelectPlan* plan, unsigned int table_index, char
     plan->has_where_clause = true;
     plan->where_column.table_index = table_index;
     plan->where_column.column_name = column_name;
+}
+
+void __ql__SelectPlan_set_limit(SelectPlan* plan) {
+    plan->has_limit_clause = true;
+}
+
+void __ql__SelectPlan_set_offset(SelectPlan* plan) {
+    plan->has_offset_clause = true;
 }
 
 static void* __ql__SelectIterator_next(QLIterator* iter) {
@@ -132,6 +142,9 @@ QLIterator* __ql__SelectPlan_prepare(sqlite3* db, SelectPlan* plan) {
 
     SelectIteratorState* state = (SelectIteratorState*)select_iterator->state;
     state->row_ptr = malloc(plan->struct_type_info->size);
+    state->where_bind_index = 0;
+    state->limit_bind_index = 0;
+    state->offset_bind_index = 0;
     state->state = SELECT_ITERATOR_EXHAUSTED;
 
     char* sql = malloc(MAX_SQL_LENGTH);
@@ -156,13 +169,29 @@ QLIterator* __ql__SelectPlan_prepare(sqlite3* db, SelectPlan* plan) {
             join.right_column.table_index, join.right_column.column_name
         );
     }
+
+    unsigned int next_bind_index = 1;
     if (plan->has_where_clause) {
+        state->where_bind_index = next_bind_index;
         write_ptr += sprintf(
             write_ptr,
-            " WHERE t%u.%s = ?1",
+            " WHERE t%u.%s = ?%u",
             plan->where_column.table_index,
-            plan->where_column.column_name
+            plan->where_column.column_name,
+            state->where_bind_index
         );
+        next_bind_index++;
+    }
+
+    if (plan->has_limit_clause) {
+        state->limit_bind_index = next_bind_index;
+        write_ptr += sprintf(write_ptr, " LIMIT ?%u", state->limit_bind_index);
+        next_bind_index++;
+    }
+
+    if (plan->has_offset_clause) {
+        state->offset_bind_index = next_bind_index;
+        write_ptr += sprintf(write_ptr, " OFFSET ?%u", state->offset_bind_index);
     }
     write_ptr += sprintf(write_ptr, ";");
 
@@ -204,6 +233,9 @@ QLIterator* __ql__SelectIterator_activate(QLIterator* select_iterator) {
         sqlite3* db = sqlite3_db_handle(state->stmt);
         sqlite3_prepare_v2(db, state->sql, -1, &new_state->stmt, NULL);
         new_state->row_ptr = malloc(select_iterator->elem_type_info->size);
+        new_state->where_bind_index = state->where_bind_index;
+        new_state->limit_bind_index = state->limit_bind_index;
+        new_state->offset_bind_index = state->offset_bind_index;
         new_state->state = SELECT_ITERATOR_NEXT;
         new_state->sql = NULL; // SQL only in original
         return new_iterator;
@@ -219,5 +251,23 @@ QLIterator* __ql__SelectIterator_activate(QLIterator* select_iterator) {
 
 void __ql__SelectIterator_bind_where(QLIterator* select_iterator, ColumnType value_type, void* value) {
     SelectIteratorState* state = (SelectIteratorState*)select_iterator->state;
-    __ql__bind_value(state->stmt, 1, value_type, value);
+    if (state->where_bind_index > 0) {
+        __ql__bind_value(state->stmt, state->where_bind_index, value_type, value);
+    }
+}
+
+void __ql__SelectIterator_bind_limit(QLIterator* select_iterator, void* value) {
+    SelectIteratorState* state = (SelectIteratorState*)select_iterator->state;
+    if (state->limit_bind_index > 0) {
+        int raw = *(int*)value;
+        sqlite3_bind_int(state->stmt, state->limit_bind_index, raw < 0 ? 0 : raw);
+    }
+}
+
+void __ql__SelectIterator_bind_offset(QLIterator* select_iterator, void* value) {
+    SelectIteratorState* state = (SelectIteratorState*)select_iterator->state;
+    if (state->offset_bind_index > 0) {
+        int raw = *(int*)value;
+        sqlite3_bind_int(state->stmt, state->offset_bind_index, raw < 0 ? 0 : raw);
+    }
 }

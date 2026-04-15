@@ -66,9 +66,13 @@ pub(super) struct Runtime<'ctxt> {
     pub(super) select_plan_set_column: FunctionValue<'ctxt>,
     pub(super) select_plan_set_join: FunctionValue<'ctxt>,
     pub(super) select_plan_set_where: FunctionValue<'ctxt>,
+    pub(super) select_plan_set_limit: FunctionValue<'ctxt>,
+    pub(super) select_plan_set_offset: FunctionValue<'ctxt>,
     pub(super) select_plan_prepare: FunctionValue<'ctxt>,
     pub(super) select_iterator_activate: FunctionValue<'ctxt>,
     pub(super) select_iterator_bind_where: FunctionValue<'ctxt>,
+    pub(super) select_iterator_bind_limit: FunctionValue<'ctxt>,
+    pub(super) select_iterator_bind_offset: FunctionValue<'ctxt>,
 
     // Update query functions
     pub(super) update_plan_new: FunctionValue<'ctxt>,
@@ -381,6 +385,18 @@ impl<'ctxt> Runtime<'ctxt> {
             Some(Linkage::External),
         );
 
+        let select_plan_set_limit = module.add_function(
+            "__ql__SelectPlan_set_limit",
+            void_type.fn_type(&[ptr_type.into()], false),
+            Some(Linkage::External),
+        );
+
+        let select_plan_set_offset = module.add_function(
+            "__ql__SelectPlan_set_offset",
+            void_type.fn_type(&[ptr_type.into()], false),
+            Some(Linkage::External),
+        );
+
         let select_plan_prepare = module.add_function(
             "__ql__SelectPlan_prepare",
             ptr_type.fn_type(&[ptr_type.into(), ptr_type.into()], false),
@@ -396,6 +412,18 @@ impl<'ctxt> Runtime<'ctxt> {
         let select_iterator_bind_where = module.add_function(
             "__ql__SelectIterator_bind_where",
             void_type.fn_type(&[ptr_type.into(), int_type.into(), ptr_type.into()], false),
+            Some(Linkage::External),
+        );
+
+        let select_iterator_bind_limit = module.add_function(
+            "__ql__SelectIterator_bind_limit",
+            void_type.fn_type(&[ptr_type.into(), ptr_type.into()], false),
+            Some(Linkage::External),
+        );
+
+        let select_iterator_bind_offset = module.add_function(
+            "__ql__SelectIterator_bind_offset",
+            void_type.fn_type(&[ptr_type.into(), ptr_type.into()], false),
             Some(Linkage::External),
         );
 
@@ -589,9 +617,13 @@ impl<'ctxt> Runtime<'ctxt> {
             select_plan_set_column,
             select_plan_set_join,
             select_plan_set_where,
+            select_plan_set_limit,
+            select_plan_set_offset,
             select_plan_prepare,
             select_iterator_activate,
             select_iterator_bind_where,
+            select_iterator_bind_limit,
+            select_iterator_bind_offset,
 
             update_plan_new,
             update_plan_set_where,

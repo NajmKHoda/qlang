@@ -145,6 +145,8 @@ pub struct SelectQueryNode {
     pub root_table_alias: Option<String>,
     pub join_clauses: Vec<JoinNode>,
     pub where_clause: Option<SelectWhereNode>,
+    pub limit_clause: Option<SelectLimitNode>,
+    pub offset_clause: Option<SelectOffsetNode>,
 }
 
 pub struct JoinNode {
@@ -156,6 +158,14 @@ pub struct JoinNode {
 
 pub struct SelectWhereNode {
     pub column: QColumnNode,
+    pub value: Box<ExpressionNode>,
+}
+
+pub struct SelectLimitNode {
+    pub value: Box<ExpressionNode>,
+}
+
+pub struct SelectOffsetNode {
     pub value: Box<ExpressionNode>,
 }
 

@@ -146,6 +146,10 @@ pub enum SemanticError {
         column_name: String,
         table_names: Vec<String>,
     },
+    SelectNonIntegralCountClause {
+        clause_name: &'static str,
+        found_type: SemanticType,
+    },
     // INSERT
     IncompatibleInsertData {
         table_name: String,
@@ -296,6 +300,9 @@ impl Display for SemanticError {
             }
             SemanticError::SelectAmbiguousColumn { column_name, table_names } => {
                 write!(f, "Column {} is ambiguous in SELECT query; present in tables {}", column_name, table_names.join(", "))
+            }
+            SemanticError::SelectNonIntegralCountClause { clause_name, found_type } => {
+                write!(f, "SELECT {} expression must be of integer type, found {}", clause_name, found_type)
             }
             SemanticError::IncompatibleInsertData { table_name, found_type } => {
                 write!(f, "Expected {} row in INSERT, got {} instead", table_name, found_type)

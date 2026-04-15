@@ -130,6 +130,24 @@ impl SemanticGen {
         })
     }
 
+    fn eval_select_count_clause(
+        &self,
+        sem_expr: SemanticExpression,
+        clause_name: &'static str,
+    ) -> Result<SelectCountClause, SemanticError> {
+        let int_type = SemanticType::new(SemanticTypeKind::Integer);
+        if !self.try_downcast(&int_type, &sem_expr.sem_type) {
+            return Err(SemanticError::SelectNonIntegralCountClause {
+                clause_name,
+                found_type: sem_expr.sem_type,
+            });
+        }
+
+        Ok(SelectCountClause {
+            value: Box::new(sem_expr),
+        })
+    }
+
     pub(super) fn declare_datasource(&mut self, name: &str, is_readonly: bool) -> Result<(), SemanticError> {
         if self.datasources.contains_name(name) {
             return Err(SemanticError::DuplicateDatasourceDeclaration {
@@ -332,12 +350,24 @@ impl SemanticGen {
             )
         }).transpose()?;
 
+        let limit_clause = query.limit_clause.as_ref().map(|limit_node| {
+            let sem_expr = self.eval_expr(&limit_node.value)?;
+            self.eval_select_count_clause(sem_expr, "LIMIT")
+        }).transpose()?;
+
+        let offset_clause = query.offset_clause.as_ref().map(|offset_node| {
+            let sem_expr = self.eval_expr(&offset_node.value)?;
+            self.eval_select_count_clause(sem_expr, "OFFSET")
+        }).transpose()?;
+
         Ok(SemanticQuery::Select {
             capturing_struct_id,
             captured_columns,
             select_table_ids,
             join_clauses,
             where_clause,
+            limit_clause,
+            offset_clause,
         })
     }
 
