@@ -1,6 +1,6 @@
 use inkwell::{AddressSpace, values::{AnyValue, BasicValue, FunctionValue, PointerValue}};
 
-use crate::{codegen::{data::GenValue}, semantics::{Ownership, SemanticDatasource, SemanticQuery, SemanticType, SemanticTypeKind, WhereClause}};
+use crate::{codegen::{data::GenValue}, semantics::{Ownership, SemanticDatasource, SemanticQuery, SemanticType, SemanticTypeKind, SelectWhereClause, WhereClause}};
 
 use super::{CodeGen, CodeGenError};
 
@@ -96,7 +96,7 @@ impl<'ctxt> CodeGen<'ctxt> {
 
     pub(super) fn prepare_query(&mut self, query: &SemanticQuery) -> Result<PointerValue<'ctxt>, CodeGenError> {
         match query {
-            SemanticQuery::Select { select_table_ids, capturing_struct_id, captured_columns, join_clauses, .. } => {
+            SemanticQuery::Select { select_table_ids, capturing_struct_id, captured_columns, join_clauses, where_clause } => {
                 let root_table_id = select_table_ids[0];
                 let table = &self.program.tables[&root_table_id];
                 let table_info = &self.table_info[&root_table_id];
@@ -151,19 +151,20 @@ impl<'ctxt> CodeGen<'ctxt> {
                     )?;
                 }
 
-                /*
-                if let Some(WhereClause { column_index, .. }) = where_clause {
-                    let column_name_str = table_info.column_name_strs[*column_index as usize];
+                if let Some(SelectWhereClause { column, .. }) = where_clause {
+                    let where_table_id = select_table_ids[column.table_index as usize];
+                    let where_table_info = &self.table_info[&where_table_id];
+                    let column_name_str = where_table_info.column_name_strs[column.column_index as usize];
                     self.builder.build_call(
                         self.runtime.select_plan_set_where,
                         &[
                             select_plan_ptr.into(),
+                            self.context.i32_type().const_int(column.table_index as u64, false).into(),
                             column_name_str.as_pointer_value().into(),
                         ],
                         "select_plan_set_where"
                     )?;
                 }
-                */
 
                 let database_global = self.datasource_ptrs[&table.datasource_id];
                 let database_ptr = self.builder.build_load(
@@ -319,7 +320,7 @@ impl<'ctxt> CodeGen<'ctxt> {
                     "activate_select_iterator"
                 )?.as_any_value_enum().into_pointer_value();
 
-                if let Some(WhereClause { value, .. }) = where_clause {
+                if let Some(SelectWhereClause { value, .. }) = where_clause {
                     let gen_value = self.gen_eval(value)?;
                     let value_ptr = self.put_on_stack(&gen_value, "select_where")?;
                     let column_type: ColumnType = (&value.sem_type).into();

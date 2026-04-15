@@ -10,6 +10,7 @@ table Student from data {
 }
 
 struct FriendPair {
+  id: int,
   friend1_first: str,
   friend1_last: str,
   friend2_first: str,
@@ -19,12 +20,14 @@ struct FriendPair {
 function main() -> int {
   let friend_pairs = query {
     select FriendPair {
+      id: Student1.id,
       friend1_first: Student1.first_name,
       friend1_last: Student1.last_name,
       friend2_first: Student2.first_name,
       friend2_last: Student2.last_name
     } from Student as Student1
     join Student as Student2 on Student1.friend_id == id
+    where Student1.id == 1
   };
 
   for pair in friend_pairs {

@@ -144,7 +144,7 @@ pub struct SelectQueryNode {
     pub root_table_name: String,
     pub root_table_alias: Option<String>,
     pub join_clauses: Vec<JoinNode>,
-    pub where_clause: Option<WhereNode>,
+    pub where_clause: Option<SelectWhereNode>,
 }
 
 pub struct JoinNode {
@@ -152,6 +152,11 @@ pub struct JoinNode {
     pub right_table_alias: Option<String>,
     pub left_column: QColumnNode,
     pub right_column_name: String,
+}
+
+pub struct SelectWhereNode {
+    pub column: QColumnNode,
+    pub value: Box<ExpressionNode>,
 }
 
 pub struct WhereNode {

@@ -103,6 +103,33 @@ impl SemanticGen {
         }        
     }
 
+    fn eval_select_where_clause(
+        &self,
+        qcol: &QColumnNode,
+        sem_expr: SemanticExpression,
+        select_table_ids: &[u32],
+        select_alias_map: &HashMap<String, u32>,
+    ) -> Result<SelectWhereClause, SemanticError> {
+        let column = self.eval_qcolumn(qcol, select_table_ids, select_alias_map)?;
+        let table_id = select_table_ids[column.table_index as usize];
+        let table = &self.tables[table_id];
+        let table_struct = &self.structs[table.struct_id];
+        let (_, col_type) = &table_struct.fields[column.column_index as usize];
+        if !self.try_downcast(col_type, &sem_expr.sem_type) {
+            return Err(SemanticError::IncompatibleColumnValue {
+                table_name: table.name.clone(),
+                column_name: qcol.column_name.clone(),
+                expected: col_type.clone(),
+                found: sem_expr.sem_type,
+            });
+        }
+
+        Ok(SelectWhereClause {
+            column,
+            value: Box::new(sem_expr),
+        })
+    }
+
     pub(super) fn declare_datasource(&mut self, name: &str, is_readonly: bool) -> Result<(), SemanticError> {
         if self.datasources.contains_name(name) {
             return Err(SemanticError::DuplicateDatasourceDeclaration {
@@ -186,6 +213,9 @@ impl SemanticGen {
             .ok_or_else(|| SemanticError::UndefinedStruct {
                 name: query.capturing_struct_name.clone()
             })?;
+        let capturing_struct_id = capturing_struct.id;
+        let capturing_struct_name = capturing_struct.name.clone();
+        let capturing_struct_fields = capturing_struct.fields.clone();
 
         let mut select_table_ids = vec![table.id];
         let root_alias = match &query.root_table_alias {
@@ -260,14 +290,14 @@ impl SemanticGen {
             captured_columns_map.insert(alias.clone(), column);
         }
 
-        if captured_columns_map.len() != capturing_struct.fields.len() {
+        if captured_columns_map.len() != capturing_struct_fields.len() {
             return Err(SemanticError::SelectIncompatibleCapture {
-                capturing_struct: capturing_struct.name.clone(),
+                capturing_struct: capturing_struct_name.clone(),
             });
         }
 
         let mut captured_columns = vec![];
-        for (field_name, field_type) in &capturing_struct.fields {
+        for (field_name, field_type) in &capturing_struct_fields {
             match captured_columns_map.get(field_name) {
                 Some(SemanticColumn { table_index, column_index }) => {
                     let table = &self.tables[select_table_ids[*table_index as usize]];
@@ -276,7 +306,7 @@ impl SemanticGen {
                     let compatible = self.try_downcast(field_type, col_type);
                     if !compatible {
                         return Err(SemanticError::SelectIncompatibleCapture {
-                            capturing_struct: capturing_struct.name.clone(),
+                            capturing_struct: capturing_struct_name.clone(),
                         });
                     }
                     captured_columns.push(SemanticColumn {
@@ -286,31 +316,28 @@ impl SemanticGen {
                 },
                 None => {
                     return Err(SemanticError::SelectIncompatibleCapture {
-                        capturing_struct: capturing_struct.name.clone(),
+                        capturing_struct: capturing_struct_name.clone(),
                     });
                 }
             }
         }
         
-        // TODO: Reimplement where clause
-        /*
-        let where_expr = query.where_clause.as_ref().map(|where_node| {
+        let where_clause = query.where_clause.as_ref().map(|where_node| {
             let sem_expr = self.eval_expr(&where_node.value)?;
-            Ok((where_node.column_name.clone(), sem_expr))
-         }).transpose()?;
-
-        let where_clause = match query.where_clause {
-            Some(where_node) => Some(self.eval_where_clause(table, &column_name, sem_expr)?),
-            None => None,
-        };
-        */
+            self.eval_select_where_clause(
+                &where_node.column,
+                sem_expr,
+                &select_table_ids,
+                &select_alias_map,
+            )
+        }).transpose()?;
 
         Ok(SemanticQuery::Select {
-            capturing_struct_id: capturing_struct.id,
+            capturing_struct_id,
             captured_columns,
             select_table_ids,
             join_clauses,
-            where_clause: None,
+            where_clause,
         })
     }
 

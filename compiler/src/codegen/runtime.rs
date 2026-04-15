@@ -377,7 +377,7 @@ impl<'ctxt> Runtime<'ctxt> {
 
         let select_plan_set_where = module.add_function(
             "__ql__SelectPlan_set_where",
-            void_type.fn_type(&[ptr_type.into(), ptr_type.into()], false),
+            void_type.fn_type(&[ptr_type.into(), int_type.into(), ptr_type.into()], false),
             Some(Linkage::External),
         );
 

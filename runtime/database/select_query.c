@@ -48,9 +48,10 @@ void __ql__SelectPlan_set_join(
     join_clause->right_column.column_name = right_column_name;
 }
 
-void __ql__SelectPlan_set_where(SelectPlan* plan, char* column_name){
+void __ql__SelectPlan_set_where(SelectPlan* plan, unsigned int table_index, char* column_name){
     plan->has_where_clause = true;
-    plan->where_column = column_name;
+    plan->where_column.table_index = table_index;
+    plan->where_column.column_name = column_name;
 }
 
 static void* __ql__SelectIterator_next(QLIterator* iter) {
@@ -155,11 +156,19 @@ QLIterator* __ql__SelectPlan_prepare(sqlite3* db, SelectPlan* plan) {
             join.right_column.table_index, join.right_column.column_name
         );
     }
+    if (plan->has_where_clause) {
+        write_ptr += sprintf(
+            write_ptr,
+            " WHERE t%u.%s = ?1",
+            plan->where_column.table_index,
+            plan->where_column.column_name
+        );
+    }
     write_ptr += sprintf(write_ptr, ";");
 
     /*
     if (plan->has_where_clause) {
-        sprintf(sql, "SELECT * FROM %s WHERE %s = ?1;", plan->table_name, plan->where_column);
+        sprintf(sql, "SELECT * FROM %s WHERE %s = ?1;", plan->table_name, plan->where_column.column_name);
         sqlite3_prepare_v2(db, sql, -1, &state->stmt, NULL);
     } else {
         sprintf(sql, "SELECT * FROM %s;", plan->table_name);

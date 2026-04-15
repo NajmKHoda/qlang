@@ -26,7 +26,7 @@ typedef struct SelectPlan {
     unsigned int num_joins;
     JoinClause* join_clauses;
     bool has_where_clause;
-    char* where_column;
+    QColumn where_column;
 } SelectPlan;
 
 typedef struct SelectIteratorState {
@@ -51,7 +51,7 @@ void __ql__SelectPlan_set_join(
     unsigned int right_table_index,
     char* right_column_name
 );
-void __ql__SelectPlan_set_where(SelectPlan* plan, char* column_name);
+void __ql__SelectPlan_set_where(SelectPlan* plan, unsigned int table_index, char* column_name);
 QLIterator* __ql__SelectPlan_prepare(sqlite3* db, SelectPlan* plan);
 QLIterator* __ql__SelectIterator_activate(QLIterator* select_iterator);
 
