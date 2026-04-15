@@ -31,12 +31,12 @@ PreparedInsert* __ql__InsertPlan_prepare(InsertPlan* plan);
 // Executes the prepared insert statement for a single row of data.
 // @param prepared_insert The prepared insert statement to execute.
 // @param row A pointer to the struct representing the row to insert.
-void __ql__PreparedInsert_exec_row(PreparedInsert* prepared_insert, void* row);
+bool __ql__PreparedInsert_exec_row(PreparedInsert* prepared_insert, void* row);
 
 // Executes the prepared insert statement for each element in the given array.
 // @param prepared_insert The prepared insert statement to execute.
 // @param array A pointer to the array of structs to insert.
-void __ql__PreparedInsert_exec_array(PreparedInsert* prepared_insert, QLArray* array);
+bool __ql__PreparedInsert_exec_array(PreparedInsert* prepared_insert, QLArray* array);
 
 // Finalizes the prepared insert statement and frees associated resources.
 // @param prepared_insert The prepared insert statement to finalize.

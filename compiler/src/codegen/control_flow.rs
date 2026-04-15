@@ -1,4 +1,4 @@
-use inkwell::{basic_block::BasicBlock, values::{BasicValue, IntValue}};
+use inkwell::{basic_block::BasicBlock, values::{AnyValue, BasicValue, IntValue}};
 
 use super::{CodeGen, CodeGenError};
 use crate::{semantics::{SemanticBlock, SemanticConditionalBranch, SemanticExpression}};
@@ -6,6 +6,11 @@ use crate::{semantics::{SemanticBlock, SemanticConditionalBranch, SemanticExpres
 pub(super) struct GenLoopInfo<'a> {
     cond_block: BasicBlock<'a>,
     after_block: BasicBlock<'a>
+}
+
+#[derive(Clone, Copy)]
+pub(super) struct GenTransactionInfo<'a> {
+    pub(super) rollback_block: BasicBlock<'a>,
 }
 
 impl<'ctxt> CodeGen<'ctxt> {
@@ -142,14 +147,84 @@ impl<'ctxt> CodeGen<'ctxt> {
         Ok(())
     }
 
+    pub fn gen_transaction(
+        &mut self,
+        body: &SemanticBlock,
+        rollback_body: &SemanticBlock,
+        id: u32,
+    ) -> Result<(), CodeGenError> {
+        let cur_fn = self.cur_fn.unwrap();
+
+        let body_block = self.context.append_basic_block(cur_fn, "tx_body");
+        let rollback_block = self.context.append_basic_block(cur_fn, "tx_rollback");
+        let release_block = self.context.append_basic_block(cur_fn, "tx_release");
+        let after_block = self.context.append_basic_block(cur_fn, "tx_after");
+
+        let savepoint_ok = self.builder.build_call(
+            self.runtime.db_savepoint,
+            &[self.int_type().const_int(id as u64, false).into()],
+            "tx_savepoint",
+        )?.as_any_value_enum().into_int_value();
+        self.builder.build_conditional_branch(savepoint_ok, body_block, rollback_block)?;
+
+        self.builder.position_at_end(body_block);
+        self.transaction_stack.push(GenTransactionInfo { rollback_block });
+        self.gen_block(body)?;
+        self.transaction_stack.pop();
+        if !body.terminates {
+            self.builder.build_unconditional_branch(release_block)?;
+        }
+
+        self.builder.position_at_end(rollback_block);
+        self.builder.build_call(
+            self.runtime.db_rollback_to_savepoint,
+            &[self.int_type().const_int(id as u64, false).into()],
+            "tx_rollback_to_sp",
+        )?;
+        self.gen_block(rollback_body)?;
+        if !rollback_body.terminates {
+            self.builder.build_unconditional_branch(release_block)?;
+        }
+
+        self.builder.position_at_end(release_block);
+        self.builder.build_call(
+            self.runtime.db_release_savepoint,
+            &[self.int_type().const_int(id as u64, false).into()],
+            "tx_release_sp",
+        )?;
+        self.builder.build_unconditional_branch(after_block)?;
+
+        self.builder.position_at_end(after_block);
+        Ok(())
+    }
+
     pub fn gen_return(&mut self, value: &Option<u32>) -> Result<(), CodeGenError> {
-        let return_val: Option<&dyn BasicValue> = if let Some(var_id) = value {
-            let ret_val = self.load_var(*var_id)?;
-            Some(&ret_val.as_llvm_basic_value())
+        if self.cur_sem_function().is_failable {
+            let sem_fn = self.cur_sem_function();
+            let result_ty = self.llvm_result_type(&sem_fn.return_type);
+            let result_alloca = self.build_alloca(result_ty.into(), "failable_ok_result")?;
+            let is_error_ptr = self.builder.build_struct_gep(result_ty, result_alloca, 0, "ok_result_is_error_ptr")?;
+            self.builder.build_store(is_error_ptr, self.bool_type().const_int(0, false))?;
+
+            if let Some(var_id) = value {
+                if sem_fn.return_type != crate::semantics::SemanticTypeKind::Void {
+                    let ok_ptr = self.builder.build_struct_gep(result_ty, result_alloca, 1, "ok_result_value_ptr")?;
+                    let ret_val = self.load_var(*var_id)?;
+                    self.builder.build_store(ok_ptr, ret_val.as_llvm_basic_value())?;
+                }
+            }
+
+            let result_val = self.builder.build_load(result_ty, result_alloca, "failable_ok_result_val")?.into_struct_value();
+            self.builder.build_return(Some(&result_val))?;
         } else {
-            None
-        };
-        self.builder.build_return(return_val)?;
+            let return_val: Option<&dyn BasicValue> = if let Some(var_id) = value {
+                let ret_val = self.load_var(*var_id)?;
+                Some(&ret_val.as_llvm_basic_value())
+            } else {
+                None
+            };
+            self.builder.build_return(return_val)?;
+        }
 		Ok(())
 	}
 

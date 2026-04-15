@@ -4,10 +4,10 @@ use inkwell::context::Context;
 use inkwell::module::Module;
 use inkwell::builder::Builder;
 use inkwell::targets::{FileType, Target, TargetMachine};
-use inkwell::types::{IntType, PointerType, VoidType};
+use inkwell::types::{IntType, PointerType, StructType, VoidType};
 use inkwell::values::{AnyValue, FunctionValue, GlobalValue, PointerValue};
 
-use crate::semantics::{SemanticExpression, SemanticExpressionKind, SemanticProgram, SemanticStatement, SemanticTypeKind};
+use crate::semantics::{SemanticExpression, SemanticExpressionKind, SemanticFunction, SemanticProgram, SemanticStatement, SemanticType, SemanticTypeKind};
 
 mod control_flow;
 mod operations;
@@ -27,6 +27,7 @@ use data::GenValue;
 use table::GenTableInfo;
 use structs::GenStructInfo;
 use control_flow::GenLoopInfo;
+use control_flow::GenTransactionInfo;
 use closure::GenClosureInfo;
 use runtime::Runtime;
 pub use error::CodeGenError;
@@ -44,6 +45,8 @@ pub struct CodeGen<'ctxt> {
     strings: HashMap<String, GlobalValue<'ctxt>>,
 
     cur_fn: Option<FunctionValue<'ctxt>>,
+    cur_function_id: Option<u32>,
+    transaction_stack: Vec<GenTransactionInfo<'ctxt>>,
 
     context: &'ctxt Context,
     builder: Builder<'ctxt>,
@@ -96,16 +99,41 @@ impl<'ctxt> CodeGen<'ctxt> {
 
         // Call user_main
         let user_main_llvm_fn = self.module.get_function("__ql__user_main").unwrap();
-        let call_site = self.builder.build_call(
-            user_main_llvm_fn,
-            &[],
-            "call_user_main"
-        )?.as_any_value_enum().into_int_value();
+        let user_main_sem_fn = self.program.functions.values()
+            .find(|f| f.name == "main")
+            .unwrap();
+        let call_site = self.builder.build_call(user_main_llvm_fn, &[], "call_user_main")?;
+        let main_ret_val = if user_main_sem_fn.is_failable {
+            let result_struct = call_site.as_any_value_enum().into_struct_value();
+            let is_error = self.builder.build_extract_value(result_struct, 0, "main_is_error")?
+                .into_int_value();
+            let ok_block = self.context.append_basic_block(main_fn, "main_ok");
+            let err_block = self.context.append_basic_block(main_fn, "main_err");
+            let merge_block = self.context.append_basic_block(main_fn, "main_ret_merge");
+            let ret_ptr = self.builder.build_alloca(self.int_type(), "main_ret_ptr")?;
+
+            self.builder.build_conditional_branch(is_error, err_block, ok_block)?;
+
+            self.builder.position_at_end(err_block);
+            self.builder.build_store(ret_ptr, self.int_type().const_int(1, false))?;
+            self.builder.build_unconditional_branch(merge_block)?;
+
+            self.builder.position_at_end(ok_block);
+            let ok_val = self.builder.build_extract_value(result_struct, 1, "main_ok_val")?
+                .into_int_value();
+            self.builder.build_store(ret_ptr, ok_val)?;
+            self.builder.build_unconditional_branch(merge_block)?;
+
+            self.builder.position_at_end(merge_block);
+            self.builder.build_load(self.int_type(), ret_ptr, "main_ret")?.into_int_value()
+        } else {
+            call_site.as_any_value_enum().into_int_value()
+        };
 
         // Teardown (drop constant strings and close databases)
         self.drop_const_strs()?;
         self.builder.build_call(self.runtime.close_dbs, &[], "close_dbs")?;
-        self.builder.build_return(Some(&call_site))?;
+        self.builder.build_return(Some(&main_ret_val))?;
 
         if let Err(msg) = self.module.print_to_file("out/main.debug") {
             eprintln!("Failed to write debug LLVM IR: {}", msg);
@@ -119,6 +147,20 @@ impl<'ctxt> CodeGen<'ctxt> {
     fn bool_type(&self) -> IntType<'ctxt> { self.context.bool_type() }
     fn ptr_type(&self) -> PointerType<'ctxt> { self.context.ptr_type(Default::default()) }
     fn void_type(&self) -> VoidType<'ctxt> { self.context.void_type() }
+
+    fn llvm_result_type(&self, sem_type: &SemanticType) -> StructType<'ctxt> {
+        match sem_type.kind() {
+            SemanticTypeKind::Void => self.context.struct_type(&[self.bool_type().into()], false),
+            _ => self.context.struct_type(&[
+                self.bool_type().into(),
+                self.llvm_basic_type(sem_type).into(),
+            ], false),
+        }
+    }
+
+    fn cur_sem_function(&self) -> &SemanticFunction {
+        &self.program.functions[&self.cur_function_id.unwrap()]
+    }
 
     fn gen_stmt(&mut self, stmt: &SemanticStatement) -> Result<(), CodeGenError> {
         match &stmt {
@@ -139,6 +181,9 @@ impl<'ctxt> CodeGen<'ctxt> {
             }
             SemanticStatement::ConditionalLoop { condition, body, id } => {
                 self.gen_loop(condition, body, *id)
+            }
+            SemanticStatement::Transaction { body, rollback_body, id } => {
+                self.gen_transaction(body, rollback_body, *id)
             }
             SemanticStatement::Return(expr) => {
                 self.gen_return(expr)
@@ -257,6 +302,8 @@ impl<'ctxt> CodeGen<'ctxt> {
             runtime: Runtime::new(&context, &module),
             strings: HashMap::new(),
             cur_fn: None,
+            cur_function_id: None,
+            transaction_stack: vec![],
             context: &context,
             builder,
             module,

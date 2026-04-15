@@ -65,3 +65,26 @@ void __ql__bind_value(sqlite3_stmt* stmt, unsigned int index, ColumnType value_t
             break;
     }
 }
+
+static bool __ql__exec_sql(char* sql) {
+    int rc = sqlite3_exec(__ql__sqlite, sql, NULL, NULL, NULL);
+    return rc == SQLITE_OK;
+}
+
+bool __ql__db_savepoint(unsigned int savepoint_id) {
+    char sql[MAX_SQL_LENGTH];
+    sprintf(sql, "SAVEPOINT __ql__sp_%u;", savepoint_id);
+    return __ql__exec_sql(sql);
+}
+
+bool __ql__db_release_savepoint(unsigned int savepoint_id) {
+    char sql[MAX_SQL_LENGTH];
+    sprintf(sql, "RELEASE SAVEPOINT __ql__sp_%u;", savepoint_id);
+    return __ql__exec_sql(sql);
+}
+
+bool __ql__db_rollback_to_savepoint(unsigned int savepoint_id) {
+    char sql[MAX_SQL_LENGTH];
+    sprintf(sql, "ROLLBACK TO SAVEPOINT __ql__sp_%u;", savepoint_id);
+    return __ql__exec_sql(sql);
+}

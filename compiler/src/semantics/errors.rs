@@ -155,6 +155,13 @@ pub enum SemanticError {
         table_name: String,
         found_type: SemanticType,
     },
+    QueryInNonFailableFunction {
+        function_name: String,
+    },
+    FailableCallInNonFailableFunction {
+        caller_name: String,
+        callee_name: String,
+    },
     NonBoolCondition {
         found_type: SemanticType,
     },
@@ -306,6 +313,12 @@ impl Display for SemanticError {
             }
             SemanticError::IncompatibleInsertData { table_name, found_type } => {
                 write!(f, "Expected {} row in INSERT, got {} instead", table_name, found_type)
+            }
+            SemanticError::QueryInNonFailableFunction { function_name } => {
+                write!(f, "Function {} must be declared failable because it contains an immediate query", function_name)
+            }
+            SemanticError::FailableCallInNonFailableFunction { caller_name, callee_name } => {
+                write!(f, "Function {} must be declared failable because it calls failable function {}", caller_name, callee_name)
             }
             SemanticError::NonBoolCondition { found_type } => {
                 write!(f, "Condition expression must be of boolean type, found {}", found_type)

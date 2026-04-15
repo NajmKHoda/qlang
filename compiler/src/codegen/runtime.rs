@@ -45,6 +45,9 @@ pub(super) struct Runtime<'ctxt> {
 
     pub(super) init_dbs: FunctionValue<'ctxt>,
     pub(super) close_dbs: FunctionValue<'ctxt>,
+    pub(super) db_savepoint: FunctionValue<'ctxt>,
+    pub(super) db_release_savepoint: FunctionValue<'ctxt>,
+    pub(super) db_rollback_to_savepoint: FunctionValue<'ctxt>,
 
     // Delete query functions
     pub(super) delete_plan_new: FunctionValue<'ctxt>,
@@ -273,6 +276,24 @@ impl<'ctxt> Runtime<'ctxt> {
             Some(Linkage::External),
         );
 
+        let db_savepoint = module.add_function(
+            "__ql__db_savepoint",
+            bool_type.fn_type(&[int_type.into()], false),
+            Some(Linkage::External),
+        );
+
+        let db_release_savepoint = module.add_function(
+            "__ql__db_release_savepoint",
+            bool_type.fn_type(&[int_type.into()], false),
+            Some(Linkage::External),
+        );
+
+        let db_rollback_to_savepoint = module.add_function(
+            "__ql__db_rollback_to_savepoint",
+            bool_type.fn_type(&[int_type.into()], false),
+            Some(Linkage::External),
+        );
+
         // Delete query functions
         let delete_plan_new = module.add_function(
             "__ql__DeletePlan_new",
@@ -294,13 +315,13 @@ impl<'ctxt> Runtime<'ctxt> {
 
         let prepared_delete_bind_where = module.add_function(
             "__ql__PreparedDelete_bind_where",
-            void_type.fn_type(&[ptr_type.into(), int_type.into(), ptr_type.into()], false),
+            bool_type.fn_type(&[ptr_type.into(), int_type.into(), ptr_type.into()], false),
             Some(Linkage::External),
         );
 
         let prepared_delete_exec = module.add_function(
             "__ql__PreparedDelete_exec",
-            void_type.fn_type(&[ptr_type.into()], false),
+            bool_type.fn_type(&[ptr_type.into()], false),
             Some(Linkage::External),
         );
 
@@ -325,13 +346,13 @@ impl<'ctxt> Runtime<'ctxt> {
 
         let prepared_insert_exec_row = module.add_function(
             "__ql__PreparedInsert_exec_row",
-            void_type.fn_type(&[ptr_type.into(), ptr_type.into()], false),
+            bool_type.fn_type(&[ptr_type.into(), ptr_type.into()], false),
             Some(Linkage::External),
         );
 
         let prepared_insert_exec_array = module.add_function(
             "__ql__PreparedInsert_exec_array",
-            void_type.fn_type(&[ptr_type.into(), ptr_type.into()], false),
+            bool_type.fn_type(&[ptr_type.into(), ptr_type.into()], false),
             Some(Linkage::External),
         );
 
@@ -410,19 +431,19 @@ impl<'ctxt> Runtime<'ctxt> {
 
         let select_iterator_bind_where = module.add_function(
             "__ql__SelectIterator_bind_where",
-            void_type.fn_type(&[ptr_type.into(), int_type.into(), ptr_type.into()], false),
+            bool_type.fn_type(&[ptr_type.into(), int_type.into(), ptr_type.into()], false),
             Some(Linkage::External),
         );
 
         let select_iterator_bind_limit = module.add_function(
             "__ql__SelectIterator_bind_limit",
-            void_type.fn_type(&[ptr_type.into(), ptr_type.into()], false),
+            bool_type.fn_type(&[ptr_type.into(), ptr_type.into()], false),
             Some(Linkage::External),
         );
 
         let select_iterator_bind_offset = module.add_function(
             "__ql__SelectIterator_bind_offset",
-            void_type.fn_type(&[ptr_type.into(), ptr_type.into()], false),
+            bool_type.fn_type(&[ptr_type.into(), ptr_type.into()], false),
             Some(Linkage::External),
         );
 
@@ -447,19 +468,19 @@ impl<'ctxt> Runtime<'ctxt> {
 
         let prepared_update_bind_where = module.add_function(
             "__ql__PreparedUpdate_bind_where",
-            void_type.fn_type(&[ptr_type.into(), int_type.into(), ptr_type.into()], false),
+            bool_type.fn_type(&[ptr_type.into(), int_type.into(), ptr_type.into()], false),
             Some(Linkage::External),
         );
 
         let prepared_update_bind_assignment = module.add_function(
             "__ql__PreparedUpdate_bind_assignment",
-            void_type.fn_type(&[ptr_type.into(), int_type.into(), int_type.into(), ptr_type.into()], false),
+            bool_type.fn_type(&[ptr_type.into(), int_type.into(), int_type.into(), ptr_type.into()], false),
             Some(Linkage::External),
         );
 
         let prepared_update_exec = module.add_function(
             "__ql__PreparedUpdate_exec",
-            void_type.fn_type(&[ptr_type.into()], false),
+            bool_type.fn_type(&[ptr_type.into()], false),
             Some(Linkage::External),
         );
 
@@ -598,6 +619,9 @@ impl<'ctxt> Runtime<'ctxt> {
 
             init_dbs,
             close_dbs,
+            db_savepoint,
+            db_release_savepoint,
+            db_rollback_to_savepoint,
 
             delete_plan_new,
             delete_plan_set_where,

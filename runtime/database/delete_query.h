@@ -34,7 +34,7 @@ PreparedDelete* __ql__DeletePlan_prepare(DeletePlan* plan);
 // @param prepared_delete The prepared delete statement.
 // @param value_type The type of the value to bind.
 // @param value A pointer to the value to bind.
-void __ql__PreparedDelete_bind_where(
+bool __ql__PreparedDelete_bind_where(
     PreparedDelete* prepared_delete,
     ColumnType value_type,
     void* value
@@ -42,7 +42,7 @@ void __ql__PreparedDelete_bind_where(
 
 // Executes the prepared delete statement.
 // @param prepared_delete The prepared delete statement to execute.
-void __ql__PreparedDelete_exec(PreparedDelete* prepared_delete);
+bool __ql__PreparedDelete_exec(PreparedDelete* prepared_delete);
 
 // Finalizes the prepared delete statement and frees associated resources.
 // @param prepared_delete The prepared delete statement to finalize.

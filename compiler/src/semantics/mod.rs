@@ -25,6 +25,12 @@ pub use errors::SemanticError;
 
 use crate::tokens::*;
 
+#[derive(Clone, Copy)]
+pub enum Executable {
+    Function(u32),
+    Closure(u32),
+}
+
 pub struct SemanticGen {
     datasources: DualLookup<SemanticDatasource>,
     tables: DualLookup<SemanticTable>,
@@ -34,7 +40,7 @@ pub struct SemanticGen {
     variables: HashMap<u32, SemanticVariable>,
     scopes: Vec<SemanticScope>,
     loops: Vec<(Option<String>, u32)>,
-    cur_return_type: SemanticType,
+    cur_function: Option<Executable>,
 
     datasource_id_gen: IdGenerator,
     table_id_gen: IdGenerator,
@@ -43,6 +49,7 @@ pub struct SemanticGen {
     closure_id_gen: IdGenerator,
     variable_id_gen: IdGenerator,
     loop_id_gen: IdGenerator,
+    transaction_id_gen: IdGenerator,
 }
     
 pub struct SemanticProgram {
@@ -65,7 +72,7 @@ impl SemanticGen {
             variables: HashMap::new(),
             scopes: vec![],
             loops: vec![],
-            cur_return_type: SemanticType::new(SemanticTypeKind::Void),
+            cur_function: None,
 
             datasource_id_gen: IdGenerator::new(),
             table_id_gen: IdGenerator::new(),
@@ -74,6 +81,7 @@ impl SemanticGen {
             closure_id_gen: IdGenerator::new(),
             variable_id_gen: IdGenerator::new(),
             loop_id_gen: IdGenerator::new(),
+            transaction_id_gen: IdGenerator::new(),
         }
     }
 
@@ -98,6 +106,9 @@ impl SemanticGen {
             StatementNode::ForLoop { variable_name, iterable_expr, body, label } => {
                 self.eval_for_loop(variable_name, iterable_expr, body, label)
             },
+            StatementNode::Transaction { body, rollback_body } => {
+                self.eval_transaction(body, rollback_body).map(|s| vec![s])
+            }
             StatementNode::Return(expr) => {
                 self.eval_return(expr.as_deref())
             },
@@ -259,7 +270,7 @@ impl SemanticGen {
         }
 
         for function in &program.functions {
-            self.declare_function(&function.name, &function.params, &function.return_type)?;
+            self.declare_function(&function.name, function.is_failable, &function.params, &function.return_type)?;
         }
         if !self.functions.contains_name("main") {
             return Err(SemanticError::MissingMainFunction);
@@ -283,5 +294,29 @@ impl SemanticGen {
     pub fn gen_semantic(program: &ProgramNode) -> Result<SemanticProgram, SemanticError> {
         let sem_gen = SemanticGen::new();
         sem_gen.eval_program(program)
+    }
+
+    pub(super) fn cur_return_type(&self) -> SemanticType {
+        match self.cur_function {
+            Some(Executable::Function(id)) => self.functions[id].return_type.clone(),
+            Some(Executable::Closure(id)) => self.closures[&id].return_type.clone(),
+            None => SemanticType::new(SemanticTypeKind::Void),
+        }
+    }
+
+    pub(super) fn cur_executable_name(&self) -> String {
+        match self.cur_function {
+            Some(Executable::Function(id)) => self.functions[id].name.clone(),
+            Some(Executable::Closure(id)) => format!("<closure@{}>", id),
+            None => "<global>".to_string(),
+        }
+    }
+
+    pub(super) fn cur_function_is_failable(&self) -> bool {
+        match self.cur_function {
+            Some(Executable::Function(id)) => self.functions[id].is_failable,
+            Some(Executable::Closure(_)) => false,
+            None => false,
+        }
     }
 }

@@ -28,4 +28,16 @@ void __ql__close_dbs();
 // @param value A pointer to the value to bind.
 void __ql__bind_value(sqlite3_stmt* stmt, unsigned int index, ColumnType value_type, void* value);
 
+// Opens a SAVEPOINT with an internal name derived from savepoint_id.
+// Returns true on success and false on SQLite error.
+bool __ql__db_savepoint(unsigned int savepoint_id);
+
+// Releases a SAVEPOINT with an internal name derived from savepoint_id.
+// Returns true on success and false on SQLite error.
+bool __ql__db_release_savepoint(unsigned int savepoint_id);
+
+// Rolls back to a SAVEPOINT with an internal name derived from savepoint_id.
+// Returns true on success and false on SQLite error.
+bool __ql__db_rollback_to_savepoint(unsigned int savepoint_id);
+
 #endif

@@ -24,6 +24,7 @@ pub struct StructNode {
 
 pub struct FunctionNode {
     pub name: String,
+    pub is_failable: bool,
     pub return_type: TypeNode,
     pub params: Vec<TypedQNameNode>,
     pub body: Vec<StatementNode>,
@@ -53,6 +54,10 @@ pub enum StatementNode {
         iterable_expr: Box<ExpressionNode>,
         body: Vec<StatementNode>,
         label: Option<String>,
+    },
+    Transaction {
+        body: Vec<StatementNode>,
+        rollback_body: Vec<StatementNode>,
     },
     LoneExpression(Box<ExpressionNode>),
     Return(Option<Box<ExpressionNode>>),

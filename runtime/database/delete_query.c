@@ -29,26 +29,44 @@ PreparedDelete* __ql__DeletePlan_prepare(DeletePlan* plan) {
         sprintf(sql, "DELETE FROM %s;", plan->table_name);
     }
 
-    sqlite3_prepare_v2(__ql__sqlite, sql, -1, &prepared_delete->stmt, NULL);
+    if (sqlite3_prepare_v2(__ql__sqlite, sql, -1, &prepared_delete->stmt, NULL) != SQLITE_OK) {
+        free(prepared_delete);
+        free(plan);
+        return NULL;
+    }
     free(plan);
     return prepared_delete;
 }
 
 
-void __ql__PreparedDelete_bind_where(
+bool __ql__PreparedDelete_bind_where(
     PreparedDelete* prepared_delete,
     ColumnType value_type,
     void* value
 ) {
+    if (prepared_delete == NULL) {
+        return false;
+    }
+
     __ql__bind_value(prepared_delete->stmt, 1, value_type, value);
+    return sqlite3_errcode(__ql__sqlite) == SQLITE_OK;
 }
 
-void __ql__PreparedDelete_exec(PreparedDelete* prepared_delete) {
-    sqlite3_step(prepared_delete->stmt);
-    sqlite3_reset(prepared_delete->stmt);
+bool __ql__PreparedDelete_exec(PreparedDelete* prepared_delete) {
+    if (prepared_delete == NULL) {
+        return false;
+    }
+
+    int step_rc = sqlite3_step(prepared_delete->stmt);
+    int reset_rc = sqlite3_reset(prepared_delete->stmt);
+    return step_rc == SQLITE_DONE && reset_rc == SQLITE_OK;
 }
 
 void __ql__PreparedDelete_finalize(PreparedDelete* prepared_delete) {
+    if (prepared_delete == NULL) {
+        return;
+    }
+
     sqlite3_finalize(prepared_delete->stmt);
     free(prepared_delete);
     fprintf(stderr, "finalize PreparedDelete\n");

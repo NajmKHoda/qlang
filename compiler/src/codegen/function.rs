@@ -10,14 +10,17 @@ impl<'ctxt> CodeGen<'ctxt> {
 		let llvm_param_types = function.param_ids.iter()
 			.map(|p| self.llvm_basic_type(&self.program.variables[p].sem_type).into())
 			.collect::<Vec<BasicMetadataTypeEnum>>(); 
-		let llvm_type = match function.return_type.kind() {
-			SemanticTypeKind::Void => {
-				self.void_type().fn_type(&llvm_param_types, false)
+		let llvm_type = if function.is_failable {
+			let result_ty = self.llvm_result_type(&function.return_type);
+			result_ty.fn_type(&llvm_param_types, false)
+		} else {
+			match function.return_type.kind() {
+				SemanticTypeKind::Void => self.void_type().fn_type(&llvm_param_types, false),
+				_ => {
+					let llvm_return_type = self.llvm_basic_type(&function.return_type);
+					llvm_return_type.fn_type(&llvm_param_types, false)
+				}
 			}
-			_ => {
-				let llvm_return_type = self.llvm_basic_type(&function.return_type);
-				llvm_return_type.fn_type(&llvm_param_types, false)
-			},
 		};
 
 		let llvm_name = if function.name == "main" { "__ql__user_main" } else { &function.name };
@@ -30,6 +33,7 @@ impl<'ctxt> CodeGen<'ctxt> {
 		let llvm_fn = self.llvm_functions[&function.id];
 
 		self.cur_fn = Some(llvm_fn);
+		self.cur_function_id = Some(function.id);
 		let entry_block = self.context.append_basic_block(llvm_fn, "entry");
 		self.builder.position_at_end(entry_block);
 
@@ -46,7 +50,44 @@ impl<'ctxt> CodeGen<'ctxt> {
 		self.gen_block(&function.body)?;
 		
 		self.cur_fn = None;
+		self.cur_function_id = None;
 		Ok(())
+	}
+
+	fn gen_failable_error_return(&mut self) -> Result<(), CodeGenError> {
+		let sem_fn = self.cur_sem_function();
+		let result_ty = self.llvm_result_type(&sem_fn.return_type);
+		let result_alloca = self.build_alloca(result_ty.into(), "failable_error_result")?;
+
+		let is_error_ptr = self.builder.build_struct_gep(result_ty, result_alloca, 0, "result_is_error_ptr")?;
+		self.builder.build_store(is_error_ptr, self.bool_type().const_int(1, false))?;
+
+		let result_val = self.builder.build_load(result_ty, result_alloca, "failable_error_result_val")?.into_struct_value();
+		self.builder.build_return(Some(&result_val))?;
+		Ok(())
+	}
+
+	pub(super) fn gen_failable_check(
+		&mut self,
+		is_error: inkwell::values::IntValue<'ctxt>,
+	) -> Result<inkwell::basic_block::BasicBlock<'ctxt>, CodeGenError> {
+		let cur_block = self.builder.get_insert_block().unwrap();
+		let cur_fn = self.cur_fn.unwrap();
+		let ok_block = self.context.append_basic_block(cur_fn, "failable_ok");
+		let err_block = self.context.append_basic_block(cur_fn, "failable_err");
+
+		self.builder.position_at_end(cur_block);
+		self.builder.build_conditional_branch(is_error, err_block, ok_block)?;
+
+		self.builder.position_at_end(err_block);
+		if let Some(txn) = self.transaction_stack.last() {
+			self.builder.build_unconditional_branch(txn.rollback_block)?;
+		} else {
+			self.gen_failable_error_return()?;
+		}
+
+		self.builder.position_at_end(ok_block);
+		Ok(ok_block)
 	}
 
     pub fn gen_direct_call(&mut self, function_id: u32, args: &[SemanticExpression]) -> Result<GenValue<'ctxt>, CodeGenError> {
@@ -71,13 +112,27 @@ impl<'ctxt> CodeGen<'ctxt> {
 			}
 		}
 
-		match call_site.try_as_basic_value() {
-			ValueKind::Basic(value) => Ok(GenValue::new(
-				&sem_function.return_type,
-				value,
-				Ownership::Owned
-			)),
-			ValueKind::Instruction(_) => Ok(GenValue::Void),
+		if sem_function.is_failable {
+			let result_struct = call_site.as_any_value_enum().into_struct_value();
+			let is_error = self.builder.build_extract_value(result_struct, 0, "call_is_error")?
+				.into_int_value();
+			self.gen_failable_check(is_error)?;
+
+			if sem_function.return_type == SemanticTypeKind::Void {
+				return Ok(GenValue::Void);
+			}
+
+			let ok_val = self.builder.build_extract_value(result_struct, 1, "call_ok_value")?;
+			Ok(GenValue::new(&sem_function.return_type, ok_val, Ownership::Owned))
+		} else {
+			match call_site.try_as_basic_value() {
+				ValueKind::Basic(value) => Ok(GenValue::new(
+					&sem_function.return_type,
+					value,
+					Ownership::Owned
+				)),
+				ValueKind::Instruction(_) => Ok(GenValue::Void),
+			}
 		}
     }
 

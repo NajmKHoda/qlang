@@ -44,30 +44,53 @@ PreparedUpdate* __ql__UpdatePlan_prepare(UpdatePlan* plan) {
         writer += sprintf(writer, ";");
     }
     
-    sqlite3_prepare_v2(__ql__sqlite, sql, -1, &prepared_update->stmt, NULL);
+    if (sqlite3_prepare_v2(__ql__sqlite, sql, -1, &prepared_update->stmt, NULL) != SQLITE_OK) {
+        free(prepared_update);
+        free(plan);
+        return NULL;
+    }
     free(plan);
     return prepared_update;
 }
 
-void __ql__PreparedUpdate_bind_where(PreparedUpdate* prepared_update, ColumnType value_type, void* value) {
+bool __ql__PreparedUpdate_bind_where(PreparedUpdate* prepared_update, ColumnType value_type, void* value) {
+    if (prepared_update == NULL) {
+        return false;
+    }
+
     __ql__bind_value(prepared_update->stmt, 1, value_type, value);
+    return sqlite3_errcode(__ql__sqlite) == SQLITE_OK;
 }
 
-void __ql__PreparedUpdate_bind_assignment(
+bool __ql__PreparedUpdate_bind_assignment(
     PreparedUpdate* prepared_update,
     unsigned int index,
     ColumnType value_type,
     void* value
 ) {
+    if (prepared_update == NULL) {
+        return false;
+    }
+
     __ql__bind_value(prepared_update->stmt, index + 2, value_type, value);
+    return sqlite3_errcode(__ql__sqlite) == SQLITE_OK;
 }
 
-void __ql__PreparedUpdate_exec(PreparedUpdate* prepared_update) {
-    sqlite3_step(prepared_update->stmt);
-    sqlite3_reset(prepared_update->stmt);
+bool __ql__PreparedUpdate_exec(PreparedUpdate* prepared_update) {
+    if (prepared_update == NULL) {
+        return false;
+    }
+
+    int step_rc = sqlite3_step(prepared_update->stmt);
+    int reset_rc = sqlite3_reset(prepared_update->stmt);
+    return step_rc == SQLITE_DONE && reset_rc == SQLITE_OK;
 }
 
 void __ql__PreparedUpdate_finalize(PreparedUpdate* prepared_update) {
+    if (prepared_update == NULL) {
+        return;
+    }
+
     sqlite3_finalize(prepared_update->stmt);
     free(prepared_update);
     fprintf(stderr, "finalize PreparedUpdate\n");

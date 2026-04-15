@@ -204,7 +204,13 @@ QLIterator* __ql__SelectPlan_prepare(SelectPlan* plan) {
         sqlite3_prepare_v2(db, sql, -1, &state->stmt, NULL);
     }
     */
-    sqlite3_prepare_v2(__ql__sqlite, sql, -1, &state->stmt, NULL);
+    if (sqlite3_prepare_v2(__ql__sqlite, sql, -1, &state->stmt, NULL) != SQLITE_OK) {
+        free(state->row_ptr);
+        free(sql);
+        free(select_iterator);
+        free(plan);
+        return NULL;
+    }
     state->sql = sql;
 
     free(plan);
@@ -213,6 +219,10 @@ QLIterator* __ql__SelectPlan_prepare(SelectPlan* plan) {
 
 
 QLIterator* __ql__SelectIterator_activate(QLIterator* select_iterator) {
+    if (select_iterator == NULL) {
+        return NULL;
+    }
+
     SelectIteratorState* state = (SelectIteratorState*)select_iterator->state;
     if (state->sql == NULL) {
         fprintf(stderr, "Cannot activate a SelectIterator clone. This is a logical compiler error.");
@@ -231,6 +241,10 @@ QLIterator* __ql__SelectIterator_activate(QLIterator* select_iterator) {
         SelectIteratorState* new_state = (SelectIteratorState*)new_iterator->state;
 
         sqlite3_prepare_v2(__ql__sqlite, state->sql, -1, &new_state->stmt, NULL);
+        if (new_state->stmt == NULL) {
+            free(new_iterator);
+            return NULL;
+        }
         new_state->row_ptr = malloc(select_iterator->elem_type_info->size);
         new_state->where_bind_index = state->where_bind_index;
         new_state->limit_bind_index = state->limit_bind_index;
@@ -248,25 +262,40 @@ QLIterator* __ql__SelectIterator_activate(QLIterator* select_iterator) {
     }
 }
 
-void __ql__SelectIterator_bind_where(QLIterator* select_iterator, ColumnType value_type, void* value) {
+bool __ql__SelectIterator_bind_where(QLIterator* select_iterator, ColumnType value_type, void* value) {
+    if (select_iterator == NULL) {
+        return false;
+    }
+
     SelectIteratorState* state = (SelectIteratorState*)select_iterator->state;
     if (state->where_bind_index > 0) {
         __ql__bind_value(state->stmt, state->where_bind_index, value_type, value);
     }
+    return sqlite3_errcode(__ql__sqlite) == SQLITE_OK;
 }
 
-void __ql__SelectIterator_bind_limit(QLIterator* select_iterator, void* value) {
+bool __ql__SelectIterator_bind_limit(QLIterator* select_iterator, void* value) {
+    if (select_iterator == NULL) {
+        return false;
+    }
+
     SelectIteratorState* state = (SelectIteratorState*)select_iterator->state;
     if (state->limit_bind_index > 0) {
         int raw = *(int*)value;
-        sqlite3_bind_int(state->stmt, state->limit_bind_index, raw < 0 ? 0 : raw);
+        return sqlite3_bind_int(state->stmt, state->limit_bind_index, raw < 0 ? 0 : raw) == SQLITE_OK;
     }
+    return true;
 }
 
-void __ql__SelectIterator_bind_offset(QLIterator* select_iterator, void* value) {
+bool __ql__SelectIterator_bind_offset(QLIterator* select_iterator, void* value) {
+    if (select_iterator == NULL) {
+        return false;
+    }
+
     SelectIteratorState* state = (SelectIteratorState*)select_iterator->state;
     if (state->offset_bind_index > 0) {
         int raw = *(int*)value;
-        sqlite3_bind_int(state->stmt, state->offset_bind_index, raw < 0 ? 0 : raw);
+        return sqlite3_bind_int(state->stmt, state->offset_bind_index, raw < 0 ? 0 : raw) == SQLITE_OK;
     }
+    return true;
 }

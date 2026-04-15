@@ -18,6 +18,9 @@ impl SemanticStatement {
                 };
                 all_branches_terminate && else_terminates
             }
+            SemanticStatement::Transaction { body, rollback_body, .. } => {
+                body.terminates && rollback_body.terminates
+            }
             SemanticStatement::Return(_) => true,
             SemanticStatement::Break(_) => true,
             SemanticStatement::Continue(_) => true,
@@ -228,6 +231,26 @@ impl SemanticGen {
         Ok(stmts)
     }
 
+    pub(super) fn eval_transaction(
+        &mut self,
+        body: &[StatementNode],
+        rollback_body: &[StatementNode],
+    ) -> Result<SemanticStatement, SemanticError> {
+        let id = self.transaction_id_gen.next_id();
+
+        self.enter_scope(SemanticScopeType::Block);
+        let sem_body = self.eval_block(body)?;
+
+        self.enter_scope(SemanticScopeType::Block);
+        let sem_rollback_body = self.eval_block(rollback_body)?;
+
+        Ok(SemanticStatement::Transaction {
+            body: sem_body,
+            rollback_body: sem_rollback_body,
+            id,
+        })
+    }
+
     pub(super) fn eval_return(
         &mut self,
         expr: Option<&ExpressionNode>,
@@ -235,18 +258,20 @@ impl SemanticGen {
         let sem_expr_op = match expr {
             Some(expr_node) => {
                 let sem_expr = self.eval_expr(expr_node)?;
-                if !self.try_unify(&self.cur_return_type, &sem_expr.sem_type) {
+                let cur_return_type = self.cur_return_type();
+                if !self.try_unify(&cur_return_type, &sem_expr.sem_type) {
                     return Err(SemanticError::MistypedReturnValue {
-                        expected: self.cur_return_type.clone(),
+                        expected: cur_return_type,
                         found: sem_expr.sem_type,
                     });
                 }
                 Some(sem_expr)
             }
             None => {
-                if self.cur_return_type != SemanticTypeKind::Void {
+                let cur_return_type = self.cur_return_type();
+                if cur_return_type != SemanticTypeKind::Void {
                     return Err(SemanticError::MistypedReturnValue {
-                        expected: self.cur_return_type.clone(),
+                        expected: cur_return_type,
                         found: SemanticType::new(SemanticTypeKind::Void),
                     });
                 }

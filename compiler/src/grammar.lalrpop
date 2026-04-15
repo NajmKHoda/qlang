@@ -24,7 +24,7 @@ Struct: StructNode =
     => StructNode { <> };
 
 Function: FunctionNode =
-    "function" <name:QName>
+    <is_failable:Present<"failable">> "function" <name:QName>
     "(" <params:Comma<TypedQName>> ")"
     "->" <return_type:TypeName>
     "{" <body:Statement*> "}"
@@ -40,6 +40,9 @@ Statement: StatementNode = {
     "for" <variable_name:QName> "in" <iterable_expr:Expression>
         "{" <body:Statement*> "}" <label:("as" <QName> ";")?>
         => StatementNode::ForLoop { <> },
+    "transaction" "{" <body:Statement*> "}"
+        "on" "rollback" "{" <rollback_body:Statement*> "}"
+        => StatementNode::Transaction { <> },
     "return" <Expression?> ";" => StatementNode::Return(<>),
     "break" <QName?> ";" => StatementNode::Break(<>),
     "continue" <QName?> ";" => StatementNode::Continue(<>),

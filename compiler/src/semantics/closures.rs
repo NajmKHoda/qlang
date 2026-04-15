@@ -1,6 +1,6 @@
 use crate::{semantics::SemanticQuery, tokens::{ClosureBodyNode, TypeNode, TypedQNameNode}};
 
-use super::{SemanticGen, SemanticType, SemanticBlock, SemanticScopeType, SemanticError, SemanticVariable, Ownership, SemanticExpression, SemanticExpressionKind, SemanticStatement, SemanticTypeKind};
+use super::{Executable, SemanticGen, SemanticType, SemanticBlock, SemanticScopeType, SemanticError, SemanticVariable, Ownership, SemanticExpression, SemanticExpressionKind, SemanticStatement, SemanticTypeKind};
 
 pub struct SemanticClosure {
     pub id: u32,
@@ -92,11 +92,11 @@ impl SemanticGen {
                 });
             },
             ClosureBodyNode::Statements(stmts) => {
-                let prev_return_type = self.cur_return_type.clone();
-                self.cur_return_type = sem_ret_type.clone();
+                let prev_executable = self.cur_function;
+                self.cur_function = Some(Executable::Closure(id));
                 self.enter_scope(SemanticScopeType::Block);
                 let mut body_block = self.eval_block(stmts)?;
-                self.cur_return_type = prev_return_type;
+                self.cur_function = prev_executable;
 
                 if !body_block.terminates {
                     let void_type = SemanticType::new(SemanticTypeKind::Void);

@@ -42,7 +42,7 @@ PreparedUpdate* __ql__UpdatePlan_prepare(UpdatePlan* plan);
 // @param prepared_update The prepared update statement.
 // @param value_type The type of the value to bind.
 // @param value A pointer to the value to bind.
-void __ql__PreparedUpdate_bind_where(
+bool __ql__PreparedUpdate_bind_where(
     PreparedUpdate* prepared_update,
     ColumnType value_type,
     void* value
@@ -53,7 +53,7 @@ void __ql__PreparedUpdate_bind_where(
 // @param index The index of the assignment to bind (0-based).
 // @param value_type The type of the value to bind.
 // @param value A pointer to the value to bind.
-void __ql__PreparedUpdate_bind_assignment(
+bool __ql__PreparedUpdate_bind_assignment(
     PreparedUpdate* prepared_update,
     unsigned int index,
     ColumnType value_type,
@@ -62,7 +62,7 @@ void __ql__PreparedUpdate_bind_assignment(
 
 // Executes the prepared update statement.
 // @param prepared_update The prepared update statement to execute.
-void __ql__PreparedUpdate_exec(PreparedUpdate* prepared_update);
+bool __ql__PreparedUpdate_exec(PreparedUpdate* prepared_update);
 
 // Finalizes the prepared update statement and frees associated resources.
 // @param prepared_update The prepared update statement to finalize.

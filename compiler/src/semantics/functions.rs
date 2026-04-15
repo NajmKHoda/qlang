@@ -3,6 +3,7 @@ use super::*;
 pub struct SemanticFunction {
     pub name: String,
     pub id: u32,
+    pub is_failable: bool,
     pub param_ids: Vec<u32>,
     pub return_type: SemanticType,
     pub body: SemanticBlock,
@@ -221,6 +222,7 @@ impl SemanticGen {
     pub(super) fn declare_function(
         &mut self,
         name: &str,
+        is_failable: bool,
         param_nodes: &[TypedQNameNode],
         return_type: &TypeNode,
     ) -> Result<(), SemanticError> {
@@ -241,6 +243,7 @@ impl SemanticGen {
         self.functions.insert(name.to_string(), function_id, SemanticFunction {
             name: name.to_string(),
             id: function_id,
+            is_failable,
             param_ids,
             return_type: sem_return_type,
             body: SemanticBlock {
@@ -262,11 +265,11 @@ impl SemanticGen {
         }
 
         // Evaluate function body
-        self.cur_return_type = self.functions[id].return_type.clone();
+        self.cur_function = Some(Executable::Function(id));
         self.enter_scope(SemanticScopeType::Function);
         let mut body_block = self.eval_block(body)?;
         if !body_block.terminates {
-            if self.cur_return_type == SemanticTypeKind::Void {
+            if self.cur_return_type() == SemanticTypeKind::Void {
                 let ret_stmt = SemanticStatement::Return(None);
                 body_block.statements.push(ret_stmt);
             } else if self.functions[id].name == "main" {
@@ -353,6 +356,13 @@ impl SemanticGen {
                 })
             }
         } else if let Some(func) = self.functions.get_by_name(name) {
+            if func.is_failable && !self.cur_function_is_failable() {
+                return Err(SemanticError::FailableCallInNonFailableFunction {
+                    caller_name: self.cur_executable_name(),
+                    callee_name: func.name.clone(),
+                });
+            }
+
             let param_types: Vec<SemanticType> = func.param_ids.iter()
                 .map(|&param_id| self.variables[&param_id].sem_type.clone())
                 .collect();

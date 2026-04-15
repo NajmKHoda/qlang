@@ -25,6 +25,11 @@ pub enum SemanticStatement {
         body: SemanticBlock,
         id: u32,
     },
+    Transaction {
+        body: SemanticBlock,
+        rollback_body: SemanticBlock,
+        id: u32,
+    },
     Return(Option<u32>),
     Break(u32),
     Continue(u32),

@@ -112,20 +112,16 @@ QLIterator* __ql__SelectIterator_activate(QLIterator* select_iterator);
 // @param select_iterator The SelectIterator to bind the value for.
 // @param value_type The type of the value to bind.
 // @param value A pointer to the value to bind.
-void __ql__SelectIterator_bind_where(QLIterator* select_iterator, ColumnType value_type, void* value);
+bool __ql__SelectIterator_bind_where(QLIterator* select_iterator, ColumnType value_type, void* value);
 
 // Binds a value to the LIMIT clause of the given SelectIterator.
 // @param select_iterator The SelectIterator to bind the value for.
 // @param value A pointer to the integer value to bind for the LIMIT clause.
-void __ql__SelectIterator_bind_limit(QLIterator* select_iterator, void* value);
+bool __ql__SelectIterator_bind_limit(QLIterator* select_iterator, void* value);
 
 // Binds a value to the OFFSET clause of the given SelectIterator.
 // @param select_iterator The SelectIterator to bind the value for.
 // @param value A pointer to the integer value to bind for the OFFSET clause.
-void __ql__SelectIterator_bind_offset(QLIterator* select_iterator, void* value);
-
-// Finalizes the given SelectIterator and frees associated resources.
-// @param select_iterator The SelectIterator to finalize.
-void __ql__SelectIterator_finalize(QLIterator* select_iterator);
+bool __ql__SelectIterator_bind_offset(QLIterator* select_iterator, void* value);
 
 #endif

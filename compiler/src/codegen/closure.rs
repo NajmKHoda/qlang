@@ -95,7 +95,7 @@ impl<'ctxt> CodeGen<'ctxt> {
 					.get_nth_param(1)
 					.unwrap()
 					.into_pointer_value();
-				let result = self.execute_query(prepared_stmt, query)?;
+				let (result, _) = self.execute_query(prepared_stmt, query)?;
                 let return_value = match result {
                     GenValue::Void => None,
                     _ => Some(&result.as_llvm_basic_value() as &dyn BasicValue),
