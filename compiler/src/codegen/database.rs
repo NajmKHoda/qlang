@@ -96,8 +96,9 @@ impl<'ctxt> CodeGen<'ctxt> {
 
     pub(super) fn prepare_query(&mut self, query: &SemanticQuery) -> Result<PointerValue<'ctxt>, CodeGenError> {
         match query {
-            SemanticQuery::Select { root_table_id, capturing_struct_id, captured_columns, join_clauses, .. } => {
-                let table = &self.program.tables[root_table_id];
+            SemanticQuery::Select { select_table_ids, capturing_struct_id, captured_columns, join_clauses, .. } => {
+                let root_table_id = select_table_ids[0];
+                let table = &self.program.tables[&root_table_id];
                 let table_info = &self.table_info[&root_table_id];
                 let struct_info = &self.struct_info[&capturing_struct_id];
                 let select_plan_ptr = self.builder.build_call(
@@ -112,15 +113,15 @@ impl<'ctxt> CodeGen<'ctxt> {
                 )?.as_any_value_enum().into_pointer_value();
 
                 for (i, column) in captured_columns.iter().enumerate() {
-                    let table_info = &self.table_info[&column.table_id];
-                    let table_name_str = table_info.name_str;
+                    let table_id = select_table_ids[column.table_index as usize];
+                    let table_info = &self.table_info[&table_id];
                     let column_name_str = table_info.column_name_strs[column.column_index as usize];
                     self.builder.build_call(
                         self.runtime.select_plan_set_column,
                         &[
                             select_plan_ptr.into(),
                             self.context.i32_type().const_int(i as u64, false).into(),
-                            table_name_str.as_pointer_value().into(),
+                            self.context.i32_type().const_int(column.table_index as u64, false).into(),
                             column_name_str.as_pointer_value().into(),
                         ],
                         &format!("select_plan_set_column_{}", i)
@@ -128,20 +129,22 @@ impl<'ctxt> CodeGen<'ctxt> {
                 }
 
                 for (i, (left_col, right_col)) in join_clauses.iter().enumerate() {
-                    let left_table_info = &self.table_info[&left_col.table_id];
-                    let right_table_info = &self.table_info[&right_col.table_id];
-                    let left_table_name_str = left_table_info.name_str;
-                    let left_column_name_str = left_table_info.column_name_strs[left_col.column_index as usize];
+                    let left_table_id = select_table_ids[left_col.table_index as usize];
+                    let right_table_id = select_table_ids[right_col.table_index as usize];
+                    let left_table_info = &self.table_info[&left_table_id];
+                    let right_table_info = &self.table_info[&right_table_id];
                     let right_table_name_str = right_table_info.name_str;
+                    let left_column_name_str = left_table_info.column_name_strs[left_col.column_index as usize];
                     let right_column_name_str = right_table_info.column_name_strs[right_col.column_index as usize];
                     self.builder.build_call(
                         self.runtime.select_plan_set_join,
                         &[
                             select_plan_ptr.into(),
                             self.context.i32_type().const_int(i as u64, false).into(),
-                            left_table_name_str.as_pointer_value().into(),
-                            left_column_name_str.as_pointer_value().into(),
                             right_table_name_str.as_pointer_value().into(),
+                            self.context.i32_type().const_int(left_col.table_index as u64, false).into(),
+                            left_column_name_str.as_pointer_value().into(),
+                            self.context.i32_type().const_int(right_col.table_index as u64, false).into(),
                             right_column_name_str.as_pointer_value().into(),
                         ],
                         &format!("select_plan_set_join_{}", i)
@@ -309,7 +312,7 @@ impl<'ctxt> CodeGen<'ctxt> {
         query: &SemanticQuery
     ) -> Result<GenValue<'ctxt>, CodeGenError> {
         match query {
-            SemanticQuery::Select { where_clause, root_table_id, .. } => {
+            SemanticQuery::Select { where_clause, select_table_ids, .. } => {
                 let select_iterator = self.builder.build_call(
                     self.runtime.select_iterator_activate,
                     &[statement.into()],
@@ -332,7 +335,7 @@ impl<'ctxt> CodeGen<'ctxt> {
                     )?;
                 }
 
-                let table = &self.program.tables[root_table_id];
+                let table = &self.program.tables[&select_table_ids[0]];
                 let elem_type = SemanticType::new(
                     SemanticTypeKind::NamedStruct(table.struct_id, table.name.clone())
                 );

@@ -8,11 +8,12 @@ typedef struct sqlite3 sqlite3;
 typedef struct sqlite3_stmt sqlite3_stmt;
 
 typedef struct {
-    char* table_name;
+    unsigned int table_index;
     char* column_name;
 } QColumn;
 
 typedef struct {
+    char* right_table_name;
     QColumn left_column;
     QColumn right_column;
 } JoinClause;
@@ -40,13 +41,14 @@ typedef struct SelectIteratorState {
 } SelectIteratorState;
 
 SelectPlan* __ql__SelectPlan_new(char* table_name, unsigned int num_columns, unsigned int num_joins, QLTypeInfo* struct_type_info);
-void __ql__SelectPlan_set_column(SelectPlan* plan, unsigned int index, char* table_name, char* column_name);
+void __ql__SelectPlan_set_column(SelectPlan* plan, unsigned int index, unsigned int table_index, char* column_name);
 void __ql__SelectPlan_set_join(
     SelectPlan* plan,
     unsigned int index,
-    char* left_table_name,
-    char* left_column_name,
     char* right_table_name,
+    unsigned int left_table_index,
+    char* left_column_name,
+    unsigned int right_table_index,
     char* right_column_name
 );
 void __ql__SelectPlan_set_where(SelectPlan* plan, char* column_name);

@@ -355,7 +355,7 @@ impl<'ctxt> Runtime<'ctxt> {
             void_type.fn_type(&[
                 ptr_type.into(), // SelectPlan pointer
                 int_type.into(), // column index
-                ptr_type.into(), // table name
+                int_type.into(), // table index
                 ptr_type.into() // column name
             ], false),
             Some(Linkage::External),
@@ -366,9 +366,10 @@ impl<'ctxt> Runtime<'ctxt> {
             void_type.fn_type(&[
                 ptr_type.into(), // SelectPlan pointer
                 int_type.into(), // join index
-                ptr_type.into(), // left table name
-                ptr_type.into(), // left column name
                 ptr_type.into(), // right table name
+                int_type.into(), // left table index
+                ptr_type.into(), // left column name
+                int_type.into(), // right table index
                 ptr_type.into(), // right column name
             ], false),
             Some(Linkage::External),

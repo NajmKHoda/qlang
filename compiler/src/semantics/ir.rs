@@ -123,7 +123,7 @@ pub enum SemanticQuery {
     Select {
         capturing_struct_id: u32,
         captured_columns: Vec<SemanticColumn>,
-        root_table_id: u32,
+        select_table_ids: Vec<u32>,
         join_clauses: Vec<(SemanticColumn, SemanticColumn)>,
         where_clause: Option<WhereClause>,
     },
@@ -153,6 +153,6 @@ pub struct WhereClause {
 }
 
 pub struct SemanticColumn {
-    pub table_id: u32,
+    pub table_index: u32,
     pub column_index: u32,
 }

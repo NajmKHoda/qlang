@@ -125,20 +125,16 @@ Query: QueryNode = {
 SelectQuery: SelectQueryNode =
     "select" <capturing_struct_name:ProperQName> 
     "{" <captured_columns:Comma<(<QName> ":" <QColumn>)>> "}"
-    "from" <root_table_name:ProperQName>
+    "from" <root_table_name:ProperQName> <root_table_alias:TableAlias?>
     <join_clauses:JoinClause*>
     <where_clause:WhereClause?> => SelectQueryNode { <> };
 
 JoinClause: JoinNode =
-    "join" <right_table_name:ProperQName> "on"
+    "join" <right_table_name:ProperQName> <right_table_alias:TableAlias?> "on"
     <left_column:QColumn> "==" <right_column_name:QName>
-    => JoinNode {
-        left_column,
-        right_column: QColumnNode {
-            table_name: Some(right_table_name),
-            column_name: right_column_name
-        }
-    };
+    => JoinNode { <> };
+
+TableAlias: String = "as" <alias:ProperQName> => alias;
 
 WhereClause: WhereNode = "where" <column_name:QName> "==" <value:Expression> => WhereNode { <> };
 

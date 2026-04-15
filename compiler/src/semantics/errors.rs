@@ -125,9 +125,6 @@ pub enum SemanticError {
     SelectIncompatibleCapture {
         capturing_struct: String,
     },
-    InvalidLeftTable {
-        left_table_name: String,
-    },
     MismatchingJoinColumnTypes {
         left_table_name: String,
         left_column_name: String,
@@ -136,8 +133,11 @@ pub enum SemanticError {
         right_column_name: String,
         right_column_type: SemanticType,
     },
-    ExcludedTableInSelect {
-        table_name: String,
+    SelectUndefinedTableAlias {
+        alias: String,
+    },
+    SelectDuplicateTableAlias {
+        alias: String,
     },
     SelectUndefinedColumn {
         column_name: String,
@@ -280,16 +280,16 @@ impl Display for SemanticError {
             SemanticError::SelectIncompatibleCapture { capturing_struct } => {
                 write!(f, "Capturing struct {} is incompatible with columns in SELECT query", capturing_struct)
             }
-            SemanticError::InvalidLeftTable { left_table_name } => {
-                write!(f, "Invalid left table {} in JOIN clause", left_table_name)
-            }
             SemanticError::MismatchingJoinColumnTypes { left_table_name, left_column_name, left_column_type, right_table_name, right_column_name, right_column_type } => {
                 write!(f, "Cannot join {}.{} of type {} with {}.{} of type {}",
                     left_table_name, left_column_name, left_column_type,
                     right_table_name, right_column_name, right_column_type)
             }
-            SemanticError::ExcludedTableInSelect { table_name } => {
-                write!(f, "Table {} cannot be SELECTed from as is not a part of the query", table_name)
+            SemanticError::SelectUndefinedTableAlias { alias } => {
+                write!(f, "Table alias {} is not part of this SELECT query", alias)
+            }
+            SemanticError::SelectDuplicateTableAlias { alias } => {
+                write!(f, "Duplicate table alias {} in SELECT query", alias)
             }
             SemanticError::SelectUndefinedColumn { column_name } => {
                 write!(f, "Column {} is not present in any table in SELECT query", column_name)

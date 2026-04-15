@@ -25,24 +25,26 @@ SelectPlan* __ql__SelectPlan_new(
     return plan;
 }
 
-void __ql__SelectPlan_set_column(SelectPlan* plan, unsigned int index, char* table_name, char* column_name) {
+void __ql__SelectPlan_set_column(SelectPlan* plan, unsigned int index, unsigned int table_index, char* column_name) {
     QColumn* col = &plan->columns[index];
-    col->table_name = table_name;
+    col->table_index = table_index;
     col->column_name = column_name;
 }
 
 void __ql__SelectPlan_set_join(
     SelectPlan* plan,
     unsigned int index,
-    char* left_table_name,
-    char* left_column_name,
     char* right_table_name,
+    unsigned int left_table_index,
+    char* left_column_name,
+    unsigned int right_table_index,
     char* right_column_name
 ) {
     JoinClause* join_clause = &plan->join_clauses[index];
-    join_clause->left_column.table_name = left_table_name;
+    join_clause->right_table_name = right_table_name;
+    join_clause->left_column.table_index = left_table_index;
     join_clause->left_column.column_name = left_column_name;
-    join_clause->right_column.table_name = right_table_name;
+    join_clause->right_column.table_index = right_table_index;
     join_clause->right_column.column_name = right_column_name;
 }
 
@@ -137,19 +139,20 @@ QLIterator* __ql__SelectPlan_prepare(sqlite3* db, SelectPlan* plan) {
     write_ptr += sprintf(write_ptr, "SELECT ");
     for (unsigned int i = 0; i < plan->num_columns; i++) {
         QColumn col = plan->columns[i];
-        write_ptr += sprintf(write_ptr, "%s.%s", col.table_name, col.column_name);
+        write_ptr += sprintf(write_ptr, "t%u.%s", col.table_index, col.column_name);
         if (i < plan->num_columns - 1) {
             write_ptr += sprintf(write_ptr, ", ");
         }
     }
-    write_ptr += sprintf(write_ptr, " FROM %s", plan->table_name);
+    write_ptr += sprintf(write_ptr, " FROM %s AS t0", plan->table_name);
 
     for (unsigned int i = 0; i < plan->num_joins; i++) {
         JoinClause join = plan->join_clauses[i];
-        write_ptr += sprintf(write_ptr, " JOIN %s ON %s.%s = %s.%s",
-            join.right_column.table_name,
-            join.left_column.table_name, join.left_column.column_name,
-            join.right_column.table_name, join.right_column.column_name
+        write_ptr += sprintf(write_ptr, " JOIN %s AS t%u ON t%u.%s = t%u.%s",
+            join.right_table_name,
+            join.right_column.table_index,
+            join.left_column.table_index, join.left_column.column_name,
+            join.right_column.table_index, join.right_column.column_name
         );
     }
     write_ptr += sprintf(write_ptr, ";");
@@ -163,7 +166,6 @@ QLIterator* __ql__SelectPlan_prepare(sqlite3* db, SelectPlan* plan) {
         sqlite3_prepare_v2(db, sql, -1, &state->stmt, NULL);
     }
     */
-
     sqlite3_prepare_v2(db, sql, -1, &state->stmt, NULL);
     state->sql = sql;
 

@@ -142,13 +142,16 @@ pub struct SelectQueryNode {
     pub capturing_struct_name: String,
     pub captured_columns: Vec<(String, QColumnNode)>,
     pub root_table_name: String,
+    pub root_table_alias: Option<String>,
     pub join_clauses: Vec<JoinNode>,
     pub where_clause: Option<WhereNode>,
 }
 
 pub struct JoinNode {
+    pub right_table_name: String,
+    pub right_table_alias: Option<String>,
     pub left_column: QColumnNode,
-    pub right_column: QColumnNode,
+    pub right_column_name: String,
 }
 
 pub struct WhereNode {
