@@ -135,7 +135,7 @@ JoinClause: JoinNode =
     => JoinNode {
         left_column,
         right_column: QColumnNode {
-            table_name: right_table_name,
+            table_name: Some(right_table_name),
             column_name: right_column_name
         }
     };
@@ -159,8 +159,16 @@ UpdateAssignment: UpdateAssignmentNode =
     <column_name:QName> "=" <value_expr:Expression>
     => UpdateAssignmentNode { <> };
 
-QColumn: QColumnNode =
-    <table_name:ProperQName> "." <column_name:QName> => QColumnNode { <> };
+QColumn: QColumnNode = {
+    <table_name:ProperQName> "." <column_name:QName> => QColumnNode {
+        table_name: Some(table_name),
+        column_name,
+    },
+    <column_name:QName> => QColumnNode {
+        table_name: None,
+        column_name,
+    }
+};
 
 // --- MISCELLANEOUS ---
 

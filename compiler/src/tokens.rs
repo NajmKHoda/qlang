@@ -178,6 +178,6 @@ pub struct UpdateAssignmentNode {
 }
 
 pub struct QColumnNode {
-    pub table_name: String,
+    pub table_name: Option<String>,
     pub column_name: String
 }

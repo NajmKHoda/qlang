@@ -139,6 +139,13 @@ pub enum SemanticError {
     ExcludedTableInSelect {
         table_name: String,
     },
+    SelectUndefinedColumn {
+        column_name: String,
+    },
+    SelectAmbiguousColumn {
+        column_name: String,
+        table_names: Vec<String>,
+    },
     // INSERT
     IncompatibleInsertData {
         table_name: String,
@@ -283,6 +290,12 @@ impl Display for SemanticError {
             }
             SemanticError::ExcludedTableInSelect { table_name } => {
                 write!(f, "Table {} cannot be SELECTed from as is not a part of the query", table_name)
+            }
+            SemanticError::SelectUndefinedColumn { column_name } => {
+                write!(f, "Column {} is not present in any table in SELECT query", column_name)
+            }
+            SemanticError::SelectAmbiguousColumn { column_name, table_names } => {
+                write!(f, "Column {} is ambiguous in SELECT query; present in tables {}", column_name, table_names.join(", "))
             }
             SemanticError::IncompatibleInsertData { table_name, found_type } => {
                 write!(f, "Expected {} row in INSERT, got {} instead", table_name, found_type)

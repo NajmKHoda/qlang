@@ -15,22 +15,53 @@ pub struct SemanticTable {
 }
 
 impl SemanticGen {
-    fn eval_qcolumn(&self, qcol: &QColumnNode) -> Result<SemanticColumn, SemanticError> {
-        let table = self.tables.get_by_name(&qcol.table_name)
-            .ok_or_else(|| SemanticError::UndefinedTable {
-                name: qcol.table_name.clone()
-            })?;
-        let table_struct = &self.structs[table.struct_id];
-        let column = table_struct.field_index_type(&qcol.column_name);
-        match column {
-            Some((col_id, _)) => Ok(SemanticColumn {
-                table_id: table.id,
-                column_index: col_id as u32,
-            }),
-            None => Err(SemanticError::UndefinedColumn {
-                table_name: qcol.table_name.clone(),
+    fn eval_qcolumn(&self, qcol: &QColumnNode, select_table_ids: &[u32]) -> Result<SemanticColumn, SemanticError> {
+        if let Some(table_name) = &qcol.table_name {
+            let table = self.tables.get_by_name(table_name)
+                .ok_or_else(|| SemanticError::UndefinedTable {
+                    name: table_name.clone()
+                })?;
+            let table_struct = &self.structs[table.struct_id];
+            let column = table_struct.field_index_type(&qcol.column_name);
+            return match column {
+                Some((col_id, _)) => Ok(SemanticColumn {
+                    table_id: table.id,
+                    column_index: col_id as u32,
+                }),
+                None => Err(SemanticError::UndefinedColumn {
+                    table_name: table_name.clone(),
+                    column_name: qcol.column_name.clone(),
+                })
+            };
+        }
+
+        let mut matching_columns = vec![];
+        for table_id in select_table_ids {
+            let table = &self.tables[*table_id];
+            let table_struct = &self.structs[table.struct_id];
+            if let Some((col_id, _)) = table_struct.field_index_type(&qcol.column_name) {
+                let already_seen = matching_columns.iter().any(|col: &SemanticColumn| col.table_id == *table_id);
+                if !already_seen {
+                    matching_columns.push(SemanticColumn {
+                        table_id: *table_id,
+                        column_index: col_id as u32,
+                    });
+                }
+            }
+        }
+
+        match matching_columns.len() {
+            0 => Err(SemanticError::SelectUndefinedColumn {
                 column_name: qcol.column_name.clone(),
-            })
+            }),
+            1 => Ok(matching_columns.pop().unwrap()),
+            _ => Err(SemanticError::SelectAmbiguousColumn {
+                column_name: qcol.column_name.clone(),
+                table_names: matching_columns
+                    .iter()
+                    .map(|col| self.tables[col.table_id].name.clone())
+                    .collect(),
+            }),
         }
     }
 
@@ -150,8 +181,8 @@ impl SemanticGen {
         let mut table_ids = vec![table.id];
         let mut join_clauses = vec![];
         for join in &query.join_clauses {
-            let left_column = self.eval_qcolumn(&join.left_column)?;
-            let right_column = self.eval_qcolumn(&join.right_column)?;
+            let left_column = self.eval_qcolumn(&join.left_column, &table_ids)?;
+            let right_column = self.eval_qcolumn(&join.right_column, &table_ids)?;
 
             let left_table = &self.tables[left_column.table_id];
             let right_table = &self.tables[right_column.table_id];
@@ -167,10 +198,10 @@ impl SemanticGen {
             let right_type = &right_struct.fields[right_column.column_index as usize].1;
             if !self.try_unify(left_type, right_type) {
                 return Err(SemanticError::MismatchingJoinColumnTypes {
-                    left_table_name: join.left_column.table_name.clone(),
+                    left_table_name: left_table.name.clone(),
                     left_column_name: join.left_column.column_name.clone(),
                     left_column_type: left_type.clone(),
-                    right_table_name: join.right_column.table_name.clone(),
+                    right_table_name: right_table.name.clone(),
                     right_column_name: join.right_column.column_name.clone(),
                     right_column_type: right_type.clone(),
                 });
@@ -189,7 +220,7 @@ impl SemanticGen {
                 });
             }
 
-            let column = self.eval_qcolumn(qcol)?;
+            let column = self.eval_qcolumn(qcol, &table_ids)?;
             if !table_ids.contains(&column.table_id) {
                 return Err(SemanticError::ExcludedTableInSelect {
                     table_name: self.tables[column.table_id].name.clone()

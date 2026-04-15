@@ -5,39 +5,31 @@ table Student from data {
   first_name: str,
   last_name: str,
   grade: int,
-  teacher_id: int
+  teacher_id: int,
+  friend_id: int
 }
 
-table Teacher from data {
-  id: int,
-  first_name: str,
-  last_name: str,
-  rating: int
-}
-
-struct StudentTeacher {
-  student_first: str,
-  student_last: str,
-  teacher_first: str,
-  teacher_last: str,
-  grade: int
+struct FriendPair {
+  friend1_first: str,
+  friend1_last: str,
+  friend2_first: str,
+  friend2_last: str
 }
 
 function main() -> int {
-  let student_teacher_pairs = query {
-    select StudentTeacher {
-      student_first: Student.first_name,
-      student_last: Student.last_name,
-      teacher_first: Teacher.first_name,
-      teacher_last: Teacher.last_name,
-      grade: Student.grade
-    } from Student
-    join Teacher on Student.teacher_id == id
+  let friend_pairs = query {
+    select FriendPair {
+      friend1_first: Student1.first_name,
+      friend1_last: Student1.last_name,
+      friend2_first: Student2.first_name,
+      friend2_last: Student2.last_name
+    } from Student as Student1
+    join Student as Student2 on Student1.friend_id == id
   };
 
-  for st in student_teacher_pairs {
-    let student_name = st.student_first + " " + st.student_last;
-    let teacher_name = st.teacher_first + " " + st.teacher_last;
-    prints(student_name + ", " + teacher_name);
+  for pair in friend_pairs {
+    let friend1_name = pair.friend1_first + " " + pair.friend1_last;
+    let friend2_name = pair.friend2_first + " " + pair.friend2_last;
+    prints(friend1_name + ", " + friend2_name);
   }
 }
