@@ -31,6 +31,7 @@ pub enum SemanticStatement {
         id: u32,
     },
     Return(Option<u32>),
+    Release(u32),
     Break(u32),
     Continue(u32),
     DropVariable(u32)

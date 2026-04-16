@@ -10,14 +10,29 @@ table Student from data1 {
 }
 
 failable function main() -> int {
-  let foo = query() {
-    insert {
-      id: 2,
-      first_name: "Bird",
-      last_name: "Cool",
-      grade: 10,
-      teacher_id: 2,
-      friend_id: 1
-    } into Student
-  };
+  let i = 0;
+
+  while i < 4 {
+    transaction {
+      if i == 0 {
+        i = i + 1;
+        continue;
+      }
+
+      if i == 1 {
+        i = i + 1;
+        break;
+      }
+
+      i = i + 1;
+    } on rollback {
+      printi(-100);
+    }
+  }
+
+  transaction {
+    return 42;
+  } on rollback {
+    printi(-200);
+  }
 }

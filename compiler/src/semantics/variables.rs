@@ -11,6 +11,7 @@ pub struct SemanticVariable {
 pub enum SemanticScopeType {
     Function,
     Closure(u32),
+    Transaction(u32),
     Loop(u32),
     Block,
 }

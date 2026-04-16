@@ -73,18 +73,23 @@ static bool __ql__exec_sql(char* sql) {
 
 bool __ql__db_savepoint(unsigned int savepoint_id) {
     char sql[MAX_SQL_LENGTH];
-    sprintf(sql, "SAVEPOINT __ql__sp_%u;", savepoint_id);
+    sprintf(sql, "SAVEPOINT s%u;", savepoint_id);
     return __ql__exec_sql(sql);
 }
 
 bool __ql__db_release_savepoint(unsigned int savepoint_id) {
     char sql[MAX_SQL_LENGTH];
-    sprintf(sql, "RELEASE SAVEPOINT __ql__sp_%u;", savepoint_id);
+    sprintf(sql, "RELEASE SAVEPOINT s%u;", savepoint_id);
+    fprintf(stderr, "release savepoint %u\n", savepoint_id);
     return __ql__exec_sql(sql);
 }
 
 bool __ql__db_rollback_to_savepoint(unsigned int savepoint_id) {
     char sql[MAX_SQL_LENGTH];
-    sprintf(sql, "ROLLBACK TO SAVEPOINT __ql__sp_%u;", savepoint_id);
+    sprintf(sql,
+        "ROLLBACK TO SAVEPOINT s%u; "
+        "RELEASE SAVEPOINT s%u;", 
+        savepoint_id, savepoint_id
+    );
     return __ql__exec_sql(sql);
 }

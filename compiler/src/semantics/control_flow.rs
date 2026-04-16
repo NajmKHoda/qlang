@@ -238,7 +238,7 @@ impl SemanticGen {
     ) -> Result<SemanticStatement, SemanticError> {
         let id = self.transaction_id_gen.next_id();
 
-        self.enter_scope(SemanticScopeType::Block);
+        self.enter_scope(SemanticScopeType::Transaction(id));
         let sem_body = self.eval_block(body)?;
 
         self.enter_scope(SemanticScopeType::Block);
@@ -302,16 +302,24 @@ impl SemanticGen {
         };
 
         // Drop variables up to (but not including) functional scope
+        // and release only the outermost intervening transaction.
+        let mut outermost_tx: Option<u32> = None;
         for scope in self.scopes.iter().rev() {
             match scope.scope_type {
                 SemanticScopeType::Function
                 | SemanticScopeType::Closure(_) => break,
+                SemanticScopeType::Transaction(tx_id) => {
+                    outermost_tx = Some(tx_id);
+                }
                 _ => {},
             }
             for var_id in scope.variables.values() {
                 let drop_stmt = SemanticStatement::DropVariable(*var_id);
                 stmts.push(drop_stmt);
             }
+        }
+        if let Some(tx_id) = outermost_tx {
+            stmts.push(SemanticStatement::Release(tx_id));
         }
         let return_stmt = SemanticStatement::Return(return_var_id);
         stmts.push(return_stmt);
@@ -327,9 +335,14 @@ impl SemanticGen {
             }
         })?;
 
-        // Drop variables in the current loop scope
+        // Drop variables in the current loop scope and release only
+        // the outermost intervening transaction.
         let mut stmts: Vec<SemanticStatement> = vec![];
+        let mut outermost_tx: Option<u32> = None;
         for scope in self.scopes.iter().rev() {
+            if let SemanticScopeType::Transaction(tx_id) = scope.scope_type {
+                outermost_tx = Some(tx_id);
+            }
             for var_id in scope.variables.values() {
                 let drop_stmt = SemanticStatement::DropVariable(*var_id);
                 stmts.push(drop_stmt);
@@ -337,6 +350,9 @@ impl SemanticGen {
             if scope.scope_type == SemanticScopeType::Loop(loop_id) {
                 break;
             }
+        }
+        if let Some(tx_id) = outermost_tx {
+            stmts.push(SemanticStatement::Release(tx_id));
         }
 
         // Emit the break statement
@@ -354,9 +370,14 @@ impl SemanticGen {
             }
         })?;
 
-        // Drop variables in the current loop scope
+        // Drop variables in the current loop scope and release only
+        // the outermost intervening transaction.
         let mut stmts: Vec<SemanticStatement> = vec![];
+        let mut outermost_tx: Option<u32> = None;
         for scope in self.scopes.iter().rev() {
+            if let SemanticScopeType::Transaction(tx_id) = scope.scope_type {
+                outermost_tx = Some(tx_id);
+            }
             for var_id in scope.variables.values() {
                 let drop_stmt = SemanticStatement::DropVariable(*var_id);
                 stmts.push(drop_stmt);
@@ -364,6 +385,9 @@ impl SemanticGen {
             if scope.scope_type == SemanticScopeType::Loop(loop_id) {
                 break;
             }
+        }
+        if let Some(tx_id) = outermost_tx {
+            stmts.push(SemanticStatement::Release(tx_id));
         }
 
         // Emit the continue statement

@@ -205,6 +205,9 @@ impl<'ctxt> CodeGen<'ctxt> {
             SemanticStatement::Return(expr) => {
                 self.gen_return(expr)
             }
+            SemanticStatement::Release(transaction_id) => {
+                self.gen_release(*transaction_id)
+            }
             SemanticStatement::Break(loop_id) => {
                 self.gen_break(*loop_id)
             }

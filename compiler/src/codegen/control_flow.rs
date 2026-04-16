@@ -228,6 +228,15 @@ impl<'ctxt> CodeGen<'ctxt> {
 		Ok(())
 	}
 
+    pub fn gen_release(&mut self, transaction_id: u32) -> Result<(), CodeGenError> {
+        self.builder.build_call(
+            self.runtime.db_release_savepoint,
+            &[self.int_type().const_int(transaction_id as u64, false).into()],
+            "tx_release_sp_ctrl",
+        )?;
+        Ok(())
+    }
+
     pub fn gen_break(&mut self, loop_id: u32) -> Result<(), CodeGenError> {
         let GenLoopInfo { after_block, .. } = self.loop_info[&loop_id];
         self.builder.build_unconditional_branch(after_block)?;
