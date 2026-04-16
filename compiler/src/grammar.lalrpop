@@ -127,13 +127,46 @@ Query: QueryNode = {
 }
 
 SelectQuery: SelectQueryNode =
-    "select" <capturing_struct_name:ProperQName> 
+    {
+        "select" <capture:ExplicitSelectCapture>
+        "from" <root_table_name:ProperQName> <root_table_alias:TableAlias?>
+        <join_clauses:JoinClause*>
+        <where_clause:SelectWhereClause?>
+        <limit_clause:SelectLimitClause?>
+        <offset_clause:SelectOffsetClause?> => {
+            let (capturing_struct_name, captured_columns) = capture;
+            SelectQueryNode {
+                capture: SelectCaptureNode::Explicit {
+                    capturing_struct_name,
+                    captured_columns,
+                },
+                root_table_name,
+                root_table_alias,
+                join_clauses,
+                where_clause,
+                limit_clause,
+                offset_clause,
+            }
+        },
+        "select" "all"
+        "from" <root_table_name:ProperQName> <root_table_alias:TableAlias?>
+        <where_clause:SelectWhereClause?>
+        <limit_clause:SelectLimitClause?>
+        <offset_clause:SelectOffsetClause?> => SelectQueryNode {
+            capture: SelectCaptureNode::All,
+            root_table_name,
+            root_table_alias,
+            join_clauses: vec![],
+            where_clause,
+            limit_clause,
+            offset_clause,
+        }
+    };
+
+ExplicitSelectCapture: (String, Vec<(String, QColumnNode)>) =
+    <capturing_struct_name:ProperQName>
     "{" <captured_columns:Comma<(<QName> ":" <QColumn>)>> "}"
-    "from" <root_table_name:ProperQName> <root_table_alias:TableAlias?>
-    <join_clauses:JoinClause*>
-    <where_clause:SelectWhereClause?>
-    <limit_clause:SelectLimitClause?>
-    <offset_clause:SelectOffsetClause?> => SelectQueryNode { <> };
+    => (capturing_struct_name, captured_columns);
 
 JoinClause: JoinNode =
     "join" <right_table_name:ProperQName> <right_table_alias:TableAlias?> "on"

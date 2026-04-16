@@ -152,9 +152,16 @@ pub enum QueryNode {
     Update(UpdateQueryNode),
 }
 
+pub enum SelectCaptureNode {
+    Explicit {
+        capturing_struct_name: String,
+        captured_columns: Vec<(String, QColumnNode)>,
+    },
+    All,
+}
+
 pub struct SelectQueryNode {
-    pub capturing_struct_name: String,
-    pub captured_columns: Vec<(String, QColumnNode)>,
+    pub capture: SelectCaptureNode,
     pub root_table_name: String,
     pub root_table_alias: Option<String>,
     pub join_clauses: Vec<JoinNode>,

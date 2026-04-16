@@ -229,13 +229,6 @@ impl SemanticGen {
             .ok_or_else(|| SemanticError::UndefinedTable {
                 name: query.root_table_name.clone()
             })?;
-        let capturing_struct = self.structs.get_by_name(&query.capturing_struct_name)
-            .ok_or_else(|| SemanticError::UndefinedStruct {
-                name: query.capturing_struct_name.clone()
-            })?;
-        let capturing_struct_id = capturing_struct.id;
-        let capturing_struct_name = capturing_struct.name.clone();
-        let capturing_struct_fields = capturing_struct.fields.clone();
 
         let mut select_table_ids = vec![table.id];
         let root_alias = match &query.root_table_alias {
@@ -243,7 +236,52 @@ impl SemanticGen {
             None => query.root_table_name.clone(),
         };
         let mut select_alias_map = HashMap::new();
-        select_alias_map.insert(root_alias, 0);
+        select_alias_map.insert(root_alias.clone(), 0);
+
+        let (capturing_struct_id, capturing_struct_name, capturing_struct_fields, captured_columns_node) =
+            match &query.capture {
+                SelectCaptureNode::Explicit {
+                    capturing_struct_name,
+                    captured_columns,
+                } => {
+                    let capturing_struct = self.structs.get_by_name(capturing_struct_name)
+                        .ok_or_else(|| SemanticError::UndefinedStruct {
+                            name: capturing_struct_name.clone(),
+                        })?;
+
+                    (
+                        capturing_struct.id,
+                        capturing_struct.name.clone(),
+                        capturing_struct.fields.clone(),
+                        captured_columns.iter().map(|(alias, qcol)| {
+                            (
+                                alias.clone(),
+                                QColumnNode {
+                                    table_name: qcol.table_name.clone(),
+                                    column_name: qcol.column_name.clone(),
+                                },
+                            )
+                        }).collect::<Vec<_>>(),
+                    )
+                }
+                SelectCaptureNode::All => {
+                    let table_struct = &self.structs[table.struct_id];
+                    (
+                        table_struct.id,
+                        table_struct.name.clone(),
+                        table_struct.fields.clone(),
+                        table_struct.fields.iter().map(|(field_name, _)| {
+                            (
+                                field_name.clone(),
+                                QColumnNode {
+                                    table_name: Some(root_alias.clone()),
+                                    column_name: field_name.clone(),
+                                },
+                            )
+                        }).collect::<Vec<_>>(),
+                    )
+                }
+            };
 
         let mut join_clauses = vec![];
         for join in &query.join_clauses {
@@ -299,7 +337,7 @@ impl SemanticGen {
 
         // Check compatibility between capturing struct and captured columns
         let mut captured_columns_map = HashMap::new();
-        for (alias, qcol) in &query.captured_columns {
+        for (alias, qcol) in &captured_columns_node {
             if captured_columns_map.contains_key(alias) {
                 return Err(SemanticError::SelectDuplicateAlias {
                     alias: alias.clone()

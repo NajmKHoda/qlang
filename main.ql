@@ -9,30 +9,14 @@ table Student from data1 {
   friend_id: int
 }
 
-failable function main() -> int {
-  let i = 0;
-
-  while i < 4 {
-    transaction {
-      if i == 0 {
-        i = i + 1;
-        continue;
-      }
-
-      if i == 1 {
-        i = i + 1;
-        break;
-      }
-
-      i = i + 1;
-    } on rollback {
-      printi(-100);
-    }
-  }
-
+function main() -> int {
   transaction {
-    return 42;
+    let students = query { select all from Student };
+    for student in students {
+      prints(student.first_name);
+    }
   } on rollback {
-    printi(-200);
+    prints("Oops! Something went very wrong.");
+    return 1;
   }
 }
