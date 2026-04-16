@@ -133,7 +133,10 @@ impl SemanticGen {
                 param_types: sem_param_types,
                 ret_type: sem_ret_type,
             }),
-            kind: SemanticExpressionKind::Closure(id),
+            kind: SemanticExpressionKind::Closure {
+                closure_id: id,
+                error_drops: vec![],
+            },
             ownership: Ownership::Owned,
         })
     }

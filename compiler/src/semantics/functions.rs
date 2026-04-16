@@ -346,6 +346,11 @@ impl SemanticGen {
                         ownership: Ownership::Borrowed,
                     }),
                     args: sem_args,
+                    error_drops: if is_failable {
+                        self.cur_error_drops()
+                    } else {
+                        vec![]
+                    },
                 };
                 return Ok(SemanticExpression {
                     sem_type: ret_type.clone(),
@@ -378,6 +383,11 @@ impl SemanticGen {
                 kind: SemanticExpressionKind::DirectFunctionCall {
                     function_id: func.id,
                     args: sem_args,
+                    error_drops: if func.is_failable {
+                        self.cur_error_drops()
+                    } else {
+                        vec![]
+                    },
                 },
                 ownership: if func.return_type.can_be_owned() {
                     Ownership::Owned

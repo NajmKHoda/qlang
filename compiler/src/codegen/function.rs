@@ -55,7 +55,19 @@ impl<'ctxt> CodeGen<'ctxt> {
 		Ok(())
 	}
 
-	pub(super) fn gen_failable_error_return(&self) -> Result<(), CodeGenError> {
+	fn gen_error_drops(&self, error_drops: &[u32]) -> Result<(), CodeGenError> {
+		for variable_id in error_drops {
+			if let Some(variable_ptr) = self.llvm_variables.get(variable_id) {
+				let sem_type = &self.program.variables[variable_id].sem_type;
+				self.drop_value(*variable_ptr, sem_type)?;
+			}
+		}
+		Ok(())
+	}
+
+	pub(super) fn gen_failable_error_return(&self, error_drops: &[u32]) -> Result<(), CodeGenError> {
+		self.gen_error_drops(error_drops)?;
+
 		let return_type = self.cur_executable_return_type();
 		let result_ty = self.llvm_result_type(&return_type);
 		let result_alloca = self.build_alloca(result_ty.into(), "failable_error_result")?;
@@ -71,6 +83,7 @@ impl<'ctxt> CodeGen<'ctxt> {
 	pub(super) fn gen_failable_check(
 		&mut self,
 		is_error: inkwell::values::IntValue<'ctxt>,
+		error_drops: &[u32],
 	) -> Result<inkwell::basic_block::BasicBlock<'ctxt>, CodeGenError> {
 		let cur_block = self.builder.get_insert_block().unwrap();
 		let cur_fn = self.cur_fn.unwrap();
@@ -81,17 +94,18 @@ impl<'ctxt> CodeGen<'ctxt> {
 		self.builder.build_conditional_branch(is_error, err_block, ok_block)?;
 
 		self.builder.position_at_end(err_block);
+		self.gen_error_drops(error_drops)?;
 		if let Some(txn) = self.transaction_stack.last() {
 			self.builder.build_unconditional_branch(txn.rollback_block)?;
 		} else {
-			self.gen_failable_error_return()?;
+			self.gen_failable_error_return(&[])?;
 		}
 
 		self.builder.position_at_end(ok_block);
 		Ok(ok_block)
 	}
 
-    pub fn gen_direct_call(&mut self, function_id: u32, args: &[SemanticExpression]) -> Result<GenValue<'ctxt>, CodeGenError> {
+	pub fn gen_direct_call(&mut self, function_id: u32, args: &[SemanticExpression], error_drops: &[u32]) -> Result<GenValue<'ctxt>, CodeGenError> {
 		let sem_function = &self.program.functions[&function_id];
 		let llvm_function = self.llvm_functions[&function_id];
 		let arg_values = args
@@ -117,7 +131,7 @@ impl<'ctxt> CodeGen<'ctxt> {
 			let result_struct = call_site.as_any_value_enum().into_struct_value();
 			let is_error = self.builder.build_extract_value(result_struct, 0, "call_is_error")?
 				.into_int_value();
-			self.gen_failable_check(is_error)?;
+			self.gen_failable_check(is_error, error_drops)?;
 
 			if sem_function.return_type == SemanticTypeKind::Void {
 				return Ok(GenValue::Void);

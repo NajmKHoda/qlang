@@ -174,7 +174,7 @@ impl<'ctxt> CodeGen<'ctxt> {
 		Ok(())
 	}
 
-	pub fn gen_callable(&mut self, closure_id: u32) -> Result<GenValue<'ctxt>, CodeGenError> {
+	pub fn gen_callable(&mut self, closure_id: u32, error_drops: &[u32]) -> Result<GenValue<'ctxt>, CodeGenError> {
 		let closure = &self.program.closures[&closure_id];
 		let closure_info = &self.closure_info[&closure_id];
 
@@ -244,7 +244,7 @@ impl<'ctxt> CodeGen<'ctxt> {
 			self.builder.build_conditional_branch(stmt_is_null, prep_failed_block, prep_ok_block)?;
 
 			self.builder.position_at_end(prep_failed_block);
-			self.gen_failable_error_return()?;
+			self.gen_failable_error_return(error_drops)?;
 
 			self.builder.position_at_end(prep_ok_block);
             self.builder.build_call(
@@ -260,7 +260,7 @@ impl<'ctxt> CodeGen<'ctxt> {
 		})
 	}
 
-	pub fn gen_indirect_call(&mut self, function_expr: &SemanticExpression, args: &[SemanticExpression]) -> Result<GenValue<'ctxt>, CodeGenError> {
+	pub fn gen_indirect_call(&mut self, function_expr: &SemanticExpression, args: &[SemanticExpression], error_drops: &[u32]) -> Result<GenValue<'ctxt>, CodeGenError> {
 		let SemanticTypeKind::Callable { is_failable, param_types, ret_type: return_type } = &function_expr.sem_type.kind() else {
 			panic!("Expected callable type for indirect call");
 		};
@@ -319,7 +319,7 @@ impl<'ctxt> CodeGen<'ctxt> {
 			let result_struct = call_site.as_any_value_enum().into_struct_value();
 			let is_error = self.builder.build_extract_value(result_struct, 0, "callable_call_is_error")?
 				.into_int_value();
-			self.gen_failable_check(is_error)?;
+			self.gen_failable_check(is_error, error_drops)?;
 
 			if return_type.kind() == SemanticTypeKind::Void {
 				Ok(GenValue::Void)

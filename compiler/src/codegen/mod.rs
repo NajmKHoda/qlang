@@ -241,8 +241,8 @@ impl<'ctxt> CodeGen<'ctxt> {
                 };
                 self.gen_array(elements, &elem_type)
             }
-            SemanticExpressionKind::Closure(closure_id) => {
-                self.gen_callable(*closure_id)
+            SemanticExpressionKind::Closure { closure_id, error_drops } => {
+                self.gen_callable(*closure_id, error_drops)
             }
             SemanticExpressionKind::Variable(var_id) => {
                 self.load_var(*var_id)
@@ -268,11 +268,11 @@ impl<'ctxt> CodeGen<'ctxt> {
             SemanticExpressionKind::Compare { left, right, op } => {
                 self.gen_compare(left, right, *op)
             }
-            SemanticExpressionKind::DirectFunctionCall { function_id, args } => {
-                self.gen_direct_call(*function_id, args)
+            SemanticExpressionKind::DirectFunctionCall { function_id, args, error_drops } => {
+                self.gen_direct_call(*function_id, args, error_drops)
             }
-            SemanticExpressionKind::IndirectFunctionCall { function_expr, args } => {
-                self.gen_indirect_call(function_expr, args)
+            SemanticExpressionKind::IndirectFunctionCall { function_expr, args, error_drops } => {
+                self.gen_indirect_call(function_expr, args, error_drops)
             }
             SemanticExpressionKind::BuiltinFunctionCall { function, args } => {
                 self.gen_builtin_call(*function, args)
@@ -281,8 +281,8 @@ impl<'ctxt> CodeGen<'ctxt> {
                 let receiver_val = self.gen_eval(receiver)?;
                 self.gen_method_call(receiver_val, *method, args)
             }
-            SemanticExpressionKind::ImmediateQuery(query) => {
-                self.gen_immediate_query(query)
+            SemanticExpressionKind::ImmediateQuery { query, error_drops } => {
+                self.gen_immediate_query(query, error_drops)
             }
         }
     }

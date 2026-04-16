@@ -534,7 +534,10 @@ impl SemanticGen {
                 Ownership::Owned
             },
             sem_type: return_type,
-            kind: SemanticExpressionKind::ImmediateQuery(sem_query),
+            kind: SemanticExpressionKind::ImmediateQuery {
+                query: sem_query,
+                error_drops: self.cur_error_drops(),
+            },
         })
     }
 
@@ -595,7 +598,10 @@ impl SemanticGen {
         closure.body = SemanticClosureBody::Query(sem_query);
 
         Ok(SemanticExpression {
-            kind: SemanticExpressionKind::Closure(closure_id),
+            kind: SemanticExpressionKind::Closure {
+                closure_id,
+                error_drops: self.cur_error_drops(),
+            },
             sem_type: callable_type,
             ownership: Ownership::Owned,
         })

@@ -23,7 +23,7 @@ impl From<&SemanticType> for ColumnType {
 }
 
 impl<'ctxt> CodeGen<'ctxt> {
-    pub(super) fn gen_immediate_query(&mut self, query: &SemanticQuery) -> Result<GenValue<'ctxt>, CodeGenError> {
+	pub(super) fn gen_immediate_query(&mut self, query: &SemanticQuery, error_drops: &[u32]) -> Result<GenValue<'ctxt>, CodeGenError> {
         let prepared_stmt = self.prepare_query(query)?;
         let prep_failed = self.builder.build_is_null(prepared_stmt, "query_prepare_failed")?;
         let (result, exec_ok) = self.execute_query(prepared_stmt, query)?;
@@ -34,7 +34,7 @@ impl<'ctxt> CodeGen<'ctxt> {
             "query_exec_failed",
         )?;
         let is_error = self.builder.build_or(prep_failed, exec_failed, "query_is_error")?;
-        self.gen_failable_check(is_error)?;
+		self.gen_failable_check(is_error, error_drops)?;
         self.finalize_query(prepared_stmt, query)?;
         Ok(result)
     }

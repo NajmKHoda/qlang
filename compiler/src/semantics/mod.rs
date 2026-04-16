@@ -319,4 +319,16 @@ impl SemanticGen {
             None => false,
         }
     }
+
+    pub(super) fn cur_error_drops(&self) -> Vec<u32> {
+        let mut drops = vec![];
+        for scope in self.scopes.iter().rev() {
+            match scope.scope_type {
+                SemanticScopeType::Function | SemanticScopeType::Closure(_) => break,
+                _ => {}
+            }
+            drops.extend(scope.variables.values().copied());
+        }
+        drops
+    }
 }

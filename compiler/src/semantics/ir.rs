@@ -53,7 +53,10 @@ pub enum SemanticExpressionKind {
     StringLiteral(String),
     Struct(HashMap<String, SemanticExpression>),
     Array(Vec<SemanticExpression>),
-    Closure(u32),
+    Closure {
+        closure_id: u32,
+        error_drops: Vec<u32>,
+    },
     Variable(u32),
     StructField {
         struct_expr: Box<SemanticExpression>,
@@ -85,10 +88,12 @@ pub enum SemanticExpressionKind {
     DirectFunctionCall {
         function_id: u32,
         args: Vec<SemanticExpression>,
+        error_drops: Vec<u32>,
     },
     IndirectFunctionCall {
         function_expr: Box<SemanticExpression>,
         args: Vec<SemanticExpression>,
+        error_drops: Vec<u32>,
     },
     BuiltinFunctionCall {
         function: BuiltinFunction,
@@ -99,7 +104,10 @@ pub enum SemanticExpressionKind {
         method: BuiltinMethod,
         args: Vec<SemanticExpression>,
     },
-    ImmediateQuery(SemanticQuery),
+    ImmediateQuery {
+        query: SemanticQuery,
+        error_drops: Vec<u32>,
+    },
 }
 
 #[derive(Clone, Copy)]
