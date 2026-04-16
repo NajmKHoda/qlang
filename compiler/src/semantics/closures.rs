@@ -4,6 +4,7 @@ use super::{Executable, SemanticGen, SemanticType, SemanticBlock, SemanticScopeT
 
 pub struct SemanticClosure {
     pub id: u32,
+    pub is_failable: bool,
     pub param_ids: Vec<u32>,
     pub captured_variables: Vec<(u32, u32)>,
     pub return_type: SemanticType,
@@ -27,6 +28,7 @@ impl SemanticClosureBody {
 impl SemanticGen {
     pub fn eval_closure(
         &mut self,
+        is_failable: bool,
         parameter_nodes: &[TypedQNameNode],
         return_type: Option<&TypeNode>,
         body: &ClosureBodyNode
@@ -57,11 +59,15 @@ impl SemanticGen {
         };
         self.closures.insert(id, SemanticClosure {
             id,
+            is_failable,
             param_ids,
             captured_variables: vec![],
             return_type: sem_ret_type.clone(),
             body: SemanticClosureBody::dummy()
         });
+
+        let prev_executable = self.cur_function;
+        self.cur_function = Some(Executable::Closure(id));
 
         match body {
             ClosureBodyNode::Expression(expr_node) => {
@@ -92,11 +98,8 @@ impl SemanticGen {
                 });
             },
             ClosureBodyNode::Statements(stmts) => {
-                let prev_executable = self.cur_function;
-                self.cur_function = Some(Executable::Closure(id));
                 self.enter_scope(SemanticScopeType::Block);
                 let mut body_block = self.eval_block(stmts)?;
-                self.cur_function = prev_executable;
 
                 if !body_block.terminates {
                     let void_type = SemanticType::new(SemanticTypeKind::Void);
@@ -115,6 +118,7 @@ impl SemanticGen {
                 closure.body = SemanticClosureBody::Procedural(body_block);
             },
         }
+        self.cur_function = prev_executable;
 
         self.exit_scope(false);
         if !sem_ret_type.is_concrete() {
@@ -124,7 +128,11 @@ impl SemanticGen {
         }
 
         Ok(SemanticExpression {
-            sem_type: SemanticType::new(SemanticTypeKind::Callable(sem_param_types, sem_ret_type)),
+            sem_type: SemanticType::new(SemanticTypeKind::Callable {
+                is_failable,
+                param_types: sem_param_types,
+                ret_type: sem_ret_type,
+            }),
             kind: SemanticExpressionKind::Closure(id),
             ownership: Ownership::Owned,
         })

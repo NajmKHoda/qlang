@@ -11,6 +11,7 @@ typedef enum CallableType {
 
 typedef struct QLCallable {
     void* invoke_fn;
+    void* failable_invoke_fn;
     void* context_struct;
     struct QLTypeInfo* context_info;
     void* prepared_stmt;
@@ -21,9 +22,10 @@ typedef struct QLCallable {
 
 extern const QLTypeInfo __ql__QLCallable_type_info;
 
-QLCallable* __ql__QLCallable_new(void* invoke_fn, CallableType type, struct QLTypeInfo* captured_info);
+QLCallable* __ql__QLCallable_new(void* true_invoke_fn, void* failable_invoke_fn, CallableType type, struct QLTypeInfo* captured_info);
 void __ql__QLCallable_set_stmt(QLCallable* callable, void* prepared_stmt);
 void* __ql__QLCallable_get_fn(QLCallable* callable);
+void* __ql__QLCallable_get_failable_fn(QLCallable* callable);
 void* __ql__QLCallable_get_context(QLCallable* callable);
 void* __ql__QLCallable_get_stmt(QLCallable* callable);
 void __ql__QLCallable_copy(QLCallable** callable_ptr);

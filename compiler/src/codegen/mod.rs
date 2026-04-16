@@ -7,7 +7,7 @@ use inkwell::targets::{FileType, Target, TargetMachine};
 use inkwell::types::{IntType, PointerType, StructType, VoidType};
 use inkwell::values::{AnyValue, FunctionValue, GlobalValue, PointerValue};
 
-use crate::semantics::{SemanticExpression, SemanticExpressionKind, SemanticFunction, SemanticProgram, SemanticStatement, SemanticType, SemanticTypeKind};
+use crate::semantics::{SemanticExpression, SemanticExpressionKind, SemanticProgram, SemanticStatement, SemanticType, SemanticTypeKind};
 
 mod control_flow;
 mod operations;
@@ -46,6 +46,7 @@ pub struct CodeGen<'ctxt> {
 
     cur_fn: Option<FunctionValue<'ctxt>>,
     cur_function_id: Option<u32>,
+    cur_closure_id: Option<u32>,
     transaction_stack: Vec<GenTransactionInfo<'ctxt>>,
 
     context: &'ctxt Context,
@@ -158,8 +159,24 @@ impl<'ctxt> CodeGen<'ctxt> {
         }
     }
 
-    fn cur_sem_function(&self) -> &SemanticFunction {
-        &self.program.functions[&self.cur_function_id.unwrap()]
+    fn cur_executable_return_type(&self) -> SemanticType {
+        if let Some(function_id) = self.cur_function_id {
+            self.program.functions[&function_id].return_type.clone()
+        } else if let Some(closure_id) = self.cur_closure_id {
+            self.program.closures[&closure_id].return_type.clone()
+        } else {
+            SemanticType::new(SemanticTypeKind::Void)
+        }
+    }
+
+    fn cur_executable_is_failable(&self) -> bool {
+        if let Some(function_id) = self.cur_function_id {
+            self.program.functions[&function_id].is_failable
+        } else if let Some(closure_id) = self.cur_closure_id {
+            self.program.closures[&closure_id].is_failable
+        } else {
+            false
+        }
     }
 
     fn gen_stmt(&mut self, stmt: &SemanticStatement) -> Result<(), CodeGenError> {
@@ -303,6 +320,7 @@ impl<'ctxt> CodeGen<'ctxt> {
             strings: HashMap::new(),
             cur_fn: None,
             cur_function_id: None,
+            cur_closure_id: None,
             transaction_stack: vec![],
             context: &context,
             builder,

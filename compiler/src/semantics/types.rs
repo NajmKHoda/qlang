@@ -12,7 +12,11 @@ pub enum SemanticTypeKind {
     Iterator(SemanticType),
     NamedStruct(u32, String),
     AnonymousStruct(HashMap<String, SemanticType>),
-    Callable(Vec<SemanticType>, SemanticType),
+    Callable {
+        is_failable: bool,
+        param_types: Vec<SemanticType>,
+        ret_type: SemanticType,
+    },
     Void
 }
 
@@ -27,8 +31,10 @@ impl PartialEq for SemanticTypeKind {
             (SemanticTypeKind::Iterator(elem_a), SemanticTypeKind::Iterator(elem_b)) => elem_a == elem_b,
             (SemanticTypeKind::NamedStruct(id_a, _), SemanticTypeKind::NamedStruct(id_b, _)) => id_a == id_b,
             (SemanticTypeKind::AnonymousStruct(fields_a), SemanticTypeKind::AnonymousStruct(fields_b)) => fields_a == fields_b,
-            (SemanticTypeKind::Callable(params_a, ret_a), SemanticTypeKind::Callable(params_b, ret_b)) =>
-                params_a == params_b && ret_a == ret_b,
+            (
+                SemanticTypeKind::Callable { is_failable: is_failable_a, param_types: params_a, ret_type: ret_a },
+                SemanticTypeKind::Callable { is_failable: is_failable_b, param_types: params_b, ret_type: ret_b }
+            ) => is_failable_a == is_failable_b && params_a == params_b && ret_a == ret_b,
             (SemanticTypeKind::Void, SemanticTypeKind::Void) => true,
             _ => false
         }
@@ -52,7 +58,7 @@ impl SemanticTypeKind {
             SemanticTypeKind::Array(_) => true,
             SemanticTypeKind::Iterator(_) => true,
             SemanticTypeKind::NamedStruct(_, _) => true,
-            SemanticTypeKind::Callable(_,_) => true,
+            SemanticTypeKind::Callable { .. } => true,
             _ => false
         }
     }
@@ -78,7 +84,10 @@ impl Display for SemanticTypeKind {
                 }
                 write!(f, "}}")
             }
-            SemanticTypeKind::Callable(param_types, ret_type) => {
+            SemanticTypeKind::Callable { is_failable, param_types, ret_type } => {
+                if *is_failable {
+                    write!(f, "failable ")?;
+                }
                 write!(f, "(")?;
                 for (i, param_type) in param_types.iter().enumerate() {
                     write!(f, "{}", param_type)?;
@@ -186,12 +195,16 @@ impl SemanticGen {
                     Err(SemanticError::UndefinedStruct { name: struct_name.to_string() })
                 }
             },
-            TypeNode::Callable(param_type_nodes, ret_type_node) => {
+            TypeNode::Callable { is_failable, params: param_type_nodes, ret: ret_type_node } => {
                 let param_types = param_type_nodes.iter()
                     .map(|param_node| self.try_get_semantic_type(param_node))
                     .collect::<Result<Vec<_>, SemanticError>>()?;
                 let ret_type = self.try_get_semantic_type(ret_type_node)?;
-                Ok(SemanticType::new(SemanticTypeKind::Callable(param_types, ret_type)))
+                Ok(SemanticType::new(SemanticTypeKind::Callable {
+                    is_failable: *is_failable,
+                    param_types,
+                    ret_type,
+                }))
             },
             TypeNode::Void => Ok(SemanticType::new(SemanticTypeKind::Void)),
         }
@@ -211,6 +224,23 @@ impl SemanticGen {
             },
             (SemanticTypeKind::Array(elem_a), SemanticTypeKind::Array(elem_b)) => self.try_downcast(&elem_a, &elem_b),
             (SemanticTypeKind::Iterator(elem_a), SemanticTypeKind::Iterator(elem_b)) => self.try_downcast(&elem_a, &elem_b),
+            (
+                SemanticTypeKind::Callable { is_failable: target_failable, param_types: target_params, ret_type: target_ret },
+                SemanticTypeKind::Callable { is_failable: source_failable, param_types: source_params, ret_type: source_ret },
+            ) => {
+                if source_failable && !target_failable {
+                    return false;
+                }
+                if target_params.len() != source_params.len() {
+                    return false;
+                }
+                for (target_param, source_param) in target_params.iter().zip(source_params.iter()) {
+                    if !self.try_unify(target_param, source_param) {
+                        return false;
+                    }
+                }
+                self.try_unify(&target_ret, &source_ret)
+            }
             (SemanticTypeKind::NamedStruct(struct_a, _), SemanticTypeKind::NamedStruct(struct_b, _))
                 => struct_a == struct_b,
             (SemanticTypeKind::NamedStruct(struct_id, struct_name), SemanticTypeKind::AnonymousStruct(ref fields)) => {

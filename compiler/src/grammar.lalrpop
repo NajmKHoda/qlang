@@ -76,7 +76,8 @@ Expression: Box<ExpressionNode> = {
     "[" <Comma<Expression>> "]" => Box::new(ExpressionNode::Array(<>)),
     
     #[precedence(level="2")]
-    "lambda" "(" <Comma<TypedQName>> ")" <("->" <TypeName>)?> "{" <ClosureBody> "}" => Box::new(ExpressionNode::Closure(<>)),
+    <is_failable:Present<"failable">> "lambda" "(" <params:Comma<TypedQName>> ")" <return_type:("->" <TypeName>)?> "{" <body:ClosureBody> "}"
+        => Box::new(ExpressionNode::Closure { <> }),
     <Expression> "[" <Expression> "]" => Box::new(ExpressionNode::ArrayIndex(<>)),
     <Expression> "." <QName> "(" <Comma<Expression>> ")" => Box::new(ExpressionNode::MethodCall(<>)),
     <Expression> "." <QName> => Box::new(ExpressionNode::StructField(<>)),
@@ -196,7 +197,8 @@ TypeName: TypeNode = {
     <TypeName> "[" "]" => TypeNode::Array(Box::new(<>)),
     "iter<" <TypeName> ">" => TypeNode::Iterator(Box::new(<>)),
     #[precedence(level="2")]
-    "(" <params:Comma<TypeName>> ")" "->" <ret:TypeName> => TypeNode::Callable(params, Box::new(ret)),
+    <is_failable:Present<"failable">> "(" <params:Comma<TypeName>> ")" "->" <ret:TypeName>
+        => TypeNode::Callable { is_failable, params, ret: Box::new(ret) },
 }
 
 Int: i32 = r"-?[0-9]+" => i32::from_str(<>).unwrap();

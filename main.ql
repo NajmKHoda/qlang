@@ -9,23 +9,15 @@ table Student from data1 {
   friend_id: int
 }
 
-table DoesntExist from data1 {
-  foo: int
-}
-
-function main() -> int {
-  insertStuff();
-}
-
-failable function insertStuff() -> void {
-  query {
+failable function main() -> int {
+  let foo = query() {
     insert {
-      id: 69420,
-      first_name: "SHOULDNT",
-      last_name: "EXIST",
-      grade: 0,
-      teacher_id: 20,
-      friend_id: 10
+      id: 2,
+      first_name: "Bird",
+      last_name: "Cool",
+      grade: 10,
+      teacher_id: 2,
+      friend_id: 1
     } into Student
   };
 }

@@ -195,15 +195,6 @@ QLIterator* __ql__SelectPlan_prepare(SelectPlan* plan) {
     }
     write_ptr += sprintf(write_ptr, ";");
 
-    /*
-    if (plan->has_where_clause) {
-        sprintf(sql, "SELECT * FROM %s WHERE %s = ?1;", plan->table_name, plan->where_column.column_name);
-        sqlite3_prepare_v2(db, sql, -1, &state->stmt, NULL);
-    } else {
-        sprintf(sql, "SELECT * FROM %s;", plan->table_name);
-        sqlite3_prepare_v2(db, sql, -1, &state->stmt, NULL);
-    }
-    */
     if (sqlite3_prepare_v2(__ql__sqlite, sql, -1, &state->stmt, NULL) != SQLITE_OK) {
         free(state->row_ptr);
         free(sql);
@@ -211,8 +202,8 @@ QLIterator* __ql__SelectPlan_prepare(SelectPlan* plan) {
         free(plan);
         return NULL;
     }
-    state->sql = sql;
 
+    state->sql = sql;
     free(plan);
     return select_iterator;
 }

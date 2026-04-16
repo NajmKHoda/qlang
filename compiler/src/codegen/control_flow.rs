@@ -199,15 +199,15 @@ impl<'ctxt> CodeGen<'ctxt> {
     }
 
     pub fn gen_return(&mut self, value: &Option<u32>) -> Result<(), CodeGenError> {
-        if self.cur_sem_function().is_failable {
-            let sem_fn = self.cur_sem_function();
-            let result_ty = self.llvm_result_type(&sem_fn.return_type);
+        if self.cur_executable_is_failable() {
+            let return_type = self.cur_executable_return_type();
+            let result_ty = self.llvm_result_type(&return_type);
             let result_alloca = self.build_alloca(result_ty.into(), "failable_ok_result")?;
             let is_error_ptr = self.builder.build_struct_gep(result_ty, result_alloca, 0, "ok_result_is_error_ptr")?;
             self.builder.build_store(is_error_ptr, self.bool_type().const_int(0, false))?;
 
             if let Some(var_id) = value {
-                if sem_fn.return_type != crate::semantics::SemanticTypeKind::Void {
+                if return_type != crate::semantics::SemanticTypeKind::Void {
                     let ok_ptr = self.builder.build_struct_gep(result_ty, result_alloca, 1, "ok_result_value_ptr")?;
                     let ret_val = self.load_var(*var_id)?;
                     self.builder.build_store(ok_ptr, ret_val.as_llvm_basic_value())?;

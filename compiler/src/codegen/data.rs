@@ -58,7 +58,7 @@ impl<'a> GenValue<'a> {
                 struct_id,
                 ownership: ownership
             },
-            SemanticTypeKind::Callable(_,_) => GenValue::Callable {
+            SemanticTypeKind::Callable { .. } => GenValue::Callable {
                 value: llvm_value.into_pointer_value(),
                 ownership: ownership
             },
@@ -127,7 +127,7 @@ impl<'ctxt> CodeGen<'ctxt> {
                     )?;
                 }
             }
-            SemanticTypeKind::Callable(_, _) => {
+            SemanticTypeKind::Callable { .. } => {
                 self.builder.build_call(
                     self.runtime.callable_copy,
                     &[ptr.into()],
@@ -173,7 +173,7 @@ impl<'ctxt> CodeGen<'ctxt> {
                     )?;
                 }
             }
-            SemanticTypeKind::Callable(_, _) => {
+            SemanticTypeKind::Callable { .. } => {
                 self.builder.build_call(
                     self.runtime.callable_drop,
                     &[ptr.into()],
@@ -223,7 +223,7 @@ impl<'ctxt> CodeGen<'ctxt> {
             SemanticTypeKind::Array(_) => self.ptr_type().into(),
             SemanticTypeKind::Iterator(_) => self.ptr_type().into(),
             SemanticTypeKind::NamedStruct(id, _) => self.struct_info[&id].struct_type.into(),
-            SemanticTypeKind::Callable(_, _) => self.ptr_type().into(),
+            SemanticTypeKind::Callable { .. } => self.ptr_type().into(),
             _ => panic!("Incomplete type found in semantic IR"),
         }
     }

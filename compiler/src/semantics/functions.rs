@@ -331,7 +331,13 @@ impl SemanticGen {
         if let Some(var) = self.get_variable_opt(name) {
             let var_id = var.id;
             let var_type = &var.sem_type.clone();
-            if let SemanticTypeKind::Callable(param_types, ret_type) = var_type.kind() {
+            if let SemanticTypeKind::Callable { is_failable, param_types, ret_type } = var_type.kind() {
+                if is_failable && !self.cur_function_is_failable() {
+                    return Err(SemanticError::FailableCallInNonFailableFunction {
+                        caller_name: self.cur_executable_name(),
+                        callee_name: name.to_string(),
+                    });
+                }
                 self.check_args(name, &sem_args, &param_types)?;
                 let expr_kind = SemanticExpressionKind::IndirectFunctionCall {
                     function_expr: Box::new(SemanticExpression {

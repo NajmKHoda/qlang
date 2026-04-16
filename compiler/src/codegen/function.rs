@@ -34,6 +34,7 @@ impl<'ctxt> CodeGen<'ctxt> {
 
 		self.cur_fn = Some(llvm_fn);
 		self.cur_function_id = Some(function.id);
+		self.cur_closure_id = None;
 		let entry_block = self.context.append_basic_block(llvm_fn, "entry");
 		self.builder.position_at_end(entry_block);
 
@@ -54,9 +55,9 @@ impl<'ctxt> CodeGen<'ctxt> {
 		Ok(())
 	}
 
-	fn gen_failable_error_return(&mut self) -> Result<(), CodeGenError> {
-		let sem_fn = self.cur_sem_function();
-		let result_ty = self.llvm_result_type(&sem_fn.return_type);
+	pub(super) fn gen_failable_error_return(&self) -> Result<(), CodeGenError> {
+		let return_type = self.cur_executable_return_type();
+		let result_ty = self.llvm_result_type(&return_type);
 		let result_alloca = self.build_alloca(result_ty.into(), "failable_error_result")?;
 
 		let is_error_ptr = self.builder.build_struct_gep(result_ty, result_alloca, 0, "result_is_error_ptr")?;

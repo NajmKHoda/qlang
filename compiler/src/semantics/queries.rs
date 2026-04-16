@@ -543,6 +543,12 @@ impl SemanticGen {
         parameters: &[TypedQNameNode],
         query: &QueryNode
     ) -> Result<SemanticExpression, SemanticError> {
+        if !self.cur_function_is_failable() {
+            return Err(SemanticError::QueryInNonFailableFunction {
+                function_name: self.cur_executable_name(),
+            });
+        }
+
         let closure_id = self.closure_id_gen.next_id();
 
         self.enter_scope(SemanticScopeType::Closure(closure_id));
@@ -565,6 +571,7 @@ impl SemanticGen {
 
         self.closures.insert(closure_id, SemanticClosure {
             id: closure_id,
+            is_failable: true,
             param_ids,
             captured_variables: vec![],
             return_type: SemanticType::new(SemanticTypeKind::Void),
@@ -576,7 +583,11 @@ impl SemanticGen {
 
         let return_type = self.return_type_of_query(&sem_query);
         let callable_type = SemanticType::new(
-            SemanticTypeKind::Callable(param_types, return_type.clone())
+            SemanticTypeKind::Callable {
+                is_failable: true,
+                param_types,
+                ret_type: return_type.clone(),
+            }
         );
 
         let closure = self.closures.get_mut(&closure_id).unwrap();

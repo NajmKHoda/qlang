@@ -90,6 +90,7 @@ pub(super) struct Runtime<'ctxt> {
     pub(super) callable_new: FunctionValue<'ctxt>,
     pub(super) callable_set_stmt: FunctionValue<'ctxt>,
     pub(super) callable_get_fn: FunctionValue<'ctxt>,
+    pub(super) callable_get_failable_fn: FunctionValue<'ctxt>,
     pub(super) callable_get_context: FunctionValue<'ctxt>,
     pub(super) callable_get_stmt: FunctionValue<'ctxt>,
     pub(super) callable_copy: FunctionValue<'ctxt>,
@@ -493,7 +494,7 @@ impl<'ctxt> Runtime<'ctxt> {
         // Callable functions
         let callable_new = module.add_function(
             "__ql__QLCallable_new",
-            ptr_type.fn_type(&[ptr_type.into(), int_type.into(), ptr_type.into()], false),
+            ptr_type.fn_type(&[ptr_type.into(), ptr_type.into(), int_type.into(), ptr_type.into()], false),
             Some(Linkage::External),
         );
 
@@ -505,6 +506,12 @@ impl<'ctxt> Runtime<'ctxt> {
 
         let callable_get_fn = module.add_function(
             "__ql__QLCallable_get_fn",
+            ptr_type.fn_type(&[ptr_type.into()], false),
+            Some(Linkage::External),
+        );
+
+        let callable_get_failable_fn = module.add_function(
+            "__ql__QLCallable_get_failable_fn",
             ptr_type.fn_type(&[ptr_type.into()], false),
             Some(Linkage::External),
         );
@@ -659,6 +666,7 @@ impl<'ctxt> Runtime<'ctxt> {
             callable_new,
             callable_set_stmt,
             callable_get_fn,
+            callable_get_failable_fn,
             callable_get_context,
             callable_get_stmt,
             callable_copy,
@@ -677,7 +685,7 @@ impl<'ctxt> CodeGen<'ctxt> {
             SemanticTypeKind::NamedStruct(struct_id, _) => {
                 self.struct_info[&struct_id].type_info   
             },
-            SemanticTypeKind::Callable(_, _) => self.runtime.callable_type_info,
+            SemanticTypeKind::Callable { .. } => self.runtime.callable_type_info,
             _ => panic!("Unsupported type for type info retrieval"),
         }
     }

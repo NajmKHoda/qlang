@@ -17,9 +17,10 @@ const QLTypeInfo __ql__QLCallable_type_info = {
     .drop = (void (*)(void*)) __ql__QLCallable_drop
 };
 
-QLCallable* __ql__QLCallable_new(void* invoke_fn, CallableType type, QLTypeInfo* captured_info) {
+QLCallable* __ql__QLCallable_new(void* true_invoke_fn, void* failable_invoke_fn, CallableType type, QLTypeInfo* captured_info) {
     QLCallable* callable = malloc(sizeof(QLCallable));
-    callable->invoke_fn = invoke_fn;
+    callable->invoke_fn = true_invoke_fn;
+    callable->failable_invoke_fn = failable_invoke_fn;
     callable->type = type;
     callable->context_info = captured_info;
     callable->prepared_stmt = NULL;
@@ -39,6 +40,13 @@ void __ql__QLCallable_set_stmt(QLCallable* callable, void* prepared_stmt) {
 }
 
 void* __ql__QLCallable_get_fn(QLCallable* callable) {
+    return callable->invoke_fn;
+}
+
+void* __ql__QLCallable_get_failable_fn(QLCallable* callable) {
+    if (callable->failable_invoke_fn != NULL) {
+        return callable->failable_invoke_fn;
+    }
     return callable->invoke_fn;
 }
 

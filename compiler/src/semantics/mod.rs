@@ -245,8 +245,8 @@ impl SemanticGen {
             ExpressionNode::MethodCall(receiver, method_name, args) => {
                 self.call_method(receiver, method_name, args)
             }
-            ExpressionNode::Closure(params, return_type, body) => {
-                self.eval_closure(params, return_type.as_ref(), body)
+            ExpressionNode::Closure { is_failable, params, return_type, body } => {
+                self.eval_closure(*is_failable, params, return_type.as_ref(), body)
             }
             ExpressionNode::ImmediateQuery(query_node) => {
                 self.eval_immediate_query(query_node)
@@ -315,7 +315,7 @@ impl SemanticGen {
     pub(super) fn cur_function_is_failable(&self) -> bool {
         match self.cur_function {
             Some(Executable::Function(id)) => self.functions[id].is_failable,
-            Some(Executable::Closure(_)) => false,
+            Some(Executable::Closure(id)) => self.closures[&id].is_failable,
             None => false,
         }
     }

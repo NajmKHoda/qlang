@@ -77,7 +77,11 @@ pub enum TypeNode {
     Array(Box<TypeNode>),
     Iterator(Box<TypeNode>),
     Struct(String),
-    Callable(Vec<TypeNode>, Box<TypeNode>),
+    Callable {
+        is_failable: bool,
+        params: Vec<TypeNode>,
+        ret: Box<TypeNode>,
+    },
     Void
 }
 
@@ -98,7 +102,12 @@ pub enum ExpressionNode {
         inclusive: bool,
         step: Option<Box<ExpressionNode>>,
     },
-    Closure(Vec<TypedQNameNode>, Option<TypeNode>, ClosureBodyNode),
+    Closure {
+        is_failable: bool,
+        params: Vec<TypedQNameNode>,
+        return_type: Option<TypeNode>,
+        body: ClosureBodyNode,
+    },
     Add(Box<ExpressionNode>, Box<ExpressionNode>),
     Subtract(Box<ExpressionNode>, Box<ExpressionNode>),
     Comparison(Box<ExpressionNode>, Box<ExpressionNode>, ComparisonType),
