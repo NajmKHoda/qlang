@@ -1,7 +1,5 @@
 function main() -> int {
-  if 200 > 1.0 {
+  if not true or false {
     prints("foo");
-  } else {
-    prints("bar");
   }
 }

@@ -272,6 +272,24 @@ impl<'ctxt> CodeGen<'ctxt> {
             SemanticExpressionKind::Subtract { left, right } => {
                 self.gen_subtract(left, right)
             }
+            SemanticExpressionKind::Multiply { left, right } => {
+                self.gen_multiply(left, right)
+            }
+            SemanticExpressionKind::Divide { left, right } => {
+                self.gen_divide(left, right)
+            }
+            SemanticExpressionKind::Modulus { left, right } => {
+                self.gen_modulus(left, right)
+            }
+            SemanticExpressionKind::LogicalAnd { left, right } => {
+                self.gen_logical_and(left, right)
+            }
+            SemanticExpressionKind::LogicalOr { left, right } => {
+                self.gen_logical_or(left, right)
+            }
+            SemanticExpressionKind::LogicalNot { value } => {
+                self.gen_logical_not(value)
+            }
             SemanticExpressionKind::Compare { left, right, op } => {
                 self.gen_compare(left, right, *op)
             }

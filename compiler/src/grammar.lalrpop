@@ -78,13 +78,18 @@ Expression: Box<ExpressionNode> = {
     #[precedence(level="0")]
     <PrimaryExpression> => <>,
     
-    #[precedence(level="2")]
+    #[precedence(level="1")]
     <is_failable:Present<"failable">> "lambda" "(" <params:Comma<TypedQName>> ")" <return_type:("->" <TypeName>)?> "{" <body:ClosureBody> "}"
         => Box::new(ExpressionNode::Closure { <> }),
     <Expression> "[" <Expression> "]" => Box::new(ExpressionNode::ArrayIndex(<>)),
     <Expression> "." <QName> "(" <Comma<Expression>> ")" => Box::new(ExpressionNode::MethodCall(<>)),
     <Expression> "." <QName> => Box::new(ExpressionNode::StructField(<>)),
     
+    #[precedence(level="2")] #[assoc(side="left")]
+    <Expression> "*" <Expression> => Box::new(ExpressionNode::Multiply(<>)),
+    <Expression> "/" <Expression> => Box::new(ExpressionNode::Divide(<>)),
+    <Expression> "%" <Expression> => Box::new(ExpressionNode::Modulus(<>)),
+
     #[precedence(level="3")] #[assoc(side="left")]
     <Expression> "+" <Expression> => Box::new(ExpressionNode::Add(<>)),
     <Expression> "-" <Expression> => Box::new(ExpressionNode::Subtract(<>)),
@@ -92,13 +97,23 @@ Expression: Box<ExpressionNode> = {
     "query" "{" <Query> "}" => Box::new(ExpressionNode::ImmediateQuery(<>)),
     "query" "(" <parameters:Comma<TypedQName>> ")" "{" <query:Query> "}"
         => Box::new(ExpressionNode::ParameterizedQuery { <> }),
-    #[precedence(level="4")] #[assoc(side="left")]
+
+    #[precedence(level="4")]
+    "not" <Expression> => Box::new(ExpressionNode::LogicalNot(<>)),
+
+    #[precedence(level="5")] #[assoc(side="left")]
     <Expression> ">" <Expression> => Box::new(ExpressionNode::Comparison(<>, ComparisonType::GreaterThan)),
     <Expression> "<" <Expression> => Box::new(ExpressionNode::Comparison(<>, ComparisonType::LessThan)),
     <Expression> ">=" <Expression> => Box::new(ExpressionNode::Comparison(<>, ComparisonType::GreaterThanOrEqual)),
     <Expression> "<=" <Expression> => Box::new(ExpressionNode::Comparison(<>, ComparisonType::LessThanOrEqual)),
     <Expression> "==" <Expression> => Box::new(ExpressionNode::Comparison(<>, ComparisonType::Equal)),
     <Expression> "!=" <Expression> => Box::new(ExpressionNode::Comparison(<>, ComparisonType::NotEqual)),
+
+    #[precedence(level="6")] #[assoc(side="left")]
+    <Expression> "and" <Expression> => Box::new(ExpressionNode::LogicalAnd(<>)),
+
+    #[precedence(level="7")] #[assoc(side="left")]
+    <Expression> "or" <Expression> => Box::new(ExpressionNode::LogicalOr(<>)),
 }
 
 ColumnValue: ColumnValueNode = <name:QName> ":" <value:Expression> => ColumnValueNode { <> };

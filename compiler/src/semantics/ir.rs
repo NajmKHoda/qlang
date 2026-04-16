@@ -82,6 +82,29 @@ pub enum SemanticExpressionKind {
         left: Box<SemanticExpression>,
         right: Box<SemanticExpression>
     },
+    Multiply {
+        left: Box<SemanticExpression>,
+        right: Box<SemanticExpression>
+    },
+    Divide {
+        left: Box<SemanticExpression>,
+        right: Box<SemanticExpression>
+    },
+    Modulus {
+        left: Box<SemanticExpression>,
+        right: Box<SemanticExpression>
+    },
+    LogicalAnd {
+        left: Box<SemanticExpression>,
+        right: Box<SemanticExpression>
+    },
+    LogicalOr {
+        left: Box<SemanticExpression>,
+        right: Box<SemanticExpression>
+    },
+    LogicalNot {
+        value: Box<SemanticExpression>
+    },
     Compare {
         left: Box<SemanticExpression>,
         right: Box<SemanticExpression>,

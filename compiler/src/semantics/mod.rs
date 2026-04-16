@@ -243,6 +243,24 @@ impl SemanticGen {
             ExpressionNode::Subtract(left, right) => {
                 self.eval_subtract(left, right)
             },
+            ExpressionNode::Multiply(left, right) => {
+                self.eval_multiply(left, right)
+            },
+            ExpressionNode::Divide(left, right) => {
+                self.eval_divide(left, right)
+            },
+            ExpressionNode::Modulus(left, right) => {
+                self.eval_modulus(left, right)
+            },
+            ExpressionNode::LogicalAnd(left, right) => {
+                self.eval_logical_and(left, right)
+            },
+            ExpressionNode::LogicalOr(left, right) => {
+                self.eval_logical_or(left, right)
+            },
+            ExpressionNode::LogicalNot(value) => {
+                self.eval_logical_not(value)
+            },
             ExpressionNode::Comparison(left, right, op) => {
                 self.eval_compare(left, right, *op)
             }

@@ -74,6 +74,77 @@ impl<'ctxt> CodeGen<'ctxt> {
         }
     }
 
+    pub fn gen_multiply(&mut self, expr1: &SemanticExpression, expr2: &SemanticExpression) -> Result<GenValue<'ctxt>, CodeGenError> {
+        let val1 = self.gen_eval(expr1)?;
+        let val2 = self.gen_eval(expr2)?;
+        if let (GenValue::Integer(int1), GenValue::Integer(int2)) = (&val1, &val2) {
+            let res = self.builder.build_int_mul(*int1, *int2, "mul")?;
+            Ok(GenValue::Integer(res))
+        } else if let (GenValue::Float(float1), GenValue::Float(float2)) = (&val1, &val2) {
+            let res = self.builder.build_float_mul(*float1, *float2, "mulf")?;
+            Ok(GenValue::Float(res))
+        } else {
+            panic!("Unexpected types for multiplication");
+        }
+    }
+
+    pub fn gen_divide(&mut self, expr1: &SemanticExpression, expr2: &SemanticExpression) -> Result<GenValue<'ctxt>, CodeGenError> {
+        let val1 = self.gen_eval(expr1)?;
+        let val2 = self.gen_eval(expr2)?;
+        if let (GenValue::Integer(int1), GenValue::Integer(int2)) = (&val1, &val2) {
+            let res = self.builder.build_int_signed_div(*int1, *int2, "div")?;
+            Ok(GenValue::Integer(res))
+        } else if let (GenValue::Float(float1), GenValue::Float(float2)) = (&val1, &val2) {
+            let res = self.builder.build_float_div(*float1, *float2, "divf")?;
+            Ok(GenValue::Float(res))
+        } else {
+            panic!("Unexpected types for division");
+        }
+    }
+
+    pub fn gen_modulus(&mut self, expr1: &SemanticExpression, expr2: &SemanticExpression) -> Result<GenValue<'ctxt>, CodeGenError> {
+        let val1 = self.gen_eval(expr1)?;
+        let val2 = self.gen_eval(expr2)?;
+        if let (GenValue::Integer(int1), GenValue::Integer(int2)) = (&val1, &val2) {
+            let res = self.builder.build_int_signed_rem(*int1, *int2, "mod")?;
+            Ok(GenValue::Integer(res))
+        } else {
+            panic!("Unexpected types for modulus");
+        }
+    }
+
+    pub fn gen_logical_and(&mut self, expr1: &SemanticExpression, expr2: &SemanticExpression) -> Result<GenValue<'ctxt>, CodeGenError> {
+        let val1 = self.gen_eval(expr1)?;
+        let val2 = self.gen_eval(expr2)?;
+        if let (GenValue::Bool(bool1), GenValue::Bool(bool2)) = (&val1, &val2) {
+            let res = self.builder.build_and(*bool1, *bool2, "and")?;
+            Ok(GenValue::Bool(res))
+        } else {
+            panic!("Unexpected types for logical and");
+        }
+    }
+
+    pub fn gen_logical_or(&mut self, expr1: &SemanticExpression, expr2: &SemanticExpression) -> Result<GenValue<'ctxt>, CodeGenError> {
+        let val1 = self.gen_eval(expr1)?;
+        let val2 = self.gen_eval(expr2)?;
+        if let (GenValue::Bool(bool1), GenValue::Bool(bool2)) = (&val1, &val2) {
+            let res = self.builder.build_or(*bool1, *bool2, "or")?;
+            Ok(GenValue::Bool(res))
+        } else {
+            panic!("Unexpected types for logical or");
+        }
+    }
+
+    pub fn gen_logical_not(&mut self, expr: &SemanticExpression) -> Result<GenValue<'ctxt>, CodeGenError> {
+        let val = self.gen_eval(expr)?;
+        if let GenValue::Bool(bool_val) = val {
+            let res = self.builder.build_not(bool_val, "not")?;
+            Ok(GenValue::Bool(res))
+        } else {
+            panic!("Unexpected type for logical not");
+        }
+    }
+
     pub fn gen_compare(&mut self, expr1: &SemanticExpression, expr2: &SemanticExpression, op: ComparisonType) -> Result<GenValue<'ctxt>, CodeGenError> {
         let val1 = self.gen_eval(expr1)?;
         let val2 = self.gen_eval(expr2)?;
