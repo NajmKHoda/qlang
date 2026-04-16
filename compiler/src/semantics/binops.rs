@@ -7,6 +7,7 @@ impl SemanticGen {
         
         match (&sem_left.sem_type.kind(), &sem_right.sem_type.kind()) {
             (SemanticTypeKind::Integer, SemanticTypeKind::Integer) => {},
+            (SemanticTypeKind::Float, SemanticTypeKind::Float) => {},
             (SemanticTypeKind::String, SemanticTypeKind::String) => {},
             _ => {
                 return Err(SemanticError::IncompatibleOperands {
@@ -37,6 +38,7 @@ impl SemanticGen {
 
         match (&sem_left.sem_type.kind(), &sem_right.sem_type.kind()) {
             (SemanticTypeKind::Integer, SemanticTypeKind::Integer) => {},
+            (SemanticTypeKind::Float, SemanticTypeKind::Float) => {},
             _ => {
                 return Err(SemanticError::IncompatibleOperands {
                     operation: "subtraction".to_string(),
@@ -48,11 +50,7 @@ impl SemanticGen {
 
         Ok(SemanticExpression {
             sem_type: sem_left.sem_type.clone(),
-            ownership: if sem_left.sem_type.can_be_owned() {
-                Ownership::Owned
-            } else {
-                Ownership::Trivial
-            },
+            ownership: Ownership::Trivial,
             kind: SemanticExpressionKind::Subtract {
                 left: Box::new(sem_left),
                 right: Box::new(sem_right),
@@ -71,6 +69,7 @@ impl SemanticGen {
 
         match (&sem_left.sem_type.kind(), &sem_right.sem_type.kind()) {
             (SemanticTypeKind::Integer, SemanticTypeKind::Integer) |
+            (SemanticTypeKind::Float, SemanticTypeKind::Float) |
             (SemanticTypeKind::String, SemanticTypeKind::String) => {},
             (SemanticTypeKind::Bool, SemanticTypeKind::Bool)
                 if op == ComparisonType::Equal || op == ComparisonType::NotEqual => {},

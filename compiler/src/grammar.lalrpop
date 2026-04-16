@@ -62,18 +62,21 @@ ConditionalStatement: StatementNode =
 ConditionalBranch: ConditionalBranchNode =
     <condition:Expression> "{" <body:Statement*> "}" => ConditionalBranchNode { <> };
 
-Expression: Box<ExpressionNode> = {
-    #[precedence(level="0")]
+PrimaryExpression: Box<ExpressionNode> = {
+    Float => Box::new(ExpressionNode::FloatLiteral(<>)),
     Int => Box::new(ExpressionNode::IntegerLiteral(<>)),
     Bool => Box::new(ExpressionNode::BoolLiteral(<>)),
     QLString => Box::new(ExpressionNode::StringLiteral(<>)),
     "irange" "(" <range:RangeSpec> ")" => Box::new(range),
     QName => Box::new(ExpressionNode::QName(<>)),
     "(" <Expression> ")" => <>,
-
-    #[precedence(level="1")]
     <name:ProperQName?> "{" <fields:Comma<ColumnValue>> "}" => Box::new(ExpressionNode::Struct(<>)),
     "[" <Comma<Expression>> "]" => Box::new(ExpressionNode::Array(<>)),
+};
+
+Expression: Box<ExpressionNode> = {
+    #[precedence(level="0")]
+    <PrimaryExpression> => <>,
     
     #[precedence(level="2")]
     <is_failable:Present<"failable">> "lambda" "(" <params:Comma<TypedQName>> ")" <return_type:("->" <TypeName>)?> "{" <body:ClosureBody> "}"
@@ -94,9 +97,8 @@ Expression: Box<ExpressionNode> = {
     <Expression> "<" <Expression> => Box::new(ExpressionNode::Comparison(<>, ComparisonType::LessThan)),
     <Expression> ">=" <Expression> => Box::new(ExpressionNode::Comparison(<>, ComparisonType::GreaterThanOrEqual)),
     <Expression> "<=" <Expression> => Box::new(ExpressionNode::Comparison(<>, ComparisonType::LessThanOrEqual)),
-    #[precedence(level="5")] #[assoc(side="left")]
     <Expression> "==" <Expression> => Box::new(ExpressionNode::Comparison(<>, ComparisonType::Equal)),
-    <Expression> "!=" <Expression> => Box::new(ExpressionNode::Comparison(<>, ComparisonType::NotEqual))
+    <Expression> "!=" <Expression> => Box::new(ExpressionNode::Comparison(<>, ComparisonType::NotEqual)),
 }
 
 ColumnValue: ColumnValueNode = <name:QName> ":" <value:Expression> => ColumnValueNode { <> };
@@ -222,6 +224,7 @@ VariableType: Option<TypeNode> = {
 TypeName: TypeNode = {
     #[precedence(level="0")]
     "int" => TypeNode::Integer,
+    "float" => TypeNode::Float,
     "bool" => TypeNode::Bool,
     "str" => TypeNode::String,
     "void" => TypeNode::Void,
@@ -234,6 +237,7 @@ TypeName: TypeNode = {
         => TypeNode::Callable { is_failable, params, ret: Box::new(ret) },
 }
 
+Float: f64 = r"-?[0-9]+\.[0-9]+" => f64::from_str(<>).unwrap();
 Int: i32 = r"-?[0-9]+" => i32::from_str(<>).unwrap();
 Bool: bool = { "true" => true, "false" => false };
 QLString: String = <s:r#""[^"]*""#> => s[1..s.len()-1].to_string();

@@ -81,9 +81,11 @@ static void* __ql__SelectIterator_next(QLIterator* iter) {
     
     int n_cols = iter->elem_type_info->num_fields;
     for (int i = 0; i < n_cols; i++) {
-        int column_type = sqlite3_column_type(state->stmt, i);
-        switch (column_type) {
-            case SQLITE_TEXT: {
+        ColumnType expected_type;
+        iter->elem_type_info->get_nth(state->row_ptr, i, &expected_type);
+
+        switch (expected_type) {
+            case COLUMN_STRING: {
                 const unsigned char* text = sqlite3_column_text(state->stmt, i);
                 unsigned int length = sqlite3_column_bytes(state->stmt, i);
                 QLString* val = __ql__QLString_new(malloc(length), length, false);
@@ -91,8 +93,18 @@ static void* __ql__SelectIterator_next(QLIterator* iter) {
                 iter->elem_type_info->set_nth(state->row_ptr, i, &val);
                 break;
             }
-            case SQLITE_INTEGER: {
+            case COLUMN_INT: {
                 int val = sqlite3_column_int(state->stmt, i);
+                iter->elem_type_info->set_nth(state->row_ptr, i, &val);
+                break;
+            }
+            case COLUMN_BOOL: {
+                bool val = sqlite3_column_int(state->stmt, i) != 0;
+                iter->elem_type_info->set_nth(state->row_ptr, i, &val);
+                break;
+            }
+            case COLUMN_REAL: {
+                double val = sqlite3_column_double(state->stmt, i);
                 iter->elem_type_info->set_nth(state->row_ptr, i, &val);
                 break;
             }

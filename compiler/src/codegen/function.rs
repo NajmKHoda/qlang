@@ -176,6 +176,15 @@ impl<'ctxt> CodeGen<'ctxt> {
 				)?;
 				Ok(GenValue::Void)
 			}
+			BuiltinFunction::PrintFloat => {
+				let float_val = &arg_values[0];
+				self.builder.build_call(
+					self.runtime.print_float,
+					&[float_val.as_llvm_basic_value().into()],
+					"print_float"
+				)?;
+				Ok(GenValue::Void)
+			}
 			BuiltinFunction::PrintBool => {
 				let bool_val = &arg_values[0];
 				self.builder.build_call(

@@ -16,6 +16,19 @@ impl From<ComparisonType> for inkwell::IntPredicate {
     }
 }
 
+impl From<ComparisonType> for inkwell::FloatPredicate {
+    fn from(op: ComparisonType) -> Self {
+        match op {
+            ComparisonType::Equal => inkwell::FloatPredicate::OEQ,
+            ComparisonType::NotEqual => inkwell::FloatPredicate::ONE,
+            ComparisonType::GreaterThan => inkwell::FloatPredicate::OGT,
+            ComparisonType::LessThan => inkwell::FloatPredicate::OLT,
+            ComparisonType::GreaterThanOrEqual => inkwell::FloatPredicate::OGE,
+            ComparisonType::LessThanOrEqual => inkwell::FloatPredicate::OLE,
+        }
+    }
+}
+
 impl<'ctxt> CodeGen<'ctxt> {
     pub fn gen_add(&mut self, expr1: &SemanticExpression, expr2: &SemanticExpression) -> Result<GenValue<'ctxt>, CodeGenError> {
         let val1 = self.gen_eval(expr1)?;
@@ -23,6 +36,9 @@ impl<'ctxt> CodeGen<'ctxt> {
         if let (GenValue::Integer(int1), GenValue::Integer(int2)) = (&val1, &val2) {
             let res = self.builder.build_int_add(*int1, *int2, "sum")?;
             Ok(GenValue::Integer(res))
+        } else if let (GenValue::Float(float1), GenValue::Float(float2)) = (&val1, &val2) {
+            let res = self.builder.build_float_add(*float1, *float2, "sumf")?;
+            Ok(GenValue::Float(res))
         } else if let (GenValue::String { value: str1, .. }, GenValue::String { value: str2, .. })
             = (&val1, &val2) 
         {
@@ -50,6 +66,9 @@ impl<'ctxt> CodeGen<'ctxt> {
         if let (GenValue::Integer(int1), GenValue::Integer(int2)) = (&val1, &val2) {
             let res = self.builder.build_int_sub(*int1, *int2, "sub")?;
             Ok(GenValue::Integer(res))
+        } else if let (GenValue::Float(float1), GenValue::Float(float2)) = (&val1, &val2) {
+            let res = self.builder.build_float_sub(*float1, *float2, "subf")?;
+            Ok(GenValue::Float(res))
         } else {
             panic!("Unexpected types for subtraction");
         }
@@ -60,6 +79,9 @@ impl<'ctxt> CodeGen<'ctxt> {
         let val2 = self.gen_eval(expr2)?;
         if let (GenValue::Integer(int1), GenValue::Integer(int2)) = (&val1, &val2) {
             let res = self.builder.build_int_compare(op.into(), *int1, *int2, "cmp")?;
+            Ok(GenValue::Bool(res))
+        } else if let (GenValue::Float(float1), GenValue::Float(float2)) = (&val1, &val2) {
+            let res = self.builder.build_float_compare(op.into(), *float1, *float2, "cmpf")?;
             Ok(GenValue::Bool(res))
         } else if let (GenValue::String { value: str1, .. }, GenValue::String { value: str2, .. })
             = (&val1, &val2) 

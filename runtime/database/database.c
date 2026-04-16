@@ -61,6 +61,10 @@ void __ql__bind_value(sqlite3_stmt* stmt, unsigned int index, ColumnType value_t
             sqlite3_bind_int(stmt, index, as_int);
             break;
         }
+        case COLUMN_REAL: {
+            sqlite3_bind_double(stmt, index, *(double*)value);
+            break;
+        }
         default:
             break;
     }

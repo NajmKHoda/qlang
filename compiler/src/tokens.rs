@@ -72,6 +72,7 @@ pub struct TypedQNameNode {
 
 pub enum TypeNode {
     Integer,
+    Float,
     Bool,
     String,
     Array(Box<TypeNode>),
@@ -94,6 +95,7 @@ pub enum ExpressionNode {
     QName(String),
     StructField(Box<ExpressionNode>, String),
     IntegerLiteral(i32),
+    FloatLiteral(f64),
     BoolLiteral(bool),
     StringLiteral(String),
     Range {

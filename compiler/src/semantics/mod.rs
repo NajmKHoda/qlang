@@ -130,6 +130,13 @@ impl SemanticGen {
                     ownership: Ownership::Trivial,
                 })
             },
+            ExpressionNode::FloatLiteral(val) => {
+                Ok(SemanticExpression {
+                    kind: SemanticExpressionKind::FloatLiteral(*val),
+                    sem_type: SemanticType::new(SemanticTypeKind::Float),
+                    ownership: Ownership::Trivial,
+                })
+            },
             ExpressionNode::BoolLiteral(val) => {
                 Ok(SemanticExpression {
                     kind: SemanticExpressionKind::BoolLiteral(*val),

@@ -1,4 +1,4 @@
-use inkwell::{types::BasicTypeEnum, values::{BasicValueEnum, IntValue, PointerValue, StructValue}};
+use inkwell::{types::BasicTypeEnum, values::{BasicValueEnum, FloatValue, IntValue, PointerValue, StructValue}};
 
 use crate::semantics::{Ownership, SemanticType, SemanticTypeKind};
 
@@ -7,6 +7,7 @@ use super::{CodeGen, CodeGenError};
 #[derive(Clone, PartialEq)]
 pub enum GenValue<'a> {
     Integer(IntValue<'a>),
+    Float(FloatValue<'a>),
     Bool(IntValue<'a>),
     String {
         value: PointerValue<'a>,
@@ -38,6 +39,7 @@ impl<'a> GenValue<'a> {
     pub fn new(sem_type: &SemanticType, llvm_value: BasicValueEnum<'a>, ownership: Ownership) -> Self {
         match sem_type.kind() {
             SemanticTypeKind::Integer => GenValue::Integer(llvm_value.into_int_value()),
+            SemanticTypeKind::Float => GenValue::Float(llvm_value.into_float_value()),
             SemanticTypeKind::Bool => GenValue::Bool(llvm_value.into_int_value()),
             SemanticTypeKind::String => GenValue::String {
                 value: llvm_value.into_pointer_value(),
@@ -81,6 +83,7 @@ impl<'a> GenValue<'a> {
     pub fn as_llvm_basic_value(&self) -> BasicValueEnum<'a> {
         match self {
             GenValue::Integer(int_val) => BasicValueEnum::IntValue(*int_val),
+            GenValue::Float(float_val) => BasicValueEnum::FloatValue(*float_val),
             GenValue::Bool(int_val) => BasicValueEnum::IntValue(*int_val),
             GenValue::String { value: str_val, .. } => BasicValueEnum::PointerValue(*str_val),
             GenValue::Array { value: arr_val, .. } => BasicValueEnum::PointerValue(*arr_val),
@@ -218,6 +221,7 @@ impl<'ctxt> CodeGen<'ctxt> {
     pub fn llvm_basic_type(&self, sem_type: &SemanticType) -> BasicTypeEnum<'ctxt> {
         match sem_type.kind() {
             SemanticTypeKind::Integer => self.int_type().into(),
+            SemanticTypeKind::Float => self.float_type().into(),
             SemanticTypeKind::Bool => self.bool_type().into(),
             SemanticTypeKind::String => self.ptr_type().into(),
             SemanticTypeKind::Array(_) => self.ptr_type().into(),

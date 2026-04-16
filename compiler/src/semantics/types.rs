@@ -6,6 +6,7 @@ use super::*;
 pub enum SemanticTypeKind {
     Any,
     Integer,
+    Float,
     Bool,
     String,
     Array(SemanticType),
@@ -25,6 +26,7 @@ impl PartialEq for SemanticTypeKind {
         match (self, other) {
             (SemanticTypeKind::Any, SemanticTypeKind::Any) => true,
             (SemanticTypeKind::Integer, SemanticTypeKind::Integer) => true,
+            (SemanticTypeKind::Float, SemanticTypeKind::Float) => true,
             (SemanticTypeKind::Bool, SemanticTypeKind::Bool) => true,
             (SemanticTypeKind::String, SemanticTypeKind::String) => true,
             (SemanticTypeKind::Array(elem_a), SemanticTypeKind::Array(elem_b)) => elem_a == elem_b,
@@ -69,6 +71,7 @@ impl Display for SemanticTypeKind {
         match self {
             SemanticTypeKind::Any => write!(f, "any"),
             SemanticTypeKind::Integer => write!(f, "int"),
+            SemanticTypeKind::Float => write!(f, "float"),
             SemanticTypeKind::Bool => write!(f, "bool"),
             SemanticTypeKind::String => write!(f, "str"),
             SemanticTypeKind::Array(elem_type) => write!(f, "{}[]", elem_type),
@@ -178,6 +181,7 @@ impl SemanticGen {
     pub fn try_get_semantic_type(&self, type_node: &TypeNode) -> Result<SemanticType, SemanticError> {
         match type_node {
             TypeNode::Integer => Ok(SemanticType::new(SemanticTypeKind::Integer)),
+            TypeNode::Float => Ok(SemanticType::new(SemanticTypeKind::Float)),
             TypeNode::Bool => Ok(SemanticType::new(SemanticTypeKind::Bool)),
             TypeNode::String => Ok(SemanticType::new(SemanticTypeKind::String)),
             TypeNode::Array(elem_type_node) => {

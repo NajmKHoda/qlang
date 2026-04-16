@@ -190,7 +190,7 @@ impl SemanticGen {
         let mut struct_fields = Vec::new();
         for field in fields {
             let is_primitive = match field.type_node {
-                TypeNode::Integer | TypeNode::Bool | TypeNode::String => true,
+                TypeNode::Integer | TypeNode::Float | TypeNode::Bool | TypeNode::String => true,
                 _ => false,
             };
             if !is_primitive {

@@ -10,11 +10,13 @@ use crate::semantics::{SemanticType, SemanticTypeKind};
 pub(super) struct Runtime<'ctxt> {
     pub(super) type_info_type: StructType<'ctxt>,
     pub(super) int_type_info: GlobalValue<'ctxt>,
+    pub(super) float_type_info: GlobalValue<'ctxt>,
     pub(super) bool_type_info: GlobalValue<'ctxt>,
     pub(super) string_type_info: GlobalValue<'ctxt>,
     pub(super) array_type_info: GlobalValue<'ctxt>,
     pub(super) callable_type_info: GlobalValue<'ctxt>,
     pub(super) print_integer: FunctionValue<'ctxt>,
+    pub(super) print_float: FunctionValue<'ctxt>,
     pub(super) print_boolean: FunctionValue<'ctxt>,
     pub(super) print_string: FunctionValue<'ctxt>,
     pub(super) input_integer: FunctionValue<'ctxt>,
@@ -101,6 +103,7 @@ impl<'ctxt> Runtime<'ctxt> {
     pub(super) fn new(context: &'ctxt Context, module: &Module<'ctxt>) -> Self {
         let void_type = context.void_type();
         let int_type = context.i32_type();
+        let float_type = context.f64_type();
         let long_type = context.i64_type();
         let bool_type = context.bool_type();
         let ptr_type = context.ptr_type(Default::default());
@@ -108,6 +111,12 @@ impl<'ctxt> Runtime<'ctxt> {
         let print_integer = module.add_function(
             "printi",
             void_type.fn_type(&[int_type.into()], false),
+            Some(Linkage::External),
+        );
+
+        let print_float = module.add_function(
+            "printd",
+            void_type.fn_type(&[float_type.into()], false),
             Some(Linkage::External),
         );
 
@@ -561,6 +570,13 @@ impl<'ctxt> Runtime<'ctxt> {
         );
         int_type_info.set_linkage(Linkage::External);
 
+        let float_type_info = module.add_global(
+            type_info_type,
+            Some(AddressSpace::default()),
+            "__ql__float_type_info"
+        );
+        float_type_info.set_linkage(Linkage::External);
+
         let bool_type_info = module.add_global(
             type_info_type,
             Some(AddressSpace::default()),
@@ -592,12 +608,14 @@ impl<'ctxt> Runtime<'ctxt> {
         Runtime {
             type_info_type,
             int_type_info,
+            float_type_info,
             bool_type_info,
             string_type_info,
             array_type_info,
             callable_type_info,
 
             print_integer,
+            print_float,
             print_boolean,
             print_string,
             input_integer,
@@ -679,6 +697,7 @@ impl<'ctxt> CodeGen<'ctxt> {
     pub(super) fn get_type_info(&self, sem_type: &SemanticType) -> GlobalValue<'ctxt> {
         match sem_type.kind() {
             SemanticTypeKind::Integer => self.runtime.int_type_info,
+            SemanticTypeKind::Float => self.runtime.float_type_info,
             SemanticTypeKind::Bool => self.runtime.bool_type_info,
             SemanticTypeKind::String => self.runtime.string_type_info,
             SemanticTypeKind::Array(_) => self.runtime.array_type_info,

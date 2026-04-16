@@ -4,9 +4,11 @@
 #include "metadata.h"
 
 extern QLTypeInfo __ql__int_type_info;
+extern QLTypeInfo __ql__float_type_info;
 extern QLTypeInfo __ql__bool_type_info;
 
 void printi(int);
+void printd(double);
 void printb(bool);
 int inputi();
 

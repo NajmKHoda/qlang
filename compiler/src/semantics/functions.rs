@@ -12,6 +12,7 @@ pub struct SemanticFunction {
 const BUILTIN_FNS: &[&str] = &[
     "prints",
     "printi",
+    "printd",
     "printb",
     "inputs",
     "inputi",
@@ -67,6 +68,17 @@ impl SemanticGen {
                     sem_type: SemanticType::new(SemanticTypeKind::Void),
                     kind: SemanticExpressionKind::BuiltinFunctionCall {
                         function: BuiltinFunction::PrintInteger,
+                        args: arg_exprs,
+                    },
+                    ownership: Ownership::Trivial,
+                })
+            }
+            "printd" => {
+                self.check_args("printd", &arg_exprs, &[SemanticType::new(SemanticTypeKind::Float)])?;
+                Ok(SemanticExpression {
+                    sem_type: SemanticType::new(SemanticTypeKind::Void),
+                    kind: SemanticExpressionKind::BuiltinFunctionCall {
+                        function: BuiltinFunction::PrintFloat,
                         args: arg_exprs,
                     },
                     ownership: Ownership::Trivial,

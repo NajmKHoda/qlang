@@ -8,13 +8,14 @@ pub(super) enum ColumnType {
     Integer,
     Bool,
     String,
-    // Real
+    Real,
 }
 
 impl From<&SemanticType> for ColumnType {
     fn from(sem_type: &SemanticType) -> Self {
         match sem_type.kind() {
             SemanticTypeKind::Integer => ColumnType::Integer,
+            SemanticTypeKind::Float => ColumnType::Real,
             SemanticTypeKind::Bool => ColumnType::Bool,
             SemanticTypeKind::String => ColumnType::String,
             _ => panic!("Unsupported column type in semantic IR"),

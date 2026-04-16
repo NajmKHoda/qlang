@@ -4,7 +4,7 @@ use inkwell::context::Context;
 use inkwell::module::Module;
 use inkwell::builder::Builder;
 use inkwell::targets::{FileType, Target, TargetMachine};
-use inkwell::types::{IntType, PointerType, StructType, VoidType};
+use inkwell::types::{FloatType, IntType, PointerType, StructType, VoidType};
 use inkwell::values::{AnyValue, FunctionValue, GlobalValue, PointerValue};
 
 use crate::semantics::{SemanticExpression, SemanticExpressionKind, SemanticProgram, SemanticStatement, SemanticType, SemanticTypeKind};
@@ -145,6 +145,7 @@ impl<'ctxt> CodeGen<'ctxt> {
     }
 
     fn int_type(&self) -> IntType<'ctxt> { self.context.i32_type() }
+    fn float_type(&self) -> FloatType<'ctxt> { self.context.f64_type() }
     fn bool_type(&self) -> IntType<'ctxt> { self.context.bool_type() }
     fn ptr_type(&self) -> PointerType<'ctxt> { self.context.ptr_type(Default::default()) }
     fn void_type(&self) -> VoidType<'ctxt> { self.context.void_type() }
@@ -225,6 +226,9 @@ impl<'ctxt> CodeGen<'ctxt> {
         match &expr.kind {
             SemanticExpressionKind::IntegerLiteral(value) => {
                 Ok(GenValue::Integer(self.int_type().const_int(*value as u64, false)))
+            },
+            SemanticExpressionKind::FloatLiteral(value) => {
+                Ok(GenValue::Float(self.float_type().const_float(*value)))
             },
             SemanticExpressionKind::BoolLiteral(value) => {
                 Ok(GenValue::Bool(self.bool_type().const_int(*value as u64, false)))

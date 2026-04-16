@@ -50,6 +50,7 @@ pub struct SemanticExpression {
 
 pub enum SemanticExpressionKind {
     IntegerLiteral(i32),
+    FloatLiteral(f64),
     BoolLiteral(bool),
     StringLiteral(String),
     Struct(HashMap<String, SemanticExpression>),
@@ -115,6 +116,7 @@ pub enum SemanticExpressionKind {
 pub enum BuiltinFunction {
     PrintString,
     PrintInteger,
+    PrintFloat,
     PrintBool,
     InputInteger,
     InputString,
