@@ -315,10 +315,12 @@ impl Display for SemanticError {
                 write!(f, "Expected {} row in INSERT, got {} instead", table_name, found_type)
             }
             SemanticError::QueryInNonFailableFunction { function_name } => {
-                write!(f, "Function {} must be declared failable because it contains a query expression", function_name)
+                write!(f, "Query in non-failable function {}.
+                    Either mark the function as failable or wrap the query in a transaction block.", function_name)
             }
             SemanticError::FailableCallInNonFailableFunction { caller_name, callee_name } => {
-                write!(f, "Function {} must be declared failable because it calls failable function {}", caller_name, callee_name)
+                write!(f, "Call to failable function {} from non-failable function {}.
+                    Either mark the function as failable or wrap the query in a transaction block.", callee_name, caller_name)
             }
             SemanticError::NonBoolCondition { found_type } => {
                 write!(f, "Condition expression must be of boolean type, found {}", found_type)

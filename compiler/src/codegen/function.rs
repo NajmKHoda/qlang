@@ -65,7 +65,7 @@ impl<'ctxt> CodeGen<'ctxt> {
 		Ok(())
 	}
 
-	pub(super) fn gen_failable_error_return(&self, error_drops: &[u32]) -> Result<(), CodeGenError> {
+	fn gen_failable_error_return(&self, error_drops: &[u32]) -> Result<(), CodeGenError> {
 		self.gen_error_drops(error_drops)?;
 
 		let return_type = self.cur_executable_return_type();

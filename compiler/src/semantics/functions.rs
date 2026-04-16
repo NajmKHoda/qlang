@@ -332,7 +332,7 @@ impl SemanticGen {
             let var_id = var.id;
             let var_type = &var.sem_type.clone();
             if let SemanticTypeKind::Callable { is_failable, param_types, ret_type } = var_type.kind() {
-                if is_failable && !self.cur_function_is_failable() {
+                if is_failable && !self.cur_environment_is_failable() {
                     return Err(SemanticError::FailableCallInNonFailableFunction {
                         caller_name: self.cur_executable_name(),
                         callee_name: name.to_string(),
@@ -367,7 +367,7 @@ impl SemanticGen {
                 })
             }
         } else if let Some(func) = self.functions.get_by_name(name) {
-            if func.is_failable && !self.cur_function_is_failable() {
+            if func.is_failable && !self.cur_environment_is_failable() {
                 return Err(SemanticError::FailableCallInNonFailableFunction {
                     caller_name: self.cur_executable_name(),
                     callee_name: func.name.clone(),

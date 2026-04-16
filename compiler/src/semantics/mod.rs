@@ -312,12 +312,15 @@ impl SemanticGen {
         }
     }
 
-    pub(super) fn cur_function_is_failable(&self) -> bool {
-        match self.cur_function {
+    pub(super) fn cur_environment_is_failable(&self) -> bool {
+        let executable_is_failable = match self.cur_function {
             Some(Executable::Function(id)) => self.functions[id].is_failable,
             Some(Executable::Closure(id)) => self.closures[&id].is_failable,
             None => false,
-        }
+        };
+
+        executable_is_failable
+            || self.scopes.iter().any(|s| matches!(s.scope_type, SemanticScopeType::Transaction(_)))
     }
 
     pub(super) fn cur_error_drops(&self) -> Vec<u32> {

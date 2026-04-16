@@ -556,7 +556,7 @@ impl SemanticGen {
     }
 
     pub(super) fn eval_immediate_query(&mut self, query: &QueryNode) -> Result<SemanticExpression, SemanticError> {
-        if !self.cur_function_is_failable() {
+        if !self.cur_environment_is_failable() {
             return Err(SemanticError::QueryInNonFailableFunction {
                 function_name: self.cur_executable_name(),
             });
@@ -584,7 +584,7 @@ impl SemanticGen {
         parameters: &[TypedQNameNode],
         query: &QueryNode
     ) -> Result<SemanticExpression, SemanticError> {
-        if !self.cur_function_is_failable() {
+        if !self.cur_environment_is_failable() {
             return Err(SemanticError::QueryInNonFailableFunction {
                 function_name: self.cur_executable_name(),
             });

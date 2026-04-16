@@ -244,7 +244,7 @@ impl<'ctxt> CodeGen<'ctxt> {
 			self.builder.build_conditional_branch(stmt_is_null, prep_failed_block, prep_ok_block)?;
 
 			self.builder.position_at_end(prep_failed_block);
-			self.gen_failable_error_return(error_drops)?;
+			self.gen_failable_check(stmt_is_null, error_drops)?;
 
 			self.builder.position_at_end(prep_ok_block);
             self.builder.build_call(
