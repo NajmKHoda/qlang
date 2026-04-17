@@ -3,9 +3,9 @@
 **QLang is a compiled, statically typed, and database-centric programming language** that combines general-purpose control flow with first-class SQL-like query expressions.
 
 This repository contains:
-- `compiler/`: parser, semantic analysis, and code generation.
-- `runtime/`: C runtime used by generated programs.
-- `main.ql`: sample entrypoint program.
+- [`compiler/`](compiler/): parser, semantic analysis, and code generation.
+- [`runtime/`](runtime/): C runtime used by generated programs.
+- [`main.ql`](main.ql): sample QLang program.
 
 ## High-Level Overview
 
