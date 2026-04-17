@@ -19,7 +19,7 @@ Errors can be caused by immediate queries, parameterized queries, or calls to fa
 
 ## Examples
 
-```js
+```ql
 function transfer() -> void {
     transaction {
         // Let's assume this fails.

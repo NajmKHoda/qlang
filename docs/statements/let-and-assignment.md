@@ -19,7 +19,7 @@ Use `let` to introduce a local variable. Type annotations are optional when the 
 ## Examples
 
 Example 1:
-```js
+```ql
 function main() -> int {
     let x: int = 10;
     x = x + 5;
@@ -34,7 +34,7 @@ Expected output:
 ```
 
 Example 2:
-```js
+```ql
 function main() -> int {
     let x = [];
 }

@@ -2,15 +2,24 @@
 
 ## Syntax
 
-```ql
-<iter_expr>.has_next()
-<iter_expr>.next()
-<iter_expr>.collect()
+```c++
+bool iter<T>.has_next()
+
+T iter<T>.next()
+
+T[] iter<T>.collect()
 ```
 
 ## Explanation
 
-Iterators support pull-based traversal and materialization into arrays. These methods are key for loops and composable collection pipelines.
+Iterators support pull-based traversal and materialization into arrays.
+These methods are key for loops and composable collection pipelines.
+
+- `has_next()` returns `true` if and only if the iterator is not exhausted.
+    It is a good idea to check this before every call to `next()`.
+- `next()` returns the iterator's next element. If the iterator is exhausted, this will panic.
+- `collect()` places the iterator's remaining elements into an array.
+    This will always exhaust the iterator (unless it is infinite, in which case this will stall indefinitely).
 
 ## Examples
 

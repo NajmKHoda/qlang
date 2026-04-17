@@ -2,16 +2,30 @@
 
 ## Syntax
 
-```ql
-<QName> "(" <Comma<Expression>> ")"
-<Expression> "." <QName> "(" <Comma<Expression>> ")"
-<Expression> "." <QName>
-<Expression> "[" <Expression> "]"
+```rs
+// Function call
+QName "(" [Expression{"," Expression}] ")"
+
+// Method calls
+Expression "." QName "(" [Expression{"," Expression}] ")"
+
+// Field access
+Expression "." QName
+
+// Array indexing
+Expression "[" Expression "]"
 ```
 
 ## Explanation
 
-QLang supports direct function calls, method calls on receivers, field access, and indexing expressions. Methods include builtin array/iterator methods and can be chained.
+QLang supports:
+- Direct function calls
+- Indirect calls on closure expressions
+- Method calls on receivers
+- Field access on structs
+- Indexing expressions for arrays.
+
+Methods include builtin array/iterator methods and can be sometimes be chained.
 
 ## Examples
 

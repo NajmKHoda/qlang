@@ -1,5 +1,9 @@
 # Builtins
 
-- [`functions.md`](functions.md)
-- [`array-methods.md`](array-methods.md)
-- [`iterator-methods.md`](iterator-methods.md)
+These are the built-in functions and methods that come with QLang.
+
+[**Builtin Functions**](functions.md)
+
+[**Array Methods**](array-methods.md)
+
+[**Iterator Methods**](iterator-methods.md)

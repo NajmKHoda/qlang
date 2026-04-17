@@ -23,7 +23,7 @@
 
 ## Examples
 
-```js
+```ql
 function main() -> int {
     let i: int = 0;
     while i < 10 {

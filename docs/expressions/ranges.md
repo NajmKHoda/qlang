@@ -2,18 +2,24 @@
 
 ## Syntax
 
-```ql
-irange(<start>..<end>)
-irange(<start>..=<end>)
-irange(..<end>)
-irange(<start>..)
-irange(..)
-irange(<start>..<end>:<step>)
+```rs
+"irange" "(" RangeEndpoints [":" c] ")"
+
+RangeEndpoints ::=
+    a ".." b  |  // [a, b)
+    a "..=" b |  // [a, b]
+    ".." b    |  // [0, b)
+    a ".."    |  // [a, infinity)
+    ".."         // [0, infinity)
+
+a : Expression
+b : Expression
+c : Expression
 ```
 
 ## Explanation
 
-`irange(...)` builds a range expression with optional start, end, inclusive end marker (`..=`), and optional step. Ranges are represented in IR as `Range { start, end, inclusive, step }`.
+`irange()` builds a range expression with optional start `a`, end `b`, inclusive end marker (`..=`), and optional step `c`. It has a type of `iter<int>` and can thus be treated as an iterator.
 
 ## Examples
 

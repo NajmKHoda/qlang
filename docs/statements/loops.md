@@ -20,7 +20,7 @@ QLang supports condition-based loops (`while`) and iteration-based loops (`for .
 ## Examples
 
 Example 1:
-```js
+```ql
 function main() -> int {
     let i: int = 0;
     while i < 3 {
@@ -39,7 +39,7 @@ Expected output:
 ```
 
 Example 2:
-```js
+```ql
 function main() -> int {
     let arr: int[] = [ 1, 2, 3 ];
     for number in arr {

@@ -2,15 +2,20 @@
 
 ## Syntax
 
-```ql
-not <Expression>
-<Expression> and <Expression>
-<Expression> or <Expression>
+```rs
+// Logical NOT
+"not" Expression
+
+// Logical AND
+Expression "and" Expression
+
+// Logical OR
+Expression "or" Expression
 ```
 
 ## Explanation
 
-Logical operators compose boolean expressions used in conditionals, loops, and query filters. In IR, these map to `LogicalNot`, `LogicalAnd`, and `LogicalOr`.
+Logical operators compose boolean expressions used in conditionals, loops, and query filters.
 
 ## Examples
 

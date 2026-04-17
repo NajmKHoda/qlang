@@ -16,7 +16,7 @@ QLang conditionals are C-like and support chained `else if` branches plus an opt
 
 ## Examples
 
-```js
+```ql
 function main() -> int {
     let n: int = 7;
 

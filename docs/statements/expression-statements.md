@@ -12,7 +12,7 @@ This simply evaluates the given expression and does nothing with the result. Thi
 
 ## Examples
 
-```js
+```ql
 function main() -> int {
     "dummy string";
     67;

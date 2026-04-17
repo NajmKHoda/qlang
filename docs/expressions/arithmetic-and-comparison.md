@@ -2,23 +2,28 @@
 
 ## Syntax
 
-```ql
-<Expression> "+" <Expression>
-<Expression> "-" <Expression>
-<Expression> "*" <Expression>
-<Expression> "/" <Expression>
-<Expression> "%" <Expression>
-<Expression> "==" <Expression>
-<Expression> "!=" <Expression>
-<Expression> ">" <Expression>
-<Expression> "<" <Expression>
-<Expression> ">=" <Expression>
-<Expression> "<=" <Expression>
+```rs
+// Arithmetic operations
+Expression "+" Expression // int, float, string
+Expression "-" Expression // int, float
+Expression "*" Expression // int, float
+Expression "/" Expression // int, float
+Expression "%" Expression // int
+
+// Comparison operations
+Expression "==" Expression
+Expression "!=" Expression
+Expression ">" Expression
+Expression "<" Expression
+Expression ">=" Expression
+Expression "<=" Expression
 ```
 
 ## Explanation
 
-Arithmetic operators produce numeric results. Comparison operators produce `bool`. Operator precedence is defined in the grammar and reflected directly in expression IR variants such as `Add`, `Multiply`, and `Compare`.
+If the type of both operands is `T`, arithmetic operators produce a value of type `T` (assuming `T` is supported for the operation). Comparison operators produce `bool`.
+
+Addition with strings is defined as concatenation.
 
 ## Examples
 

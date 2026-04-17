@@ -2,20 +2,28 @@
 
 ## Syntax
 
-```ql
-prints(str)
-printi(int)
-printd(float)
-printb(bool)
-inputs()
-inputi()
-zip(iter<T>, iter<T>)
-concat(iter<T>, iter<T>)
+```c++
+void prints(str);
+void printi(int);
+void printd(float);
+void printb(bool);
+
+str inputs();
+int inputi();
+
+iter<T> zip(iter<T>, iter<T>);
+iter<T> concat(iter<T>, iter<T>);
 ```
 
 ## Explanation
 
-Builtin functions are resolved by name during semantic analysis. Current builtin set includes I/O helpers (`print*`, `input*`) and iterator combinators (`zip`, `concat`).
+Current builtin set includes I/O helpers (`print*`, `input*`) and iterator combinators (`zip`, `concat`).
+
+- The `print*()` family of builtins prints the respective datatype to standard output.
+- The `input*()` family of builtins accepts the respective datatype from standard input and returns it.
+- `zip()` returns a new iterator that alternates between the first and second given iterators.
+    If one iterator runs out, it only takes from the other iterator.
+- `concat()` returns a new iterator that moves through the first iterator, then the second after the first is exhausted.
 
 ## Examples
 

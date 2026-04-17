@@ -2,22 +2,22 @@
 
 ## Syntax
 
-```ql
-["failable"] lambda "(" <params:Comma<TypedQName>> ")"
-["->" <TypeName>] "{" <ClosureBody> "}"
+```rs
+["failable"] "lambda"
+"(" [QName ":" Typename {"," QName ":" Typename}] ")"
+["->" Typename]
+"{" ( Expression | {Statement} ) "}"
 ```
 
 ## Explanation
 
 Closures are first-class callable values. They can be marked `failable`, can optionally declare a return type, and may use an expression body or statement body.
 
-The semantic IR models closures as `Closure { closure_id, ... }` expressions with callable types.
-
 ## Examples
 
 ```ql
 function main() -> int {
-    let twice: (int) -> int = lambda (x: int) -> int { x * 2 };
+    let twice: (int) -> int = lambda(x: int) { x * 2 };
     printi(twice(21));
     return 0;
 }

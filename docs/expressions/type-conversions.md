@@ -2,13 +2,20 @@
 
 ## Syntax
 
-```ql
-<int|float|bool|str>(<value:Expression>)
+```rs
+("int" | "float" | "bool" | "str") "(" Expression ")"
 ```
 
 ## Explanation
 
-Primitive conversion syntax is function-like and represented in IR as `Conversion(value, target_type)` / semantic `Convert`. Use conversions when you want explicit intent around numeric and string coercions.
+QLang only supports explicit conversions from a primitive datatype to another primitive datatype. Conversion syntax is function-like. QLang does not support implicit coercions. A summary table of conversion rules can be found below:
+
+|      | to `int` | to `float` | to `bool` | to `string` |
+|------|--------|---------|--------|-----------|
+| from `int`| Identity | `x` -> `x.0` | `0` -> `false`, otherwise `true`  | Decimal representation |
+| from `float` | Round | Identity | `0.0` -> `false`, otherwise `true`| Decimal representation |
+| from `bool` | `true` -> `1`, `false` -> `0`| `true` -> `1.0`, `false` -> `0.0` | Identity | `true` -> `"true"`, `false` -> `"false"`|
+| from `string` | `0` if parsing fails, otherwise decimal-parsed integer | `0.0` if parsing fails, otherwise decimal-parsed float | `""` -> `false`, otherwise `true` | Identity |
 
 ## Examples
 

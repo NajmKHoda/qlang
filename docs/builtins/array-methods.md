@@ -2,16 +2,24 @@
 
 ## Syntax
 
-```ql
-<array_expr>.length()
-<array_expr>.append(value)
-<array_expr>.pop()
-<array_expr>.iter()
+```c++
+int T[].length();
+
+void T[].append(T);
+
+T T[].pop();
+
+iter<T> T[].iter();
 ```
 
 ## Explanation
 
-Arrays expose builtin methods for size introspection, mutation, and iterator conversion. The semantic layer resolves these as builtin method calls.
+Arrays expose builtin methods for size introspection, mutation, and iterator conversion.
+
+- `Array.length()` returns the number of items in the array.
+- `Array.append(x)` appends the value of expression `x` to the end of the array.
+- `Array.pop()` removes the element at the end of the array and returns it.
+- `Array.iter()` returns an iterator over the array's elements.
 
 ## Examples
 

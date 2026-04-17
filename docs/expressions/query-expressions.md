@@ -2,29 +2,54 @@
 
 ## Syntax
 
-```ql
-query { <Query> }
-query(<parameters:Comma<TypedQName>>) { <Query> }
+```rs
+// Immediate query
+"query" "{" Query "}"
+
+// Parameterized query
+"query" "(" [QName ":" Typename{"," QName ":" Typename}] ")"
+"{" Query "}"
 ```
 
 ## Explanation
 
-Queries are expressions, not standalone top-level declarations. QLang supports immediate queries and parameterized query expressions. These are represented in IR as `ImmediateQuery` and `ParameterizedQuery`.
+Queries are expressions, not standalone top-level declarations. QLang supports *immediate queries* (which execute immediately) and *parameterized queries* (which are stored to be called later). Parameterized queries use prepared statements under the hood for optimal performance.
 
 ## Examples
 
 ```ql
-function get_all_users() -> void {
-    let q = query {
-        select all from Users
+datasource data;
+
+table User from data {
+    name: str
+}
+
+failable function get_all_users() -> void {
+    let user_iter: iter<User> = query { select all from User };
+    let users: User[] = user_iter.collect();
+
+    let insertUser = query(_name: str) {
+        insert { name: _name }
+        into User
     };
-    q;
+
+    for parent in users {
+        let son_name = "son of " + parent.name;
+        prints(parent.name);
+        prints(son_name);
+        insertUser(son_name);
+    }
 }
 ```
 
 Expected output:
 ```text
-(no direct stdout unless printed)
+Umar
+son of Umar
+John Doe
+son of John Doe
+Dwayne Johnson
+son of Dwayne Johnson
 ```
 
 ## See Also
