@@ -67,7 +67,6 @@ void __ql__QLCallable_drop(QLCallable** callable_ptr) {
     QLCallable* callable = *callable_ptr;
     callable->ref_count--;
     if (callable->ref_count == 0) {
-        fprintf(stderr, "free(callable %d)\n", callable->type);
         switch (callable->type) {
             case CALLABLE_SELECT: 
                 __ql__QLIterator_drop((QLIterator**)&callable->prepared_stmt);

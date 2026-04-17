@@ -84,7 +84,6 @@ bool __ql__db_savepoint(unsigned int savepoint_id) {
 bool __ql__db_release_savepoint(unsigned int savepoint_id) {
     char sql[MAX_SQL_LENGTH];
     sprintf(sql, "RELEASE SAVEPOINT s%u;", savepoint_id);
-    fprintf(stderr, "release savepoint %u\n", savepoint_id);
     return __ql__exec_sql(sql);
 }
 

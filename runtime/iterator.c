@@ -67,7 +67,6 @@ void __ql__QLIterator_drop(QLIterator** iter_ptr) {
         } else {
             free(iter);
         }
-        fprintf(stderr, "free(QLIterator)\n");
     }
 }
 

@@ -75,5 +75,4 @@ void __ql__PreparedInsert_finalize(PreparedInsert* prepared_insert) {
 
     sqlite3_finalize(prepared_insert->stmt);
     free(prepared_insert);
-    fprintf(stderr, "finalize PreparedInsert\n");
 }

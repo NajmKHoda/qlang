@@ -46,7 +46,6 @@ void __ql__QLString_drop(QLString** str_ptr) {
     QLString* str = *str_ptr;
     str->ref_count--;
     if (str->ref_count == 0) {
-        fprintf(stderr, "free(\"%.*s\")\n", str->length, str->raw_string);
         if (!str->is_global) {
             free(str->raw_string);
         }

@@ -58,7 +58,6 @@ void __ql__QLArray_drop(QLArray** array_ptr) {
         }
         free(array->elems);
         free(array);
-        fprintf(stderr, "free(array %p)\n", (void*)array);
     }
 }
 
