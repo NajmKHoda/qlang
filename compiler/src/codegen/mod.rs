@@ -136,11 +136,6 @@ impl<'ctxt> CodeGen<'ctxt> {
         self.builder.build_call(self.runtime.close_dbs, &[], "close_dbs")?;
         self.builder.build_return(Some(&main_ret_val))?;
 
-        if let Err(msg) = self.module.print_to_file("out/main.debug") {
-            eprintln!("Failed to write debug LLVM IR: {}", msg);
-        }
-
-        self.module.verify().map_err(|e| CodeGenError::ModuleVerificationError(e))?;
         Ok(self.module)
     }
 
@@ -315,7 +310,7 @@ impl<'ctxt> CodeGen<'ctxt> {
         }
     }
 
-    pub fn gen_code(program: &SemanticProgram) -> Result<(), CodeGenError> {
+    pub fn gen_code(program: &SemanticProgram, out_path: &Path) -> Result<(), CodeGenError> {
         let context = Context::create();
         let builder = context.create_builder();
         let module = context.create_module("main");
@@ -356,8 +351,13 @@ impl<'ctxt> CodeGen<'ctxt> {
         };
 
         let module = codegen._gen_code()?;
-        let path = Path::new("out/main.o");
-        target_machine.write_to_file(&module, FileType::Object, path)
-            .map_err(|_| CodeGenError::TargetMachineWriteError)
+        if let Err(msg) = module.print_to_file(&out_path.join("main.debug")) {
+            eprintln!("Failed to write debug LLVM IR: {}", msg);
+        }
+
+        module.verify()
+            .map_err(|e| CodeGenError::ModuleVerificationError(e))?;
+        target_machine.write_to_file(&module, FileType::Object, &out_path.join("main.o"))
+            .map_err(|e| CodeGenError::TargetMachineWriteError(e))
     }
 }

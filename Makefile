@@ -1,5 +1,4 @@
 CC=clang
-DEBUG=true
 RUNTIME_OBJ=./out/runtime.o
 RUNTIME_SRC=$(shell find ./runtime -name '*.c')
 RUNTIME_HEADERS=$(shell find ./runtime -name '*.h')
@@ -10,13 +9,13 @@ PROGRAM_OBJ=./out/main
 ARGS ?=
 
 ifeq ($(DEBUG),true)
-	COMPILER_OBJ=./compiler/target/debug/db-lang
+	COMPILER_OBJ=./compiler/target/debug/qlang
 else
-	COMPILER_OBJ=./compiler/target/release/db-lang
+	COMPILER_OBJ=./compiler/target/release/qlang
 endif
 
 .DEFAULT_GOAL := all
-all: $(PROGRAM_OBJ)
+all: $(COMPILER_OBJ) $(RUNTIME_OBJ)
 
 $(PROGRAM_OBJ): $(PROGRAM_SRC) $(COMPILER_OBJ) $(RUNTIME_OBJ)
 	@$(COMPILER_OBJ) $(PROGRAM_SRC) $(PROGRAM_OBJ)
