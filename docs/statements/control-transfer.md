@@ -2,21 +2,28 @@
 
 ## Syntax
 
-```ql
-return <Expression?>;
-break <QName?>;
-continue <QName?>;
+```rs
+// Return
+"return" [Expression] ";"
+
+// Break
+"break" [QName] ";"
+
+// Continue
+"continue" [QName] ";"
 ```
 
 ## Explanation
 
-`return` exits the current function and may return a value. `break` and `continue` affect loop flow and may optionally target a labeled loop.
+`return` exits the current function. A return expression is supplied *if and only if* the function's return type is non-`void`.
 
-In semantic IR, these map to explicit control-flow statements (`Return`, `Break`, `Continue`).
+`break` exits the loop with the given label, or the innermost loop if no label is provided. This is only valid within a loop.
+
+`continue` immediately moves to the next iteration of the loop with the given label, or the innermost loop if no label is provided. This is only valid within a loop.
 
 ## Examples
 
-```ql
+```js
 function main() -> int {
     let i: int = 0;
     while i < 10 {

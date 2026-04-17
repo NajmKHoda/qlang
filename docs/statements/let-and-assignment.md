@@ -2,20 +2,24 @@
 
 ## Syntax
 
-```ql
-"let" <name:QName> <var_type:(":" <TypeName>)?> "=" <init_expr:Expression> ";"
-<name:QName> "=" <expr:Expression> ";"
+```rs
+// Variable declaration
+"let" QName [":" TypeName] "=" Expression ";"
+
+// Variable assignment
+QName "=" Expression ";"
 ```
 
 ## Explanation
 
-Use `let` to introduce a local variable. Type annotations are optional when the initializer is sufficient for inference, but explicit types are useful for readability and stricter intent. Assignment updates an existing variable.
+Use `let` to introduce a local variable. Type annotations are optional when the initializer is sufficient for inference of a concrete type, but explicit types are useful for readability and stricter intent. Assignment updates an existing variable.
 
-See also: variable declarations in semantic IR (`VariableDeclaration`, `VariableAssignment`).
+
 
 ## Examples
 
-```ql
+Example 1:
+```js
 function main() -> int {
     let x: int = 10;
     x = x + 5;
@@ -27,6 +31,18 @@ function main() -> int {
 Expected output:
 ```text
 15
+```
+
+Example 2:
+```js
+function main() -> int {
+    let x = [];
+}
+```
+
+Expected error:
+```text
+Variable x has an ambiguous type: any[]
 ```
 
 ## See Also

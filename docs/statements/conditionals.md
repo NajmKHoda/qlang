@@ -2,19 +2,21 @@
 
 ## Syntax
 
-```ql
-if <condition:Expression> { <Statement*> }
-else if <condition:Expression> { <Statement*> }
-else { <Statement*> }
+```rs
+"if" Expression "{" {Statement} "}"
+{ "else" "if" Expression "{" {Statement} "}" }
+[ "else" "{" {Statement} "}" ]
 ```
 
 ## Explanation
 
-QLang conditionals are statement-oriented and support chained `else if` branches plus an optional `else` fallback. Conditions must be boolean expressions.
+QLang conditionals are C-like and support chained `else if` branches plus an optional `else` fallback.
+- Condition expressions must be of type `bool`.
+- No parenthesis are required for the condition expression.
 
 ## Examples
 
-```ql
+```js
 function main() -> int {
     let n: int = 7;
 

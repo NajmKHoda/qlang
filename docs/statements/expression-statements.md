@@ -1,19 +1,22 @@
-# Expression Statements
+# Lone Expression Statements
 
 ## Syntax
 
-```ql
-<Expression> ";"
+```rs
+Expression ";"
 ```
 
 ## Explanation
 
-Any expression can be used as a statement when its result is not bound. This is common for function/method calls and query expressions that are executed for side effects.
+This simply evaluates the given expression and does nothing with the result. This is common for function/method calls and query expressions that are executed for side effects.
 
 ## Examples
 
-```ql
+```js
 function main() -> int {
+    "dummy string";
+    67;
+    true;
     prints("hello from expression statement");
     return 0;
 }
