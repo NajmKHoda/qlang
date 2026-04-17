@@ -39,6 +39,6 @@ small odd
 
 ## See Also
 
-- [`loops.md`](loops.md)
-- [`../expressions/logical-operators.md`](../expressions/logical-operators.md)
-- [`../expressions/arithmetic-and-comparison.md`](../expressions/arithmetic-and-comparison.md)
+- [Loops](loops.md)
+- [Logical Operators](../expressions/logical-operators.md)
+- [Arithmetic and Comparison](../expressions/arithmetic-and-comparison.md)

@@ -2,16 +2,15 @@
 
 ## Syntax
 
-```ql
-["failable"] function <name:QName>
-"(" <params:Comma<TypedQName>> ")"
-"->" <return_type:TypeName>
-"{" <body:Statement*> "}"
+```rs
+["failable"] "function" QName "(" [QName ":" Typename{"," QName ":" Typename}] ")"
+"->" Typename
+"{" {Statement} "}"
 ```
 
 ## Explanation
 
-Functions are top-level declarations with explicit return types. `main` is the conventional entrypoint and is validated by semantic analysis (signature constraints are enforced).
+Functions are top-level declarations with explicit return types. `main` is the conventional entrypoint and must have the signature `function main() -> int`.
 
 Functions can call builtins, execute queries, and use all statement/expression forms.
 
@@ -35,6 +34,6 @@ Expected output:
 
 ## See Also
 
-- [`../types/callables.md`](../types/callables.md)
-- [`../expressions/calls.md`](../expressions/calls.md)
-- [`../statements/control-transfer.md`](../statements/control-transfer.md)
+- [Callable Types](../types/callables.md)
+- [Function and Method Calls](../expressions/calls.md)
+- [Return, Break, and Continue](../statements/control-transfer.md)

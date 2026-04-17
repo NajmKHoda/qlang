@@ -64,6 +64,22 @@ qlang main.ql main
 
 Huzzah! You can now compile and run QLang programs on your system.
 
+## Tech Stack
+
+### Compiler
+
+- The [QLang compiler](compiler/) is written in **Rust**. Rust was chosen for its rigid typing system, memory safety, and incredibly fast performance.
+
+- Parsing is done with [LALRPOP](https://github.com/lalrpop/lalrpop), a parser generator framework for Rust. Check out QLang's [grammar specification](compiler/src/grammar.lalrpop)!
+
+- QLang's backend is entirely handled by [LLVM](https://llvm.org/). Codegen uses [Inkwell](https://github.com/TheDan64/inkwell), a strongly-typed LLVM wrapper for Rust, to build IR. 
+
+### Runtime
+
+- The [QLang runtime](runtime/) is written in **C**. This allows compiled QLang programs to easily link with runtime object modules and access runtime function code.
+
+- Last but definitely not least, the QLang runtime uses [SQLite](https://sqlite.org/index.html) (specifically, the [`sqlite3` C API](https://sqlite.org/c3ref/intro.html)) to perform database operations. SQLite is a lightweight implementation of SQL that primarily operates on local files. In the future, I hope to add support for PostgreSQL and MongoDB databases.
+
 ## Documentation
 
 Come check out QLang's detailed [documentation](docs/README.md)!

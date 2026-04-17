@@ -3,12 +3,12 @@
 ## Syntax
 
 ```ql
-insert <data_expr:Expression> into <table_name:ProperQName>
+"insert" Expression "into" ProperQName
 ```
 
 ## Explanation
 
-`insert` takes an expression value and inserts it into a target table. The inserted expression typically matches table column structure through named struct compatibility.
+`insert` takes an expression value and inserts it into a target table. If `T` is the target table's type, the expression can be of types `T` (for a single row) or `T[]` (for multiple rows at once).
 
 ## Examples
 
@@ -18,13 +18,8 @@ query {
 };
 ```
 
-Expected output:
-```text
-(no direct stdout unless printed)
-```
-
 ## See Also
 
-- [`update.md`](update.md)
-- [`delete.md`](delete.md)
-- [`../types/structs.md`](../types/structs.md)
+- [Update Query](update.md)
+- [Delete Query](delete.md)
+- [Struct Types](../types/structs.md)

@@ -2,13 +2,24 @@
 
 ## Syntax
 
-```ql
-Program := Datasource* Table* Struct* Function*
+```rs
+Program ::=
+    {Datasource}
+    {Table}
+    {Struct}
+    {Function}
 ```
 
 ## Explanation
 
-A QLang program is composed of declarations followed by function definitions. The parser models this as `ProgramNode` with four ordered groups: datasources, tables, structs, and functions.
+A QLang program is composed of four types of declarations in this order:
+
+- [Datasources](datasource-and-table.md): external storage handlers.
+- [Tables](datasource-and-table.md): records within datasources.
+- [Structs](../types/structs.md): records without associated datasources.
+- [Functions](functions.md): executable code.
+
+ All QLang programs must have a `main` function.
 
 ## Examples
 
@@ -31,6 +42,6 @@ Expected output:
 
 ## See Also
 
-- [`datasource-and-table.md`](datasource-and-table.md)
-- [`../types/structs.md`](../types/structs.md)
-- [`../statements/control-transfer.md`](../statements/control-transfer.md)
+- [Datasources and Tables](datasource-and-table.md)
+- [Struct Types](../types/structs.md)
+- [Return, Break, and Continue](../statements/control-transfer.md)

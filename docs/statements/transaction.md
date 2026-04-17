@@ -41,6 +41,6 @@ rollback executed
 
 ## See Also
 
-- [`../queries/update.md`](../queries/update.md)
-- [`../misc/failable-semantics.md`](../misc/failable-semantics.md)
-- [`control-transfer.md`](control-transfer.md)
+- [Update Query](../queries/update.md)
+- [Failable Semantics](../misc/failable-semantics.md)
+- [Return, Break, and Continue](control-transfer.md)

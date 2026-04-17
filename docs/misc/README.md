@@ -1,7 +1,11 @@
-# Misc
+# Miscellaneous
 
-- [`program-structure.md`](program-structure.md)
-- [`functions.md`](functions.md)
-- [`datasource-and-table.md`](datasource-and-table.md)
-- [`failable-semantics.md`](failable-semantics.md)
-- [`naming-and-identifiers.md`](naming-and-identifiers.md)
+[**Program Structure**](program-structure.md)
+
+[**Functions**](functions.md)
+
+[**Datasources and Tables**](datasource-and-table.md)
+
+[**Failable Semantics**](failable-semantics.md)
+
+[**Identifiers and Naming**](naming-and-identifiers.md)

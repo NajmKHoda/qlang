@@ -30,6 +30,6 @@ Expected output:
 
 ## See Also
 
-- [`calls.md`](calls.md)
-- [`../types/callables.md`](../types/callables.md)
-- [`../misc/failable-semantics.md`](../misc/failable-semantics.md)
+- [Function and Method Calls](calls.md)
+- [Callable Types](../types/callables.md)
+- [Failable Semantics](../misc/failable-semantics.md)

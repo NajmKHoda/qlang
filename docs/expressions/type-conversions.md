@@ -35,6 +35,6 @@ Expected output:
 
 ## See Also
 
-- [`arithmetic-and-comparison.md`](arithmetic-and-comparison.md)
-- [`../types/primitives.md`](../types/primitives.md)
-- [`../statements/let-and-assignment.md`](../statements/let-and-assignment.md)
+- [Arithmetic and Comparison](arithmetic-and-comparison.md)
+- [Primitive Types](../types/primitives.md)
+- [Let Declarations and Assignment](../statements/let-and-assignment.md)

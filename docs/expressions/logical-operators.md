@@ -41,6 +41,6 @@ true
 
 ## See Also
 
-- [`arithmetic-and-comparison.md`](arithmetic-and-comparison.md)
-- [`../statements/conditionals.md`](../statements/conditionals.md)
-- [`../queries/select.md`](../queries/select.md)
+- [Arithmetic and Comparison](arithmetic-and-comparison.md)
+- [Conditional Statements](../statements/conditionals.md)
+- [Select Query](../queries/select.md)

@@ -2,14 +2,13 @@
 
 ## Syntax
 
-```ql
-<QColumn> ::= <TableName> "." <column_name> | <column_name>
-<TableAlias> ::= "as" <Alias>
+```rs
+ColumnRef ::= [ProperQName "."] QName
 ```
 
 ## Explanation
 
-A query column can be qualified (`Users.id`) or unqualified (`id`) depending on ambiguity and context. Table aliases introduced with `as` improve readability in joins and large queries.
+In `SELECT` statements, a column reference can be qualified by table alias (`Users.id`) or unqualified (`id`) depending on ambiguity and context. Table aliases introduced with `as` improve readability in joins and large queries.
 
 ## Examples
 
@@ -22,13 +21,8 @@ query {
 };
 ```
 
-Expected output:
-```text
-(no direct stdout unless printed)
-```
-
 ## See Also
 
-- [`select.md`](select.md)
-- [`../expressions/query-expressions.md`](../expressions/query-expressions.md)
-- [`../misc/datasource-and-table.md`](../misc/datasource-and-table.md)
+- [Select Query](select.md)
+- [Query Expressions](../expressions/query-expressions.md)
+- [Datasources and Tables](../misc/datasource-and-table.md)

@@ -2,22 +2,23 @@
 
 ## Syntax
 
-```ql
-select <StructName> { <field_alias:QColumn>, ... }
-from <RootTable> [as <Alias>]
-[join <RightTable> [as <Alias>] on <QColumn> == <column_name>]*
-[where <QColumn> == <Expression>]
-[limit <Expression>]
-[offset <Expression>]
-
-select all from <RootTable> [as <Alias>] ...
+```rs
+"select" ("all" | ProperQName "{" QName ":" ColumnRef{"," QName ":" ColumnRef} "}")
+"from" ProperQName ["as" ProperQName]
+{"join" ProperQName ["as" ProperQName] "on" ColumnRef == QName}
+["where" ColumnRef "==" Expression]
+["limit" Expression]
+["offset" Expression]
 ```
 
 ## Explanation
 
-`select` supports explicit capture into a struct shape or `select all`. Query clauses include joins, where filters, limit, and offset.
+`select` retrieves rows from a database. It supports explicit capture into a struct shape, or `select all` to use the starting table struct for capture if no `join` clauses are present.
 
-In semantic IR this maps to `SemanticQuery::Select` with captured columns, table IDs, and optional count/filter clauses.
+- `join` clauses perform a join operation.
+- `where` filters out rows on a predicate (only equality is supported at the moment).
+- `limit` constrains the maximum number of rows returned. The provided expression must be of type `int`.
+- `offset` skips a number of rows at the start. The provided expression must be of type `int`.
 
 ## Examples
 
@@ -30,13 +31,8 @@ let users_q = query {
 };
 ```
 
-Expected output:
-```text
-(no direct stdout unless consumed and printed)
-```
-
 ## See Also
 
-- [`qcolumn-and-aliases.md`](qcolumn-and-aliases.md)
-- [`insert.md`](insert.md)
-- [`../expressions/query-expressions.md`](../expressions/query-expressions.md)
+- [Qualified Columns and Aliases](qcolumn-and-aliases.md)
+- [Insert Query](insert.md)
+- [Query Expressions](../expressions/query-expressions.md)

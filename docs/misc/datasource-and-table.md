@@ -2,33 +2,35 @@
 
 ## Syntax
 
-```ql
-["readonly"] datasource <name:QName>;
-["readonly"] table <name:ProperQName> from <datasource_name:QName> { <columns:Comma<TypedQName>> }
+```rs
+// Datasources
+["readonly"] "datasource" QName;
+
+// Tables
+["readonly"] "table" ProperQName "from" QName
+"{" QName ":" Typename{"," QName ":" Typename} "}"
 ```
 
 ## Explanation
 
-Datasources define external storage handles. Tables map schema declarations onto a datasource and define typed columns. The optional `readonly` modifier marks declarations that should not be mutated.
+Datasources define external storage handles. Tables map schema declarations onto a datasource and define typed columns.
+
+- Table declarations automatically get their own struct type.
+- The optional `readonly` modifier marks declarations that should not be mutated by `insert`, `update`, or `delete` queries. If a table originates from a `readonly` datasource, it must also be marked `readonly`.
 
 ## Examples
 
 ```ql
 readonly datasource AppDb;
 
-table Users from AppDb {
+readonly table Users from AppDb {
     id: int,
     name: str
 }
 ```
 
-Expected output:
-```text
-(schema declaration only; no stdout)
-```
-
 ## See Also
 
-- [`program-structure.md`](program-structure.md)
-- [`../queries/select.md`](../queries/select.md)
-- [`../queries/insert.md`](../queries/insert.md)
+- [Program Structure](program-structure.md)
+- [Select Query](../queries/select.md)
+- [Insert Query](../queries/insert.md)

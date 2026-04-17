@@ -47,6 +47,6 @@ Variable x has an ambiguous type: any[]
 
 ## See Also
 
-- [`../types/primitives.md`](../types/primitives.md)
-- [`../expressions/arithmetic-and-comparison.md`](../expressions/arithmetic-and-comparison.md)
-- [`control-transfer.md`](control-transfer.md)
+- [Primitive Types](../types/primitives.md)
+- [Arithmetic and Comparison](../expressions/arithmetic-and-comparison.md)
+- [Return, Break, and Continue](control-transfer.md)

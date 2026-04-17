@@ -54,6 +54,6 @@ son of Dwayne Johnson
 
 ## See Also
 
-- [`../queries/select.md`](../queries/select.md)
-- [`../queries/insert.md`](../queries/insert.md)
-- [`../statements/expression-statements.md`](../statements/expression-statements.md)
+- [Select Query](../queries/select.md)
+- [Insert Query](../queries/insert.md)
+- [Lone Expression Statements](../statements/expression-statements.md)

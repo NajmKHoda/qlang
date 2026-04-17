@@ -57,6 +57,6 @@ true
 
 ## See Also
 
-- [`../types/primitives.md`](../types/primitives.md)
-- [`../types/collections.md`](../types/collections.md)
-- [`calls.md`](calls.md)
+- [Primitive Types](../types/primitives.md)
+- [Collection Types: Arrays and Iterators](../types/collections.md)
+- [Function and Method Calls](calls.md)

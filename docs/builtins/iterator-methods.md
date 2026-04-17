@@ -42,6 +42,6 @@ Expected output:
 
 ## See Also
 
-- [`array-methods.md`](array-methods.md)
-- [`../expressions/ranges.md`](../expressions/ranges.md)
-- [`../statements/loops.md`](../statements/loops.md)
+- [Array Builtin Methods](array-methods.md)
+- [Ranges](../expressions/ranges.md)
+- [Loops](../statements/loops.md)

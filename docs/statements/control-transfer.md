@@ -49,6 +49,6 @@ Expected output:
 
 ## See Also
 
-- [`loops.md`](loops.md)
-- [`conditionals.md`](conditionals.md)
-- [`../misc/program-structure.md`](../misc/program-structure.md)
+- [Loops](loops.md)
+- [Conditional Statements](conditionals.md)
+- [Program Structure](../misc/program-structure.md)

@@ -2,14 +2,18 @@
 
 ## Syntax
 
-```ql
-QName
-ProperQName
+```rs
+// Qualified names
+QName ::= /_*[a-z][a-zA-Z0-9_]*/
+
+// Proper qualified names
+ProperQName ::= /_*[A-Z][a-zA-Z0-9]*/
+
 ```
 
 ## Explanation
 
-QLang grammar distinguishes between general names (`QName`) and proper names (`ProperQName`) for constructs such as table/struct names. Follow consistent naming conventions to keep schemas and code readable.
+QLang grammar distinguishes between general names (`QName`) and proper names (`ProperQName`) for constructs such as table/struct names. The first non-underscore character in `QName` must be lowercase, while it must be uppercase in `ProperQName`. Follow consistent naming conventions to keep schemas and code readable.
 
 Suggested style:
 - `ProperQName`: PascalCase for structs/tables.
@@ -33,6 +37,6 @@ guest
 
 ## See Also
 
-- [`program-structure.md`](program-structure.md)
-- [`../types/structs.md`](../types/structs.md)
-- [`../queries/qcolumn-and-aliases.md`](../queries/qcolumn-and-aliases.md)
+- [Program Structure](program-structure.md)
+- [Struct Types](../types/structs.md)
+- [Qualified Columns and Aliases](../queries/qcolumn-and-aliases.md)

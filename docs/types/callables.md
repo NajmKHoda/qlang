@@ -2,8 +2,8 @@
 
 ## Syntax
 
-```ql
-["failable"] "(" <params:Comma<TypeName>> ")" "->" <ret:TypeName>
+```rs
+["failable"] "(" [Typename{"," Typename}] ")" "->" Typename
 ```
 
 ## Explanation
@@ -31,6 +31,6 @@ Expected output:
 
 ## See Also
 
-- [`../expressions/closures.md`](../expressions/closures.md)
-- [`../misc/failable-semantics.md`](../misc/failable-semantics.md)
-- [`primitives.md`](primitives.md)
+- [Closures](../expressions/closures.md)
+- [Failable Semantics](../misc/failable-semantics.md)
+- [Primitive Types](primitives.md)

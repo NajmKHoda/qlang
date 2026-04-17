@@ -2,9 +2,12 @@
 
 ## Syntax
 
-```ql
-<TypeName>[]
-iter<TypeName>
+```rs
+// Array type
+TypeName "[]"
+
+// Iterator type
+"iter" "<" TypeName ">"
 ```
 
 ## Explanation
@@ -33,6 +36,6 @@ Expected output:
 
 ## See Also
 
-- [`primitives.md`](primitives.md)
-- [`../builtins/array-methods.md`](../builtins/array-methods.md)
-- [`../builtins/iterator-methods.md`](../builtins/iterator-methods.md)
+- [Primitive Types](primitives.md)
+- [Array Builtin Methods](../builtins/array-methods.md)
+- [Iterator Builtin Methods](../builtins/iterator-methods.md)

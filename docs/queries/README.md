@@ -1,7 +1,13 @@
 # Queries
 
-- [`select.md`](select.md)
-- [`insert.md`](insert.md)
-- [`update.md`](update.md)
-- [`delete.md`](delete.md)
-- [`qcolumn-and-aliases.md`](qcolumn-and-aliases.md)
+QLang supports all main SQL operations with constrained syntax.
+
+[**`select` Queries**](select.md)
+
+[**`insert` Queries**](insert.md)
+
+[**`update` Queries**](update.md)
+
+[**`delete` Queries**](delete.md)
+
+[**Column References and Table Aliases**](qcolumn-and-aliases.md)

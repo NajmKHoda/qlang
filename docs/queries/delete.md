@@ -3,7 +3,8 @@
 ## Syntax
 
 ```ql
-delete from <table_name:ProperQName> [where <column_name> == <Expression>]
+"delete" "from" ProperQName
+["where" QName "==" Expression]
 ```
 
 ## Explanation
@@ -18,13 +19,8 @@ query {
 };
 ```
 
-Expected output:
-```text
-(no direct stdout unless printed)
-```
-
 ## See Also
 
-- [`select.md`](select.md)
-- [`update.md`](update.md)
-- [`../statements/transaction.md`](../statements/transaction.md)
+- [Select Query](select.md)
+- [Update Query](update.md)
+- [Transaction Statement](../statements/transaction.md)

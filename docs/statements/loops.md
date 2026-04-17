@@ -57,6 +57,6 @@ Expected output:
 
 ## See Also
 
-- [`control-transfer.md`](control-transfer.md)
-- [`../expressions/ranges.md`](../expressions/ranges.md)
-- [`../types/collections.md`](../types/collections.md)
+- [Return, Break, and Continue](control-transfer.md)
+- [Ranges](../expressions/ranges.md)
+- [Collection Types: Arrays and Iterators](../types/collections.md)

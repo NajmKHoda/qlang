@@ -2,29 +2,29 @@
 
 ## Syntax
 
-```ql
-update <table_name:ProperQName> set <column_name> = <Expression>, ... [where <column_name> == <Expression>]
+```rs
+"update" ProperQName "set"
+QName "=" Expression{"," QName "=" Expression}
+["where" QName "==" Expression]
 ```
 
 ## Explanation
 
-`update` mutates one or more columns for matching rows. Without `where`, it can affect all rows in the target table.
+`update` mutates one or more columns for matching rows. Without `where` to select specific rows, it affects all rows in the target table.
 
 ## Examples
 
 ```ql
 query {
-    update Users set name = "Grace" where id == 1
+    update Users set
+        name = "Grace"
+        age = 20
+    where id == 1
 };
-```
-
-Expected output:
-```text
-(no direct stdout unless printed)
 ```
 
 ## See Also
 
-- [`select.md`](select.md)
-- [`delete.md`](delete.md)
-- [`../statements/transaction.md`](../statements/transaction.md)
+- [Select Query](select.md)
+- [Delete Query](delete.md)
+- [Transaction Statement](../statements/transaction.md)

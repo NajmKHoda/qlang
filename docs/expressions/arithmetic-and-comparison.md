@@ -49,6 +49,6 @@ true
 
 ## See Also
 
-- [`logical-operators.md`](logical-operators.md)
-- [`type-conversions.md`](type-conversions.md)
-- [`../statements/conditionals.md`](../statements/conditionals.md)
+- [Logical Operators](logical-operators.md)
+- [Primitive Type Conversions](type-conversions.md)
+- [Conditional Statements](../statements/conditionals.md)

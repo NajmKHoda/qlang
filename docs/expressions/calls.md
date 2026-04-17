@@ -46,6 +46,6 @@ Expected output:
 
 ## See Also
 
-- [`../builtins/functions.md`](../builtins/functions.md)
-- [`../builtins/array-methods.md`](../builtins/array-methods.md)
-- [`literals-and-collections.md`](literals-and-collections.md)
+- [Builtin Functions](../builtins/functions.md)
+- [Array Builtin Methods](../builtins/array-methods.md)
+- [Literals, Struct Literals, and Arrays](literals-and-collections.md)

@@ -29,6 +29,6 @@ hello from expression statement
 
 ## See Also
 
-- [`../expressions/calls.md`](../expressions/calls.md)
-- [`../expressions/query-expressions.md`](../expressions/query-expressions.md)
-- [`let-and-assignment.md`](let-and-assignment.md)
+- [Function and Method Calls](../expressions/calls.md)
+- [Query Expressions](../expressions/query-expressions.md)
+- [Let Declarations and Assignment](let-and-assignment.md)

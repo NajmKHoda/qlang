@@ -2,7 +2,7 @@
 
 ## Syntax
 
-```ql
+```rs
 int
 float
 bool
@@ -41,6 +41,6 @@ hi
 
 ## See Also
 
-- [`collections.md`](collections.md)
-- [`callables.md`](callables.md)
-- [`../expressions/type-conversions.md`](../expressions/type-conversions.md)
+- [Collection Types: Arrays and Iterators](collections.md)
+- [Callable Types](callables.md)
+- [Primitive Type Conversions](../expressions/type-conversions.md)

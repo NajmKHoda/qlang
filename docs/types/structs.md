@@ -2,9 +2,8 @@
 
 ## Syntax
 
-```ql
-struct <name:ProperQName> { <fields:Comma<TypedQName>> }
-<TypeName> ::= <ProperQName>
+```rs
+"struct" ProperQName "{" QName ":" Typename{"," QName ":" Typename} "}"
 ```
 
 ## Explanation
@@ -14,10 +13,13 @@ Structs define named field collections and are used for domain data and query ca
 ## Examples
 
 ```ql
-struct User { id: int, name: str }
+struct User {
+    id: int,
+    name: str
+}
 
 function main() -> int {
-    let u: User = User { id: 1, name: "Ada" };
+    let u: User = { id: 1, name: "Ada" };
     printi(u.id);
     prints(u.name);
     return 0;
@@ -32,6 +34,6 @@ Ada
 
 ## See Also
 
-- [`../queries/select.md`](../queries/select.md)
-- [`../queries/insert.md`](../queries/insert.md)
-- [`../expressions/literals-and-collections.md`](../expressions/literals-and-collections.md)
+- [Select Query](../queries/select.md)
+- [Insert Query](../queries/insert.md)
+- [Literals, Struct Literals, and Arrays](../expressions/literals-and-collections.md)

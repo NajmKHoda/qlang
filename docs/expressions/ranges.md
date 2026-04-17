@@ -43,6 +43,6 @@ Expected output:
 
 ## See Also
 
-- [`../statements/loops.md`](../statements/loops.md)
-- [`../types/collections.md`](../types/collections.md)
-- [`../builtins/iterator-methods.md`](../builtins/iterator-methods.md)
+- [Loops](../statements/loops.md)
+- [Collection Types: Arrays and Iterators](../types/collections.md)
+- [Iterator Builtin Methods](../builtins/iterator-methods.md)
