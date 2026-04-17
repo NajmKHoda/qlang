@@ -118,6 +118,7 @@ pub enum ExpressionNode {
     LogicalAnd(Box<ExpressionNode>, Box<ExpressionNode>),
     LogicalOr(Box<ExpressionNode>, Box<ExpressionNode>),
     LogicalNot(Box<ExpressionNode>),
+    Conversion(Box<ExpressionNode>, TypeNode),
     Comparison(Box<ExpressionNode>, Box<ExpressionNode>, ComparisonType),
     FunctionCall(String, Vec<Box<ExpressionNode>>),
     Struct(Option<String>, Vec<ColumnValueNode>),

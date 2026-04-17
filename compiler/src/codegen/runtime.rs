@@ -27,6 +27,13 @@ pub(super) struct Runtime<'ctxt> {
     pub(super) string_drop: FunctionValue<'ctxt>,
     pub(super) concat_string: FunctionValue<'ctxt>,
     pub(super) compare_string: FunctionValue<'ctxt>,
+    pub(super) str_to_int: FunctionValue<'ctxt>,
+    pub(super) str_to_float: FunctionValue<'ctxt>,
+    pub(super) str_to_bool: FunctionValue<'ctxt>,
+    pub(super) float_to_int: FunctionValue<'ctxt>,
+    pub(super) int_to_string: FunctionValue<'ctxt>,
+    pub(super) float_to_string: FunctionValue<'ctxt>,
+    pub(super) bool_to_string: FunctionValue<'ctxt>,
 
     pub(super) new_array: FunctionValue<'ctxt>,
     pub(super) array_copy: FunctionValue<'ctxt>,
@@ -171,6 +178,48 @@ impl<'ctxt> Runtime<'ctxt> {
         let compare_string = module.add_function(
             "__ql__QLString_compare",
             int_type.fn_type(&[ptr_type.into(), ptr_type.into()], false),
+            Some(Linkage::External),
+        );
+
+        let str_to_int = module.add_function(
+            "__ql__str_to_int",
+            int_type.fn_type(&[ptr_type.into()], false),
+            Some(Linkage::External),
+        );
+
+        let str_to_float = module.add_function(
+            "__ql__str_to_float",
+            float_type.fn_type(&[ptr_type.into()], false),
+            Some(Linkage::External),
+        );
+
+        let str_to_bool = module.add_function(
+            "__ql__str_to_bool",
+            bool_type.fn_type(&[ptr_type.into()], false),
+            Some(Linkage::External),
+        );
+
+        let float_to_int = module.add_function(
+            "__ql__float_to_int",
+            int_type.fn_type(&[float_type.into()], false),
+            Some(Linkage::External),
+        );
+
+        let int_to_string = module.add_function(
+            "__ql__int_to_string",
+            ptr_type.fn_type(&[int_type.into()], false),
+            Some(Linkage::External),
+        );
+
+        let float_to_string = module.add_function(
+            "__ql__float_to_string",
+            ptr_type.fn_type(&[float_type.into()], false),
+            Some(Linkage::External),
+        );
+
+        let bool_to_string = module.add_function(
+            "__ql__bool_to_string",
+            ptr_type.fn_type(&[bool_type.into()], false),
             Some(Linkage::External),
         );
 
@@ -625,6 +674,13 @@ impl<'ctxt> Runtime<'ctxt> {
             string_drop,
             concat_string,
             compare_string, 
+            str_to_int,
+            str_to_float,
+            str_to_bool,
+            float_to_int,
+            int_to_string,
+            float_to_string,
+            bool_to_string,
             new_array,
             array_copy,
             array_drop,

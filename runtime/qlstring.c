@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
+#include <ctype.h>
 #include <stdbool.h>
 #include "metadata.h"
 #include "qlstring.h"
@@ -76,6 +77,72 @@ QLString* inputs() {
     return __ql__QLString_new(buffer, i, false);
 }
 
-void _print_rc(QLString* str) {
-    fprintf(stderr, "RC(%p) = %u\n", (void*)str, str->ref_count);
+int __ql__str_to_int(QLString* str) {
+    char* raw = str->raw_string;
+    int i = 0, n = str->length;
+
+    // Determine sign (if any)
+    bool is_negative = false;
+    if (i < n && str->raw_string[0] == '-') {
+        is_negative = true;
+        i++;
+    } else if (i < n && str->raw_string[0] == '+') {
+        i++;
+    }
+
+    // Parse digits
+    int result = 0;
+    for (; i < n; i++) {
+        char c = str->raw_string[i];
+        if (c < '0' || c > '9') {
+            return 0; // Invalid integer string
+        }
+        result = result * 10 + (c - '0');
+    }
+
+    return is_negative ? -result : result;
+}
+
+double __ql__str_to_float(QLString* str) {
+    if (str->length == 0) {
+        return 0.0;
+    }
+
+    // Create a c-string to use with stdlib
+    char* cstr = malloc(str->length + 1);
+    memcpy(cstr, str->raw_string, str->length);
+    cstr[str->length] = '\0';
+
+    char* endptr;
+    double value = strtod(cstr, NULL);
+    free(cstr);
+    return value;
+}
+
+bool __ql__str_to_bool(QLString* str) {
+    return str->length != 0;
+}
+
+QLString* __ql__int_to_string(int x) {
+    char* raw;
+    int len = asprintf(&raw, "%d", x);
+    return __ql__QLString_new(raw, len, false);
+}
+
+QLString* __ql__float_to_string(double x) {
+    char* raw;
+    int len = asprintf(&raw, "%.3g", x);
+    return __ql__QLString_new(raw, len, false);
+}
+
+QLString* __ql__bool_to_string(bool x) {
+    if (x) {
+        char* raw = malloc(4);
+        memcpy(raw, "true", 4);
+        return __ql__QLString_new(raw, 4, false);
+    }
+
+    char* raw = malloc(5);
+    memcpy(raw, "false", 5);
+    return __ql__QLString_new(raw, 5, false);
 }

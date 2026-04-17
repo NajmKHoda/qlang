@@ -22,4 +22,11 @@ void __ql__QLString_drop(QLString** str_ptr);
 void prints(QLString* str);
 QLString* inputs();
 
+int __ql__str_to_int(QLString* str);
+double __ql__str_to_float(QLString* str);
+bool __ql__str_to_bool(QLString* str);
+QLString* __ql__int_to_string(int x);
+QLString* __ql__float_to_string(double x);
+QLString* __ql__bool_to_string(bool x);
+
 #endif

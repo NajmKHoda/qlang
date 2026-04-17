@@ -25,7 +25,8 @@ impl<'ctxt> CodeGen<'ctxt> {
         struct BranchGenInfo<'a> {
             cond_value: IntValue<'a>,
             cond_block: BasicBlock<'a>,
-            body_block: BasicBlock<'a>,
+            entry_block: BasicBlock<'a>,
+            exit_block: BasicBlock<'a>,
             body_terminates: bool,
         }
 
@@ -36,37 +37,42 @@ impl<'ctxt> CodeGen<'ctxt> {
             self.builder.position_at_end(cond_block);
             let cond_value = self.gen_eval(&branch.condition)?.as_llvm_basic_value().into_int_value();
 
-            let body_block = self.context.append_basic_block(cur_fn, &format!("branch{}_body", i+1));
-            self.builder.position_at_end(body_block);
+            let entry_block = self.context.append_basic_block(cur_fn, &format!("branch{}_entry", i+1));
+            self.builder.position_at_end(entry_block);
             self.gen_block(&branch.body)?;
 
+            let exit_block = self.builder.get_insert_block().unwrap();
             blocks.push(BranchGenInfo {
                 cond_value,
                 cond_block,
-                body_block,
+                entry_block,
+                exit_block,
                 body_terminates: branch.body.terminates,
             });
         }
+
         if let Some(else_block) = else_branch {
             let else_jump_block = self.context.append_basic_block(cur_fn, "else_jump");
-            let else_body_block = self.context.append_basic_block(cur_fn, "else_body");
-            self.builder.position_at_end(else_body_block);
+            let else_entry_block = self.context.append_basic_block(cur_fn, "else_entry");
+            self.builder.position_at_end(else_entry_block);
             self.gen_block(else_block)?;
 
+            let exit_block = self.builder.get_insert_block().unwrap();
             blocks.push(BranchGenInfo {
                 cond_value: self.context.bool_type().const_int(1, false),
                 cond_block: else_jump_block,
-                body_block: else_body_block,
+                entry_block: else_entry_block,
+                exit_block,
                 body_terminates: else_block.terminates,
             });
         }
 
         // Second pass: link blocks together
         for window in blocks.windows(2) {
-            let BranchGenInfo { cond_value, cond_block, body_block, .. } = window[0];
+            let BranchGenInfo { cond_value, cond_block, entry_block, .. } = window[0];
             let BranchGenInfo { cond_block: next_cond_block, .. } = window[1];
             self.builder.position_at_end(cond_block);
-            self.builder.build_conditional_branch(cond_value, body_block, next_cond_block)?;
+            self.builder.build_conditional_branch(cond_value, entry_block, next_cond_block)?;
         }
 
         // Link initial block to first condition block
@@ -84,26 +90,26 @@ impl<'ctxt> CodeGen<'ctxt> {
         let BranchGenInfo {
             cond_value: last_cond_value,
             cond_block: last_cond_block,
-            body_block: last_body_block, ..
+            entry_block: last_entry_block, ..
         } = blocks.last().unwrap();
         
         // If not all branches terminate, create a merge block
         if !all_branches_terminate {
             let merge_block = self.context.append_basic_block(cur_fn, "merge_branches");
-            for BranchGenInfo { body_block, body_terminates, .. } in &blocks {
+            for BranchGenInfo { exit_block, body_terminates, .. } in &blocks {
                 if !*body_terminates {
-                    self.builder.position_at_end(*body_block);
+                    self.builder.position_at_end(*exit_block);
                     self.builder.build_unconditional_branch(merge_block)?;
                 }
             }
 
             // Link last condition block to merge block
             self.builder.position_at_end(*last_cond_block);
-            self.builder.build_conditional_branch(*last_cond_value, *last_body_block, merge_block)?;
+            self.builder.build_conditional_branch(*last_cond_value, *last_entry_block, merge_block)?;
             self.builder.position_at_end(merge_block);
         } else {
             self.builder.position_at_end(*last_cond_block);
-            self.builder.build_unconditional_branch(*last_body_block)?;
+            self.builder.build_unconditional_branch(*last_entry_block)?;
         }
 
         Ok(())
@@ -124,7 +130,8 @@ impl<'ctxt> CodeGen<'ctxt> {
         // Build loop conditional branch
         self.builder.build_unconditional_branch(cond_block)?;
         self.builder.position_at_end(cond_block);
-        let condition = self.gen_eval(condition_expr)?.as_llvm_basic_value().into_int_value();
+        let condition = self.gen_eval(condition_expr)?
+            .as_llvm_basic_value().into_int_value();
         self.builder.build_conditional_branch(condition, entry_block, after_block)?;
 
         // Build loop body

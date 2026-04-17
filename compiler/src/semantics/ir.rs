@@ -105,6 +105,9 @@ pub enum SemanticExpressionKind {
     LogicalNot {
         value: Box<SemanticExpression>
     },
+    Convert {
+        value: Box<SemanticExpression>
+    },
     Compare {
         left: Box<SemanticExpression>,
         right: Box<SemanticExpression>,

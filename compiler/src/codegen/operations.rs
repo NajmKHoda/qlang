@@ -1,7 +1,7 @@
 use inkwell::values::AnyValue;
 
 use super::{CodeGen, CodeGenError};
-use crate::{codegen::data::GenValue, semantics::{Ownership, SemanticExpression}, tokens::ComparisonType};
+use crate::{codegen::data::GenValue, semantics::{Ownership, SemanticExpression, SemanticType, SemanticTypeKind}, tokens::ComparisonType};
 
 impl From<ComparisonType> for inkwell::IntPredicate {
     fn from(op: ComparisonType) -> Self {
@@ -30,6 +30,121 @@ impl From<ComparisonType> for inkwell::FloatPredicate {
 }
 
 impl<'ctxt> CodeGen<'ctxt> {
+    pub fn gen_convert(&mut self, expr: &SemanticExpression, target_type: &SemanticType) -> Result<GenValue<'ctxt>, CodeGenError> {
+        let source_val = self.gen_eval(expr)?;
+        let source_kind = expr.sem_type.kind();
+        let target_kind = target_type.kind();
+
+        if source_kind == target_kind {
+            return Ok(source_val);
+        }
+
+        match (&source_kind, &target_kind) {
+            (SemanticTypeKind::Integer, SemanticTypeKind::String) => {
+                let GenValue::Integer(int_val) = source_val else { panic!("Expected integer"); };
+                let str_val = self.builder.build_call(
+                    self.runtime.int_to_string,
+                    &[int_val.into()],
+                    "int_to_string"
+                )?.as_any_value_enum().into_pointer_value();
+                Ok(GenValue::String { value: str_val, ownership: Ownership::Owned })
+            }
+            (SemanticTypeKind::String, SemanticTypeKind::Integer) => {
+                let GenValue::String { value: str_val, .. } = source_val.clone() else { panic!("Expected string"); };
+                let int_val = self.builder.build_call(
+                    self.runtime.str_to_int,
+                    &[str_val.into()],
+                    "str_to_int"
+                )?.as_any_value_enum().into_int_value();
+                self.remove_if_owned(source_val, &expr.sem_type)?;
+                Ok(GenValue::Integer(int_val))
+            }
+            (SemanticTypeKind::Integer, SemanticTypeKind::Float) => {
+                let GenValue::Integer(int_val) = source_val else { panic!("Expected integer"); };
+                let float_val = self.builder.build_signed_int_to_float(int_val, self.float_type(), "int_to_float")?;
+                Ok(GenValue::Float(float_val))
+            }
+            (SemanticTypeKind::Float, SemanticTypeKind::Integer) => {
+                let GenValue::Float(float_val) = source_val else { panic!("Expected float"); };
+                let int_val = self.builder.build_call(
+                    self.runtime.float_to_int,
+                    &[float_val.into()],
+                    "float_to_int"
+                )?.as_any_value_enum().into_int_value();
+                Ok(GenValue::Integer(int_val))
+            }
+            (SemanticTypeKind::Integer, SemanticTypeKind::Bool) => {
+                let GenValue::Integer(int_val) = source_val else { panic!("Expected integer"); };
+                let bool_val = self.builder.build_int_compare(
+                    inkwell::IntPredicate::NE,
+                    int_val,
+                    self.int_type().const_zero(),
+                    "int_to_bool"
+                )?;
+                Ok(GenValue::Bool(bool_val))
+            }
+            (SemanticTypeKind::Bool, SemanticTypeKind::Integer) => {
+                let GenValue::Bool(bool_val) = source_val else { panic!("Expected bool"); };
+                let int_val = self.builder.build_int_z_extend(bool_val, self.int_type(), "bool_to_int")?;
+                Ok(GenValue::Integer(int_val))
+            }
+            (SemanticTypeKind::Float, SemanticTypeKind::String) => {
+                let GenValue::Float(float_val) = source_val else { panic!("Expected float"); };
+                let str_val = self.builder.build_call(
+                    self.runtime.float_to_string,
+                    &[float_val.into()],
+                    "float_to_string"
+                )?.as_any_value_enum().into_pointer_value();
+                Ok(GenValue::String { value: str_val, ownership: Ownership::Owned })
+            }
+            (SemanticTypeKind::String, SemanticTypeKind::Float) => {
+                let GenValue::String { value: str_val, .. } = source_val.clone() else { panic!("Expected string"); };
+                let float_val = self.builder.build_call(
+                    self.runtime.str_to_float,
+                    &[str_val.into()],
+                    "str_to_float"
+                )?.as_any_value_enum().into_float_value();
+                self.remove_if_owned(source_val, &expr.sem_type)?;
+                Ok(GenValue::Float(float_val))
+            }
+            (SemanticTypeKind::Float, SemanticTypeKind::Bool) => {
+                let GenValue::Float(float_val) = source_val else { panic!("Expected float"); };
+                let bool_val = self.builder.build_float_compare(
+                    inkwell::FloatPredicate::ONE,
+                    float_val,
+                    self.float_type().const_float(0.0),
+                    "float_to_bool"
+                )?;
+                Ok(GenValue::Bool(bool_val))
+            }
+            (SemanticTypeKind::Bool, SemanticTypeKind::Float) => {
+                let GenValue::Bool(bool_val) = source_val else { panic!("Expected bool"); };
+                let float_val = self.builder.build_unsigned_int_to_float(bool_val, self.float_type(), "bool_to_float")?;
+                Ok(GenValue::Float(float_val))
+            }
+            (SemanticTypeKind::Bool, SemanticTypeKind::String) => {
+                let GenValue::Bool(bool_val) = source_val else { panic!("Expected bool"); };
+                let str_val = self.builder.build_call(
+                    self.runtime.bool_to_string,
+                    &[bool_val.into()],
+                    "bool_to_string"
+                )?.as_any_value_enum().into_pointer_value();
+                Ok(GenValue::String { value: str_val, ownership: Ownership::Owned })
+            }
+            (SemanticTypeKind::String, SemanticTypeKind::Bool) => {
+                let GenValue::String { value: str_val, .. } = source_val.clone() else { panic!("Expected string"); };
+                let bool_val = self.builder.build_call(
+                    self.runtime.str_to_bool,
+                    &[str_val.into()],
+                    "str_to_bool"
+                )?.as_any_value_enum().into_int_value();
+                self.remove_if_owned(source_val, &expr.sem_type)?;
+                Ok(GenValue::Bool(bool_val))
+            }
+            _ => panic!("Unsupported conversion in codegen"),
+        }
+    }
+
     pub fn gen_add(&mut self, expr1: &SemanticExpression, expr2: &SemanticExpression) -> Result<GenValue<'ctxt>, CodeGenError> {
         let val1 = self.gen_eval(expr1)?;
         let val2 = self.gen_eval(expr2)?;

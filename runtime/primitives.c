@@ -33,3 +33,7 @@ int inputi() {
     while(getchar() != '\n');
     return x;
 }
+
+int __ql__float_to_int(double x) {
+    return x >= 0.0 ? (int)(x + 0.5) : (int)(x - 0.5);
+}

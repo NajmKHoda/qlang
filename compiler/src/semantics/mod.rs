@@ -261,6 +261,9 @@ impl SemanticGen {
             ExpressionNode::LogicalNot(value) => {
                 self.eval_logical_not(value)
             },
+            ExpressionNode::Conversion(value, target_type) => {
+                self.eval_convert(value, target_type)
+            },
             ExpressionNode::Comparison(left, right, op) => {
                 self.eval_compare(left, right, *op)
             }

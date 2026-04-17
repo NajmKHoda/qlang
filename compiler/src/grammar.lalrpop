@@ -86,11 +86,14 @@ Expression: Box<ExpressionNode> = {
     <Expression> "." <QName> => Box::new(ExpressionNode::StructField(<>)),
     
     #[precedence(level="2")] #[assoc(side="left")]
+    <target_type:PrimitiveTypeName> "(" <value:Expression> ")" => Box::new(ExpressionNode::Conversion(value, target_type)),
+
+    #[precedence(level="3")] #[assoc(side="left")]
     <Expression> "*" <Expression> => Box::new(ExpressionNode::Multiply(<>)),
     <Expression> "/" <Expression> => Box::new(ExpressionNode::Divide(<>)),
     <Expression> "%" <Expression> => Box::new(ExpressionNode::Modulus(<>)),
 
-    #[precedence(level="3")] #[assoc(side="left")]
+    #[precedence(level="4")] #[assoc(side="left")]
     <Expression> "+" <Expression> => Box::new(ExpressionNode::Add(<>)),
     <Expression> "-" <Expression> => Box::new(ExpressionNode::Subtract(<>)),
     <QName> "(" <Comma<Expression>> ")" => Box::new(ExpressionNode::FunctionCall(<>)),
@@ -98,10 +101,10 @@ Expression: Box<ExpressionNode> = {
     "query" "(" <parameters:Comma<TypedQName>> ")" "{" <query:Query> "}"
         => Box::new(ExpressionNode::ParameterizedQuery { <> }),
 
-    #[precedence(level="4")]
+    #[precedence(level="5")]
     "not" <Expression> => Box::new(ExpressionNode::LogicalNot(<>)),
 
-    #[precedence(level="5")] #[assoc(side="left")]
+    #[precedence(level="6")] #[assoc(side="left")]
     <Expression> ">" <Expression> => Box::new(ExpressionNode::Comparison(<>, ComparisonType::GreaterThan)),
     <Expression> "<" <Expression> => Box::new(ExpressionNode::Comparison(<>, ComparisonType::LessThan)),
     <Expression> ">=" <Expression> => Box::new(ExpressionNode::Comparison(<>, ComparisonType::GreaterThanOrEqual)),
@@ -109,10 +112,10 @@ Expression: Box<ExpressionNode> = {
     <Expression> "==" <Expression> => Box::new(ExpressionNode::Comparison(<>, ComparisonType::Equal)),
     <Expression> "!=" <Expression> => Box::new(ExpressionNode::Comparison(<>, ComparisonType::NotEqual)),
 
-    #[precedence(level="6")] #[assoc(side="left")]
+    #[precedence(level="7")] #[assoc(side="left")]
     <Expression> "and" <Expression> => Box::new(ExpressionNode::LogicalAnd(<>)),
 
-    #[precedence(level="7")] #[assoc(side="left")]
+    #[precedence(level="8")] #[assoc(side="left")]
     <Expression> "or" <Expression> => Box::new(ExpressionNode::LogicalOr(<>)),
 }
 
@@ -250,6 +253,13 @@ TypeName: TypeNode = {
     #[precedence(level="2")]
     <is_failable:Present<"failable">> "(" <params:Comma<TypeName>> ")" "->" <ret:TypeName>
         => TypeNode::Callable { is_failable, params, ret: Box::new(ret) },
+}
+
+PrimitiveTypeName: TypeNode = {
+    "int" => TypeNode::Integer,
+    "float" => TypeNode::Float,
+    "bool" => TypeNode::Bool,
+    "str" => TypeNode::String,
 }
 
 Float: f64 = r"-?[0-9]+\.[0-9]+" => f64::from_str(<>).unwrap();

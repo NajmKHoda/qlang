@@ -290,6 +290,9 @@ impl<'ctxt> CodeGen<'ctxt> {
             SemanticExpressionKind::LogicalNot { value } => {
                 self.gen_logical_not(value)
             }
+            SemanticExpressionKind::Convert { value } => {
+                self.gen_convert(value, &expr.sem_type)
+            }
             SemanticExpressionKind::Compare { left, right, op } => {
                 self.gen_compare(left, right, *op)
             }

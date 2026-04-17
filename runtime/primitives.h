@@ -12,4 +12,6 @@ void printd(double);
 void printb(bool);
 int inputi();
 
+int __ql__float_to_int(double x);
+
 #endif
